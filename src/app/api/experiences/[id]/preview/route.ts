@@ -1,0 +1,233 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getExperience, getSteps, saveInteraction } from '@/lib/firestore';
+
+// ─── Preview Evaluation Endpoint ──────────────────────────────────────────────
+// POST /api/experiences/[id]/preview
+// Body: { userMessage: string; stepIndex: number }
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await params;
+        const { userMessage, stepIndex: rawStepIndex } = await req.json() as { userMessage: string; stepIndex: number };
+        const [experience, steps] = await Promise.all([getExperience(id), getSteps(id)]);
+
+        if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });
+        if (!steps.length) return NextResponse.json({ error: 'La experiencia no tiene pasos' }, { status: 400 });
+
+        // ─── BUG FIX: if frontend sends a narrative stepIndex, forward to next interactive ──
+        // This handles race conditions or stale closures where stepIndex points to a narrative step
+        let stepIndex = rawStepIndex;
+        while (stepIndex < steps.length && !(steps[stepIndex]?.requires_response ?? true)) {
+            stepIndex++;
+        }
+
+        const currentStep = steps[stepIndex];
+        if (!currentStep) {
+            // All remaining steps are narrative — experience is effectively complete
+            return NextResponse.json({ evaluation: 'correct', nextStepIndex: steps.length, completed: true, response: '¡Llegaste al final de la experiencia!' });
+        }
+
+        const totalSteps = steps.length;
+        const stepNumber = stepIndex + 1;
+
+        // ─── Detect LLM provider from key prefix ──────────────────────────────────
+        const apiKey = experience.llm_api_key ?? '';
+        const isOpenAI = apiKey.startsWith('sk-');
+        const sessionId = `preview-${id}`;
+
+        // ─── Compute effective context: use own context, fallback to most recent non-empty ──
+        let effectiveContext = '';
+        for (let i = 0; i <= stepIndex; i++) {
+            const c = steps[i]?.context?.trim();
+            if (c) effectiveContext = c;  // last non-empty wins
+        }
+
+        // ─── Build a context-aware system prompt ───────────────────────────────────
+        const buildSystemPrompt = (task: string) => `
+${experience.narrator_personality}
+
+---
+
+CONTEXTO DEL JUEGO (invisible para el jugador):
+- El jugador está en el PASO ${stepNumber} de ${totalSteps}.
+- Mensaje que le enviaste al jugador en este paso: "${currentStep.message_to_send}"
+${currentStep.requires_response
+                ? `- La respuesta esperada es (semánticamente): "${currentStep.expected_answer}"
+- Pistas disponibles si el jugador está trabado: ${currentStep.hints.length ? currentStep.hints.join(' | ') : '(sin pistas)'}
+- Mensaje de reintento configurado: "${currentStep.wrong_answer_message || '(no configurado, inventá uno en personaje)'}"
+${effectiveContext ? `- Contexto adicional del creador de la experiencia: "${effectiveContext}"` : ''}`
+                : '- Este es un paso narrativo, el jugador NO necesita responder nada.'}
+
+REGLAS:
+- Nunca salgas del personaje.
+- Nunca des la respuesta correcta directamente.
+- Podés parafrasear el mensaje del paso sin repetirlo textualmente.
+- Hablá en español, con el tono y vocabulario de tu personalidad.
+- Respuestas cortas: 1-3 oraciones máximo.
+${effectiveContext ? `- Usá el contexto adicional para guiar al jugador si está trabado, sin saltearse los pasos definidos.` : ''}
+
+TAREA ACTUAL: ${task}
+`.trim();
+
+        // Helper: call LLM + save interaction cost to Firestore
+        const llmAndSave = async (systemPrompt: string, userMsg: string) => {
+            const result = await callLLM(apiKey, isOpenAI, systemPrompt, userMsg);
+            saveInteraction({
+                session_id: sessionId,
+                experience_id: id,
+                user_message: userMsg,
+                system_response: result.text,
+                tokens_consumed: result.tokens,
+                estimated_cost: result.cost,
+            });
+            return result.text;
+        };
+
+        // ─── Evaluate if the answer satisfies the expected intent ──────────────────
+        const evalSystemPrompt = [
+            'Sos un evaluador de respuestas para un juego interactivo.',
+            'Tu tarea: decidir si la respuesta del jugador demuestra que entendió correctamente lo que se le pedía.',
+            'Criterios de CORRECTO:',
+            '  - Expresa la misma intención o idea central que la respuesta de referencia.',
+            '  - Una respuesta más corta o informal que capture la esencia es válida (ej: "sí" ≈ "sí, claro").',
+            '  - Sinónimos, variantes ortográficas y equivalentes semánticos cuentan.',
+            '  - Una respuesta afirmativa simple ("sí", "si", "yes", "claro") equivale a "sí" o "sí, claro" o "por supuesto".',
+            'Criterios de INCORRECTO:',
+            '  - La respuesta es claramente equivocada, contradictoria o completamente fuera de tema.',
+            '  - El jugador no respondió la pregunta en absoluto.',
+            'Respondé ÚNICAMENTE con la palabra SÍ o NO, sin ningún otro texto.',
+        ].join('\n');
+
+        const evalUserPrompt = [
+            `Pregunta/instrucción que recibió el jugador: "${currentStep.message_to_send}"`,
+            `Respuesta de referencia (la ideal): "${currentStep.expected_answer}"`,
+            `Respuesta real del jugador: "${userMessage}"`,
+            '¿La respuesta del jugador es correcta?',
+        ].join('\n');
+
+        const evalResult = await callLLM(apiKey, isOpenAI, evalSystemPrompt, evalUserPrompt);
+        saveInteraction({
+            session_id: sessionId,
+            experience_id: id,
+            user_message: evalUserPrompt,
+            system_response: evalResult.text,
+            tokens_consumed: evalResult.tokens,
+            estimated_cost: evalResult.cost,
+        });
+
+        const upper = evalResult.text.trim().toUpperCase();
+        const isCorrect = upper.startsWith('SÍ') || upper.startsWith('SI') || upper.startsWith('YES');
+
+        // ─── Correct answer ───────────────────────────────────────────────────────
+        if (isCorrect) {
+            const nextIndex = stepIndex + 1;
+            const isLast = nextIndex >= steps.length;
+
+            if (isLast) {
+                const response = await llmAndSave(
+                    buildSystemPrompt('¡El jugador completó TODA la experiencia! Enviá un mensaje de cierre épico y felicitación en personaje.'),
+                    '¡Lo logré!',
+                );
+                return NextResponse.json({ evaluation: 'correct', nextStepIndex: nextIndex, response, completed: true });
+            }
+
+            const nextStep = steps[nextIndex];
+            const confirmTask = nextStep.requires_response
+                ? `El jugador respondió correctamente. Celebrá brevemente en personaje (1 oración) y luego presentá el siguiente mensaje al jugador: "${nextStep.message_to_send}". Podés adaptarlo a tu tono sin cambiar el contenido esencial.`
+                : `El jugador respondió correctamente. Confirmá brevemente en personaje con una sola oración de celebración. NO añadas más información ni anticipes el siguiente paso; el sistema lo hará automáticamente.`;
+
+            const response = await llmAndSave(buildSystemPrompt(confirmTask), userMessage);
+            return NextResponse.json({ evaluation: 'correct', nextStepIndex: nextIndex, response });
+        }
+
+        // ─── Incorrect answer ─────────────────────────────────────────────────────
+        const response = await llmAndSave(
+            buildSystemPrompt(`El jugador respondió incorrectamente con: "${userMessage}". Usá el mensaje de reintento y las pistas disponibles para guiarlo sin revelar la respuesta. Si hay contexto adicional, usalo para orientarlo mejor sin saltearse pasos.`),
+            userMessage,
+        );
+        return NextResponse.json({ evaluation: 'incorrect', nextStepIndex: stepIndex, response });
+
+    } catch (err: any) {
+        console.error('[preview]', err);
+        return NextResponse.json({ error: err.message ?? 'Error en preview' }, { status: 500 });
+    }
+}
+
+// ─── LLM Response type ────────────────────────────────────────────────────────
+interface LLMResult { text: string; tokens: number; cost: number; }
+
+// ─── LLM Router ───────────────────────────────────────────────────────────────
+async function callLLM(apiKey: string, isOpenAI: boolean, systemPrompt: string, userMessage: string): Promise<LLMResult> {
+    if (!apiKey) {
+        return { text: `[Sin API key configurada] El sistema evaluaría: "${userMessage.slice(0, 60)}"`, tokens: 0, cost: 0 };
+    }
+    return isOpenAI
+        ? callOpenAI(apiKey, systemPrompt, userMessage)
+        : callGemini(apiKey, systemPrompt, userMessage);
+}
+
+// ─── Gemini Call ──────────────────────────────────────────────────────────────
+// Pricing: gemini-2.0-flash — Input $0.10/1M tokens, Output $0.40/1M tokens
+async function callGemini(apiKey: string, systemPrompt: string, userMessage: string): Promise<LLMResult> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const body = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        generationConfig: { temperature: 0.75, maxOutputTokens: 350 },
+    };
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '(sin respuesta del LLM)';
+    const inputTokens: number = data.usageMetadata?.promptTokenCount ?? 0;
+    const outputTokens: number = data.usageMetadata?.candidatesTokenCount ?? 0;
+    const tokens = inputTokens + outputTokens;
+    const cost = (inputTokens * 0.10 + outputTokens * 0.40) / 1_000_000;
+
+    return { text, tokens, cost };
+}
+
+// ─── OpenAI Call ──────────────────────────────────────────────────────────────
+// Pricing: gpt-4o-mini — Input $0.15/1M tokens, Output $0.60/1M tokens
+async function callOpenAI(apiKey: string, systemPrompt: string, userMessage: string): Promise<LLMResult> {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userMessage },
+            ],
+            temperature: 0.75,
+            max_tokens: 350,
+        }),
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`OpenAI API ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content ?? '(sin respuesta del LLM)';
+    const inputTokens: number = data.usage?.prompt_tokens ?? 0;
+    const outputTokens: number = data.usage?.completion_tokens ?? 0;
+    const tokens = inputTokens + outputTokens;
+    const cost = (inputTokens * 0.15 + outputTokens * 0.60) / 1_000_000;
+
+    return { text, tokens, cost };
+}

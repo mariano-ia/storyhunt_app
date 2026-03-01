@@ -1,0 +1,549 @@
+'use client';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import {
+    ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, ChevronLeft, ChevronRight,
+    BarChart2, AlertCircle, Save, Zap, CheckCircle, XCircle, Play, BookOpen, Share2, X, Copy, ExternalLink
+} from 'lucide-react';
+import {
+    getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps
+} from '@/lib/firestore';
+import ConfirmModal from '@/components/ConfirmModal';
+import type { Experience, ExperienceFormData, Step, StepFormData } from '@/lib/types';
+
+// ─── Share Modal ──────────────────────────────────────────────────────────────
+function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
+    const [copied, setCopied] = useState(false);
+    const url = typeof window !== 'undefined'
+        ? `${window.location.origin}/play/${id}`
+        : `/play/${id}`;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }} onClick={onClose}>
+            <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border-default)',
+                borderRadius: 16, padding: 28, maxWidth: 480, width: '100%',
+                boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+            }} onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                            width: 40, height: 40, borderRadius: 10,
+                            background: 'linear-gradient(135deg, var(--brand-primary) 0%, #a855f7 100%)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <Share2 size={18} style={{ color: '#fff' }} />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                Compartir experiencia
+                            </h3>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                                {name}
+                            </p>
+                        </div>
+                    </div>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>
+                        <X size={16} />
+                    </button>
+                </div>
+
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
+                    Compartí este link para que cualquier persona pueda vivir la experiencia desde el navegador, sin necesidad de WhatsApp ni cuenta.
+                </p>
+
+                {/* Link box */}
+                <div style={{
+                    display: 'flex', gap: 8, alignItems: 'center',
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                    borderRadius: 10, padding: '10px 14px',
+                    marginBottom: 16,
+                }}>
+                    <span style={{
+                        flex: 1, fontSize: 13, color: 'var(--text-secondary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontFamily: 'monospace',
+                    }}>
+                        {url}
+                    </span>
+                    <button
+                        className="btn btn-ghost btn-sm btn-icon"
+                        onClick={handleCopy}
+                        title="Copiar link"
+                        style={{ flexShrink: 0, color: copied ? 'var(--success)' : undefined }}
+                    >
+                        {copied ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleCopy}
+                        style={{ flex: 1 }}
+                    >
+                        {copied ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar link</>}
+                    </button>
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary"
+                        title="Abrir en nueva pestaña"
+                    >
+                        <ExternalLink size={15} />
+                    </a>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Inline Step Editor with Auto-Save ────────────────────────────────────────
+function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMoveDown }: {
+    step: Step; index: number; total: number;
+    onSave: (data: Partial<StepFormData>) => Promise<void>;
+    onDelete: () => void; onMoveUp: () => void; onMoveDown: () => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [form, setForm] = useState<StepFormData>({
+        order: step.order,
+        message_to_send: step.message_to_send,
+        requires_response: step.requires_response ?? true,
+        expected_answer: step.expected_answer,
+        hints: step.hints,
+        wrong_answer_message: step.wrong_answer_message,
+        context: step.context || '',
+        delay_seconds: step.delay_seconds ?? 1.2,
+    });
+    const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isFirstRender = useRef(true);
+
+    // Auto-save with 1.5s debounce whenever form changes while editing
+    const triggerAutoSave = useCallback((newForm: StepFormData) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        setAutoSaveState('saving');
+        debounceRef.current = setTimeout(async () => {
+            await onSave(newForm);
+            setAutoSaveState('saved');
+            setTimeout(() => setAutoSaveState('idle'), 2000);
+        }, 1500);
+    }, [onSave]);
+
+    const handleFormChange = (newForm: StepFormData) => {
+        setForm(newForm);
+        if (editing) triggerAutoSave(newForm);
+    };
+
+    // Cleanup on unmount
+    useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+    if (!editing) {
+        const isNarrative = !(step.requires_response ?? true);
+        return (
+            <div className="step-item" style={{ borderColor: isNarrative ? 'rgba(167,139,250,0.3)' : undefined }}>
+                <div className="step-item-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={onMoveUp} disabled={index === 0} type="button"><ChevronLeft size={13} style={{ transform: 'rotate(90deg)' }} /></button>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={onMoveDown} disabled={index === total - 1} type="button"><ChevronRight size={13} style={{ transform: 'rotate(90deg)' }} /></button>
+                        </div>
+                        <div className="step-item-number">{index + 1}</div>
+                        <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {step.message_to_send.slice(0, 70)}{step.message_to_send.length > 70 ? '…' : ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                                {isNarrative
+                                    ? <span style={{ color: 'var(--brand-primary-light)' }}>📖 Narrativo — sin respuesta</span>
+                                    : <>Espera: {step.expected_answer} &middot; {step.hints.length} pista(s)</>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="step-item-actions">
+                        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditing(true)} id={`edit-step-${step.id}`}><Edit2 size={14} /></button>
+                        <button className="btn btn-danger btn-icon btn-sm" onClick={onDelete} id={`del-step-${step.id}`}><Trash2 size={14} /></button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* requires_response toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                    <input
+                        type="checkbox"
+                        id={`req-resp-edit-${step.id}`}
+                        checked={form.requires_response}
+                        onChange={e => handleFormChange({ ...form, requires_response: e.target.checked })}
+                        style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`req-resp-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                        Requiere respuesta del usuario
+                    </label>
+                    {!form.requires_response && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Narrativo: avanza automáticamente</span>}
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
+                    <textarea className="form-textarea" style={{ minHeight: 80 }} value={form.message_to_send} onChange={e => handleFormChange({ ...form, message_to_send: e.target.value })} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Contexto heredable (Opcional)</label>
+                        <input className="form-input" placeholder="Ej: Usa un tono muy urgente. El jugador está en Grand Central." value={form.context} onChange={e => handleFormChange({ ...form, context: e.target.value })} />
+                        <span className="form-hint" style={{ fontSize: 11, marginTop: 4, display: 'block', color: 'var(--text-muted)' }}>Mantiene este contexto hasta el próximo paso con contexto.</span>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Delay antes de enviar (segundos)</label>
+                        <input className="form-input" type="number" step="0.1" min="0" value={form.delay_seconds} onChange={e => handleFormChange({ ...form, delay_seconds: parseFloat(e.target.value) || 0 })} />
+                        <span className="form-hint" style={{ fontSize: 11, marginTop: 4, display: 'block', color: 'var(--text-muted)' }}>Tiempo de espera para enviar este mensaje.</span>
+                    </div>
+                </div>
+
+                {form.requires_response && (
+                    <>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Respuesta esperada <span className="required">*</span></label>
+                            <input className="form-input" value={form.expected_answer} onChange={e => handleFormChange({ ...form, expected_answer: e.target.value })} />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Mensaje si respuesta incorrecta</label>
+                            <input className="form-input" value={form.wrong_answer_message} onChange={e => handleFormChange({ ...form, wrong_answer_message: e.target.value })} />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Pistas</label>
+                            {form.hints.map((h, i) => (
+                                <div className="hint-row" key={i} style={{ marginBottom: 6 }}>
+                                    <input className="form-input" value={h} onChange={e => handleFormChange({ ...form, hints: form.hints.map((hh, ii) => ii === i ? e.target.value : hh) })} />
+                                    <button className="btn btn-ghost btn-icon btn-sm" type="button" onClick={() => handleFormChange({ ...form, hints: form.hints.filter((_, ii) => ii !== i) })}><Trash2 size={13} /></button>
+                                </div>
+                            ))}
+                            <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleFormChange({ ...form, hints: [...form.hints, ''] })} style={{ color: 'var(--text-brand)' }}><Plus size={13} /> Agregar pista</button>
+                        </div>
+                    </>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                    {/* Auto-save indicator */}
+                    <span style={{
+                        fontSize: 12,
+                        color: autoSaveState === 'saved' ? 'var(--success)' : 'var(--text-muted)',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        transition: 'color 0.3s',
+                    }}>
+                        {autoSaveState === 'saving' && <span style={{ opacity: 0.6 }}>Guardando...</span>}
+                        {autoSaveState === 'saved' && <><Check size={12} /> Auto-guardado</>}
+                    </span>
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        type="button"
+                        onClick={() => setEditing(false)}
+                    >
+                        Listo
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Tabs ──────────────────────────────────────────────────────────
+function TabNav({ active, onChange }: { active: string; onChange: (t: string) => void }) {
+    return (
+        <div className="tab-nav">
+            {['general', 'pasos', 'tecnico'].map(tab => (
+                <button key={tab} className={`tab-btn ${active === tab ? 'active' : ''}`} onClick={() => onChange(tab)} id={`tab-${tab}`}>
+                    {tab === 'general' ? 'Información General' : tab === 'pasos' ? 'Pasos' : 'Configuración Técnica'}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// ─── Main page ────────────────────────────────────────────────────
+export default function ExperienceDetailPage() {
+    const { id } = useParams() as { id: string };
+    const router = useRouter();
+    const [exp, setExp] = useState<Experience | null>(null);
+    const [steps, setSteps] = useState<Step[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [tab, setTab] = useState('general');
+    const [formData, setFormData] = useState<Partial<ExperienceFormData>>({});
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [newStep, setNewStep] = useState<StepFormData | null>(null);
+    const [toDeleteStep, setToDeleteStep] = useState<Step | null>(null);
+    const [deletingStep, setDeletingStep] = useState(false);
+    const [showShare, setShowShare] = useState(false);
+
+    const load = async () => {
+        setLoading(true);
+        const [e, s] = await Promise.all([getExperience(id), getSteps(id)]);
+        if (e) { setExp(e); setFormData(e); }
+        setSteps(s);
+        setLoading(false);
+    };
+
+    useEffect(() => { load(); }, [id]);
+
+    const handleSaveGeneral = async () => {
+        if (!exp) return;
+        setSaving(true);
+        await updateExperience(id, formData as ExperienceFormData);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+        setSaving(false);
+    };
+
+    const handleMoveUp = async (i: number) => {
+        if (i === 0) return;
+        const s = [...steps];[s[i - 1], s[i]] = [s[i], s[i - 1]];
+        const reordered = s.map((st, idx) => ({ ...st, order: idx + 1 }));
+        setSteps(reordered); await reorderSteps(id, reordered);
+    };
+
+    const handleMoveDown = async (i: number) => {
+        if (i === steps.length - 1) return;
+        const s = [...steps];[s[i], s[i + 1]] = [s[i + 1], s[i]];
+        const reordered = s.map((st, idx) => ({ ...st, order: idx + 1 }));
+        setSteps(reordered); await reorderSteps(id, reordered);
+    };
+
+    const handleAddStep = async () => {
+        if (!newStep) return;
+        await createStep(id, { ...newStep, order: steps.length + 1 });
+        setNewStep(null);
+        load();
+    };
+
+    const handleDeleteStep = async () => {
+        if (!toDeleteStep) return;
+        setDeletingStep(true);
+        await deleteStep(id, toDeleteStep.id);
+        setToDeleteStep(null);
+        setDeletingStep(false);
+        load();
+    };
+
+    if (loading) return (
+        <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 80, borderRadius: 12 }} />)}
+            </div>
+        </div>
+    );
+
+    if (!exp) return <div style={{ color: 'var(--text-secondary)', padding: 40, textAlign: 'center' }}>Experiencia no encontrada.</div>;
+
+    return (
+        <div>
+            <div className="page-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button className="btn btn-ghost btn-icon" onClick={() => router.push('/dashboard/experiences')}><ArrowLeft size={18} /></button>
+                    <div>
+                        <h1 className="page-title">{exp.name}</h1>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                            <span className={`badge badge-${exp.status}`}>{exp.status === 'active' ? 'Activa' : 'Inactiva'}</span>
+                            <span className={`badge badge-${exp.mode}`}>{exp.mode === 'test' ? 'Prueba' : 'Producción'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowShare(true)}
+                        id="share-btn"
+                        title="Compartir experiencia"
+                    >
+                        <Share2 size={15} /> Compartir
+                    </button>
+                    <button className="btn btn-primary" onClick={() => router.push(`/dashboard/experiences/${id}/preview`)} id="preview-btn">
+                        <Play size={15} /> Probar
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => router.push(`/dashboard/experiences/${id}/metrics`)} id="view-metrics-btn">
+                        <BarChart2 size={15} /> Métricas
+                    </button>
+                </div>
+            </div>
+
+            <TabNav active={tab} onChange={setTab} />
+
+            {/* General Tab */}
+            {tab === 'general' && (
+                <div style={{ maxWidth: 640 }}>
+                    <div className="form-group">
+                        <label className="form-label">Nombre <span className="required">*</span></label>
+                        <input className="form-input" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Descripción</label>
+                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Personalidad del narrador</label>
+                        <textarea className="form-textarea" style={{ minHeight: 140 }} value={formData.narrator_personality || ''} onChange={e => setFormData({ ...formData, narrator_personality: e.target.value })} />
+                        <span className="form-hint">System prompt del LLM que define el tono y carácter del narrador.</span>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Palabra clave de activación</label>
+                        <input className="form-input" value={formData.activation_keyword || ''} onChange={e => setFormData({ ...formData, activation_keyword: e.target.value.toUpperCase() })} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary" onClick={handleSaveGeneral} disabled={saving} id="save-general-btn">
+                            {saved ? <><Check size={15} /> Guardado</> : saving ? 'Guardando...' : <><Save size={15} /> Guardar cambios</>}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Steps Tab */}
+            {tab === 'pasos' && (
+                <div>
+                    {steps.length === 0 && !newStep && (
+                        <div className="empty-state">
+                            <div className="empty-state-icon"><GripVertical size={24} /></div>
+                            <div className="empty-state-title">Sin pasos</div>
+                            <p className="empty-state-text">Esta experiencia no tiene pasos. Agregá el primero.</p>
+                        </div>
+                    )}
+                    {steps.map((step, i) => (
+                        <InlineStepEditor
+                            key={step.id} step={step} index={i} total={steps.length}
+                            onSave={async (data) => { await updateStep(id, step.id, data); }}
+                            onDelete={() => setToDeleteStep(step)}
+                            onMoveUp={() => handleMoveUp(i)}
+                            onMoveDown={() => handleMoveDown(i)}
+                        />
+                    ))}
+                    {newStep ? (
+                        <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, color: 'var(--text-brand)' }}>Nuevo paso #{steps.length + 1}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                {/* requires_response toggle for new step */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                                    <input
+                                        type="checkbox"
+                                        id="new-step-requires-resp"
+                                        checked={newStep.requires_response}
+                                        onChange={e => setNewStep({ ...newStep, requires_response: e.target.checked })}
+                                        style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                                    />
+                                    <label htmlFor="new-step-requires-resp" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                        Requiere respuesta del usuario
+                                    </label>
+                                    {!newStep.requires_response && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Narrativo</span>}
+                                </div>
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
+                                    <textarea className="form-textarea" style={{ minHeight: 80 }} value={newStep.message_to_send} onChange={e => setNewStep({ ...newStep, message_to_send: e.target.value })} />
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                    <div className="form-group" style={{ margin: 0 }}>
+                                        <label className="form-label">Contexto heredable (Opcional)</label>
+                                        <input className="form-input" placeholder="Ej: Usa un tono muy urgente..." value={newStep.context} onChange={e => setNewStep({ ...newStep, context: e.target.value })} />
+                                    </div>
+
+                                    <div className="form-group" style={{ margin: 0 }}>
+                                        <label className="form-label">Delay (segundos)</label>
+                                        <input className="form-input" type="number" step="0.1" min="0" value={newStep.delay_seconds} onChange={e => setNewStep({ ...newStep, delay_seconds: parseFloat(e.target.value) || 0 })} />
+                                    </div>
+                                </div>
+                                {newStep.requires_response && (
+                                    <>
+                                        <div className="form-group" style={{ margin: 0 }}>
+                                            <label className="form-label">Respuesta esperada <span className="required">*</span></label>
+                                            <input className="form-input" value={newStep.expected_answer} onChange={e => setNewStep({ ...newStep, expected_answer: e.target.value })} />
+                                        </div>
+                                        <div className="form-group" style={{ margin: 0 }}>
+                                            <label className="form-label">Mensaje si respuesta incorrecta</label>
+                                            <input className="form-input" value={newStep.wrong_answer_message} onChange={e => setNewStep({ ...newStep, wrong_answer_message: e.target.value })} />
+                                        </div>
+                                    </>
+                                )}
+                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                    <button className="btn btn-secondary btn-sm" onClick={() => setNewStep(null)}>Cancelar</button>
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={handleAddStep}
+                                        disabled={!newStep.message_to_send || (newStep.requires_response && !newStep.expected_answer)}
+                                        id="save-new-step-btn"
+                                    >
+                                        <Check size={13} /> Guardar paso
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2 })} id="add-new-step-btn">
+                            <Plus size={16} /> Agregar paso
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Technical Tab */}
+            {tab === 'tecnico' && (
+                <div style={{ maxWidth: 640 }}>
+                    <div className="form-group">
+                        <label className="form-label">API Key del LLM</label>
+                        <input className="form-input" type="password" value={formData.llm_api_key || ''} onChange={e => setFormData({ ...formData, llm_api_key: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Número / Trigger de Twilio</label>
+                        <input className="form-input" value={formData.twilio_trigger || ''} onChange={e => setFormData({ ...formData, twilio_trigger: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Modo de operación</label>
+                        <div className="toggle-group" style={{ maxWidth: 300 }}>
+                            <button type="button" className={`toggle-option ${formData.mode === 'test' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'test' })}>🧪 Prueba</button>
+                            <button type="button" className={`toggle-option ${formData.mode === 'production' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'production' })}>🚀 Producción</button>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Estado</label>
+                        <div className="toggle-group" style={{ maxWidth: 300 }}>
+                            <button type="button" className={`toggle-option ${formData.status === 'active' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'active' })}>✅ Activa</button>
+                            <button type="button" className={`toggle-option ${formData.status === 'inactive' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'inactive' })}>⏸ Inactiva</button>
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={handleSaveGeneral} disabled={saving} id="save-tech-btn">
+                        {saved ? <><Check size={15} /> Guardado</> : saving ? 'Guardando...' : <><Save size={15} /> Guardar cambios</>}
+                    </button>
+                </div>
+            )}
+
+            {toDeleteStep && (
+                <ConfirmModal
+                    title="Eliminar paso"
+                    message={`¿Eliminás el paso #${toDeleteStep.order}? Esta acción no se puede deshacer.`}
+                    onConfirm={handleDeleteStep}
+                    onCancel={() => setToDeleteStep(null)}
+                    loading={deletingStep}
+                />
+            )}
+
+            {showShare && exp && (
+                <ShareModal id={id} name={exp.name} onClose={() => setShowShare(false)} />
+            )}
+        </div>
+    );
+}
