@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowUp, RotateCcw, AlertTriangle, BookOpen, Zap, CheckCircle } from 'lucide-react';
-import { getExperience, getSteps } from '@/lib/firestore';
+import { useParams } from 'next/navigation';
+import { ArrowUp, RotateCcw } from 'lucide-react';
+import { getExperienceBySlug, getSteps } from '@/lib/firestore';
 import type { Experience, Step, PreviewMessage } from '@/lib/types';
 
 // ─── Chat Bubble ──────────────────────────────────────────────────────────────
@@ -15,61 +15,44 @@ function ChatMedia({ type, url }: { type: 'image' | 'video' | 'audio'; url: stri
 
 function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, narratorAvatar }: { msg: PreviewMessage; isLastSequence: boolean; isFirstSequence: boolean; narratorInitial: string; narratorAvatar?: string }) {
     const isSystem = msg.role === 'system';
-
-    const EVAL_COLORS: Record<string, string> = {
-        correct: '#34D399',
-        incorrect: '#EF4444',
-        narrative: '#A78BFA',
-        off_topic: '#F59E0B',
-    };
-    const evalColor = msg.evaluation ? EVAL_COLORS[msg.evaluation] : undefined;
-
     return (
         <div style={{
             display: 'flex',
-            flexDirection: 'column',
-            alignItems: isSystem ? 'flex-start' : 'flex-end',
+            justifyContent: isSystem ? 'flex-start' : 'flex-end',
             marginBottom: isLastSequence ? 16 : 4,
             width: '100%',
+            gap: 8,
+            alignItems: 'flex-end'
         }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', width: '100%', justifyContent: isSystem ? 'flex-start' : 'flex-end' }}>
-                {isSystem && (
-                    <div style={{
-                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                        background: isFirstSequence
-                            ? (narratorAvatar ? `url(${narratorAvatar}) center/cover no-repeat` : 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)')
-                            : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 500, color: 'white',
-                        visibility: isFirstSequence ? 'visible' : 'hidden',
-                        marginBottom: 2
-                    }}>
-                        {!narratorAvatar && isFirstSequence && narratorInitial}
-                    </div>
-                )}
+            {isSystem && (
                 <div style={{
-                    maxWidth: '75%',
-                    background: isSystem ? '#E5E5EA' : '#0B84FF',
-                    color: isSystem ? 'black' : 'white',
-                    borderRadius: isSystem
-                        ? (isLastSequence ? '18px 18px 18px 4px' : '18px')
-                        : (isLastSequence ? '18px 18px 4px 18px' : '18px'),
-                    padding: '8px 14px',
-                    fontSize: 15,
-                    lineHeight: 1.4,
-                    wordBreak: 'break-word',
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    background: isFirstSequence
+                        ? (narratorAvatar ? `url(${narratorAvatar}) center/cover no-repeat` : 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)')
+                        : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 500, color: 'white',
+                    visibility: isFirstSequence ? 'visible' : 'hidden', // maintain spacing if hidden
+                    marginBottom: 2
                 }}>
-                    {msg.media_url && msg.media_type && <ChatMedia type={msg.media_type} url={msg.media_url} />}
-                    {msg.content}
+                    {!narratorAvatar && isFirstSequence && narratorInitial}
                 </div>
-            </div>
-            {msg.evaluation && isLastSequence && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: evalColor, marginTop: 4, marginLeft: isSystem ? 40 : 0, marginRight: isSystem ? 0 : 4 }}>
-                    {msg.evaluation === 'correct' ? '✓ Correcto' :
-                        msg.evaluation === 'incorrect' ? '✗ Incorrecto' :
-                            msg.evaluation === 'narrative' ? '📖 Narrativo' : '↗ Fuera de contexto'}
-                </span>
             )}
+            <div style={{
+                maxWidth: '75%',
+                background: isSystem ? '#E5E5EA' : '#0B84FF',
+                color: isSystem ? 'black' : 'white',
+                borderRadius: isSystem
+                    ? (isLastSequence ? '18px 18px 18px 4px' : '18px')
+                    : (isLastSequence ? '18px 18px 4px 18px' : '18px'),
+                padding: '8px 14px',
+                fontSize: 15,
+                lineHeight: 1.4,
+                wordBreak: 'break-word',
+            }}>
+                {msg.media_url && msg.media_type && <ChatMedia type={msg.media_type} url={msg.media_url} />}
+                {msg.content}
+            </div>
         </div>
     );
 }
@@ -109,9 +92,8 @@ function TypingIndicator({ narratorInitial, narratorAvatar }: { narratorInitial:
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function ExperiencePreview() {
-    const { id } = useParams() as { id: string };
-    const router = useRouter();
+export default function PlayPage() {
+    const { slug } = useParams() as { slug: string };
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
     const [messages, setMessages] = useState<PreviewMessage[]>([]);
@@ -120,15 +102,13 @@ export default function ExperiencePreview() {
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
 
-    const [hasApiKey, setHasApiKey] = useState(true);
-
     // Status states
     const [sending, setSending] = useState(false);
     const [completed, setCompleted] = useState(false);
     const [systemTyping, setSystemTyping] = useState(false);
 
-    const inputRef = useRef<HTMLInputElement>(null);
     const chatRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
 
     const scrollToBottom = () => {
@@ -146,13 +126,17 @@ export default function ExperiencePreview() {
         const finalDelay = typeof delay_seconds === 'number' ? delay_seconds * 1000 : 1200;
 
         if (interrupted_typing) {
+            // Start typing
             setSystemTyping(true);
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 1500)); // Types for 1.5s
+            // Stops typing
             setSystemTyping(false);
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 1500)); // Hesitates for 1.5s
+            // Resume typing
             setSystemTyping(true);
             await new Promise(r => setTimeout(r, finalDelay > 0 ? finalDelay : 1000));
         } else {
+            // Standard typing effect
             setSystemTyping(true);
             await new Promise(r => setTimeout(r, finalDelay));
         }
@@ -189,7 +173,7 @@ export default function ExperiencePreview() {
             // recurse to next step
             await advanceNarrativeSteps(allSteps, fromIndex + 1);
         } else {
-            // Reached an interactive step
+            // Interactive step: pause execution here
             setStepIndex(fromIndex);
 
             // Render it, and then STOP advancing
@@ -206,25 +190,23 @@ export default function ExperiencePreview() {
         if (initialized.current) return;
         initialized.current = true;
 
-        Promise.all([getExperience(id), getSteps(id)]).then(([exp, stps]) => {
+        getExperienceBySlug(slug).then(exp => {
             if (!exp) { setNotFound(true); setLoading(false); return; }
             setExperience(exp);
-            setSteps(stps);
-            setLoading(false);
-            if (!exp.llm_api_key) setHasApiKey(false);
+            getSteps(exp.id).then(stps => {
+                setSteps(stps);
+                setLoading(false);
 
-            if (stps.length > 0) {
-                const init = async () => {
-                    // Kick off narrative steps starting from index 0
-                    // Our recursive function will handle both the typing/narrative steps 
-                    // and correctly stop + display the first interactive step.
-                    // Doing pushMessage + advance was causing duplicates.
-                    await advanceNarrativeSteps(stps, 0);
-                };
-                init();
-            }
+                if (stps.length > 0) {
+                    // Initialize async so we can use await for the typing effect
+                    const init = async () => {
+                        await advanceNarrativeSteps(stps, 0);
+                    };
+                    init();
+                }
+            });
         });
-    }, [id]);
+    }, [slug]);
 
     useEffect(() => { scrollToBottom(); }, [messages, systemTyping]);
 
@@ -244,7 +226,7 @@ export default function ExperiencePreview() {
         setSending(true);
 
         try {
-            const res = await fetch(`/api/experiences/${id}/preview`, {
+            const res = await fetch(`/api/experiences/${experience?.id}/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userMessage: userMsg.content, stepIndex }),
@@ -260,12 +242,14 @@ export default function ExperiencePreview() {
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
                 evaluation: data.evaluation,
+                // Inherit media from the next step if we successfully advanced
                 media_type: isCorrect && nextStepObj ? nextStepObj.media_type : undefined,
                 media_url: isCorrect && nextStepObj ? nextStepObj.media_url : undefined
             };
 
             await pushMessageWithEffects(systemMsg, {
                 delay_seconds: 1.0,
+                // Only use interrupted typing on correct evaluation if the next step has it
                 interrupted_typing: isCorrect && nextStepObj ? nextStepObj.interrupted_typing : false
             });
 
@@ -273,7 +257,6 @@ export default function ExperiencePreview() {
                 setCompleted(true);
                 setStepIndex(steps.length);
             } else if (isCorrect) {
-                // Since this interactive step is passed, we advance starting from the next
                 if (nextIdx < steps.length) {
                     await advanceNarrativeSteps(steps, nextIdx);
                 }
@@ -291,7 +274,6 @@ export default function ExperiencePreview() {
         setStepIndex(0);
         setCompleted(false);
         setInput('');
-        setSystemTyping(false);
 
         if (steps.length > 0) {
             const init = async () => {
@@ -301,17 +283,20 @@ export default function ExperiencePreview() {
         }
     };
 
+    // ─── States ────────────────────────────────────────────────────────────────
+
     if (loading) return (
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF' }}>
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF' }}>
             <div style={{ width: 30, height: 30, border: '3px solid #E5E5EA', borderTopColor: '#8E8E93', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     );
 
-    if (notFound || !experience) return (
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF', color: '#8E8E93', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+    if (notFound) return (
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF', color: '#8E8E93', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-            <h2 style={{ fontSize: 18, color: 'black', margin: 0, fontWeight: 600 }}>Vista Previa no encontrada</h2>
+            <h2 style={{ fontSize: 18, color: 'black', margin: 0, fontWeight: 600 }}>Chat no encontrado</h2>
+            <p style={{ margin: '8px 0 0', fontSize: 15 }}>Esta experiencia no existe.</p>
         </div>
     );
 
@@ -323,7 +308,7 @@ export default function ExperiencePreview() {
 
     return (
         <div style={{
-            height: 'calc(100vh - var(--topbar-height))',
+            height: '100vh',
             background: '#FFFFFF',
             display: 'flex', flexDirection: 'column',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
@@ -340,48 +325,33 @@ export default function ExperiencePreview() {
                 position: 'sticky', top: 0, zIndex: 10,
                 color: 'black'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <button
-                        onClick={() => router.push(`/dashboard/experiences/${id}`)}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#0B84FF', display: 'flex', alignItems: 'center' }}
-                    >
-                        <ArrowLeft size={24} />
-                    </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                            width: 40, height: 40, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 18, fontWeight: 500, color: 'white',
-                        }}>
-                            {narratorInitial}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: 17, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {experience?.name}
-                            </span>
-                            <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
-                                {stepIndex >= steps.length ? '¡Completada!' : `Paso ${stepIndex + 1} de ${steps.length}`}
-                            </span>
-                        </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18, fontWeight: 500, color: 'white',
+                    }}>
+                        {narratorInitial}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 17, fontWeight: 600 }}>{experience?.name}</span>
+                        <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
+                            {experience?.description?.substring(0, 30) || 'Experiencia interactiva'}
+                        </span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {!hasApiKey && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#F59E0B', fontWeight: 500 }}>
-                            <AlertTriangle size={14} /> Sin API key
-                        </div>
-                    )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button
                         onClick={handleReset}
                         style={{
                             background: '#E5E5EA', border: 'none', cursor: 'pointer',
-                            color: '#0B84FF', padding: '6px 12px', borderRadius: '14px',
-                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500
+                            color: 'black', width: 32, height: 32, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}
                     >
-                        <RotateCcw size={14} /> Reiniciar
+                        <RotateCcw size={16} />
                     </button>
                 </div>
             </div>
@@ -390,12 +360,12 @@ export default function ExperiencePreview() {
             <div
                 ref={chatRef}
                 style={{
-                    flex: 1, overflowY: 'auto', padding: '24px 16px 16px',
+                    flex: 1, overflowY: 'auto', padding: '16px 12px',
                     display: 'flex', flexDirection: 'column',
                     maxWidth: 720, margin: '0 auto', width: '100%',
                 }}
             >
-                <div style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', margin: '0 0 24px', fontWeight: 500 }}>
+                <div style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', margin: '8px 0 24px', fontWeight: 500 }}>
                     Hoy {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                 </div>
 
@@ -411,30 +381,13 @@ export default function ExperiencePreview() {
 
                 {completed && (
                     <div style={{ textAlign: 'center', margin: '24px 0', fontSize: 13, color: '#8E8E93' }}>
-                        Experiencia Completada.
+                        Has completado la experiencia.
                     </div>
                 )}
 
+                {/* Spacer to push input into view properly if needed */}
                 <div style={{ flexShrink: 0, height: 8 }} />
             </div>
-
-            {/* Optional Current step info bar for creator debugging */}
-            {currentStep && !completed && (
-                <div style={{ padding: '8px 16px', background: '#F9F9F9', borderTop: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, color: '#8E8E93', display: 'flex', alignItems: 'center', gap: 8, maxWidth: 720, margin: '0 auto', width: '100%' }}>
-                    {currentStep.requires_response ? (
-                        <>
-                            <Zap size={14} style={{ color: '#0B84FF' }} />
-                            <span>Esperando: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.expected_answer}</strong></span>
-                            {currentStep.hints.length > 0 && <span>· {currentStep.hints.length} pista(s)</span>}
-                        </>
-                    ) : (
-                        <>
-                            <BookOpen size={14} style={{ color: '#0B84FF' }} />
-                            <span>Narrativo — avanzando...</span>
-                        </>
-                    )}
-                </div>
-            )}
 
             {/* Input area */}
             <div style={{
@@ -461,7 +414,7 @@ export default function ExperiencePreview() {
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                            placeholder={isSystemDisable ? (completed ? 'Chat terminado' : 'Escribiendo...') : 'Mensaje iMessage'}
+                            placeholder={isSystemDisable ? (completed ? 'Chat terminado' : 'Mensaje iMessage') : 'Mensaje iMessage'}
                             disabled={isSystemDisable}
                             style={{
                                 flex: 1, border: 'none', background: 'transparent',

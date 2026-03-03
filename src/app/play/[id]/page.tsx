@@ -1,64 +1,92 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Send, RotateCcw, CheckCircle } from 'lucide-react';
+import { ArrowUp, RotateCcw } from 'lucide-react';
 import { getExperience, getSteps } from '@/lib/firestore';
 import type { Experience, Step, PreviewMessage } from '@/lib/types';
 
 // ─── Chat Bubble ──────────────────────────────────────────────────────────────
-function ChatBubble({ msg, narratorInitial }: { msg: PreviewMessage; narratorInitial: string }) {
+function ChatMedia({ type, url }: { type: 'image' | 'video' | 'audio'; url: string }) {
+    if (type === 'image') return <img src={url} alt="Media" style={{ width: '100%', borderRadius: 12, marginBottom: 4 }} />;
+    if (type === 'video') return <video src={url} controls style={{ width: '100%', borderRadius: 12, marginBottom: 4 }} />;
+    if (type === 'audio') return <audio src={url} controls style={{ width: '100%', marginBottom: 4 }} />;
+    return null;
+}
+
+function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, narratorAvatar }: { msg: PreviewMessage; isLastSequence: boolean; isFirstSequence: boolean; narratorInitial: string; narratorAvatar?: string }) {
     const isSystem = msg.role === 'system';
     return (
         <div style={{
             display: 'flex',
             justifyContent: isSystem ? 'flex-start' : 'flex-end',
-            marginBottom: 10,
-            alignItems: 'flex-end',
+            marginBottom: isLastSequence ? 16 : 4,
+            width: '100%',
             gap: 8,
+            alignItems: 'flex-end'
         }}>
             {isSystem && (
                 <div style={{
-                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                    background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    background: isFirstSequence
+                        ? (narratorAvatar ? `url(${narratorAvatar}) center/cover no-repeat` : 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)')
+                        : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 700, color: 'white',
-                    boxShadow: '0 2px 8px rgba(124,58,237,0.25)',
-                }}>{narratorInitial}</div>
+                    fontSize: 14, fontWeight: 500, color: 'white',
+                    visibility: isFirstSequence ? 'visible' : 'hidden', // maintain spacing if hidden
+                    marginBottom: 2
+                }}>
+                    {!narratorAvatar && isFirstSequence && narratorInitial}
+                </div>
             )}
             <div style={{
-                maxWidth: '78%',
-                background: isSystem
-                    ? 'white'
-                    : 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
-                color: isSystem ? '#1a1a2e' : 'white',
-                borderRadius: isSystem ? '4px 18px 18px 18px' : '18px 4px 18px 18px',
-                padding: '10px 16px',
-                boxShadow: isSystem
-                    ? '0 1px 4px rgba(0,0,0,0.08)'
-                    : '0 2px 8px rgba(124,58,237,0.3)',
+                maxWidth: '75%',
+                background: isSystem ? '#E5E5EA' : '#0B84FF',
+                color: isSystem ? 'black' : 'white',
+                borderRadius: isSystem
+                    ? (isLastSequence ? '18px 18px 18px 4px' : '18px')
+                    : (isLastSequence ? '18px 18px 4px 18px' : '18px'),
+                padding: '8px 14px',
+                fontSize: 15,
+                lineHeight: 1.4,
+                wordBreak: 'break-word',
             }}>
-                <p style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{msg.content}</p>
-                <span style={{
-                    fontSize: 11, opacity: 0.55, display: 'block', textAlign: 'right', marginTop: 4,
-                }}>
-                    {new Date(msg.timestamp).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                {msg.media_url && msg.media_type && <ChatMedia type={msg.media_type} url={msg.media_url} />}
+                {msg.content}
             </div>
         </div>
     );
 }
 
-// ─── Step dots ────────────────────────────────────────────────────────────────
-function ProgressDots({ total, current }: { total: number; current: number }) {
+function TypingIndicator({ narratorInitial, narratorAvatar }: { narratorInitial: string; narratorAvatar?: string }) {
     return (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-            {Array.from({ length: total }).map((_, i) => (
-                <div key={i} style={{
-                    width: i === current ? 20 : 8, height: 8, borderRadius: 4,
-                    background: i < current ? '#7c3aed' : i === current ? '#a855f7' : 'rgba(255,255,255,0.25)',
-                    transition: 'all 0.3s ease',
-                }} />
-            ))}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16, gap: 8, alignItems: 'flex-end' }}>
+            <div style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: narratorAvatar ? `url(${narratorAvatar}) center/cover no-repeat` : 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, fontWeight: 500, color: 'white',
+                marginBottom: 2
+            }}>
+                {!narratorAvatar && narratorInitial}
+            </div>
+            <div style={{
+                background: '#E5E5EA',
+                borderRadius: '18px 18px 18px 18px',
+                padding: '12px 14px',
+                display: 'flex',
+                gap: 4,
+                width: 'fit-content',
+                alignItems: 'center',
+                height: 38
+            }}>
+                {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                        width: 7, height: 7, borderRadius: '50%', background: '#8E8E93',
+                        animation: `iosBounce 1.4s infinite ease-in-out both`,
+                        animationDelay: `${i * 0.16}s`
+                    }} />
+                ))}
+            </div>
         </div>
     );
 }
@@ -73,45 +101,95 @@ export default function PlayPage() {
     const [stepIndex, setStepIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
+
+    // Status states
     const [sending, setSending] = useState(false);
     const [completed, setCompleted] = useState(false);
+    const [systemTyping, setSystemTyping] = useState(false);
+
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const initialized = useRef(false);
 
-    const scrollToBottom = () =>
-        chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
+    const scrollToBottom = () => {
+        if (chatRef.current) {
+            chatRef.current.scrollTop = chatRef.current.scrollHeight;
+        }
+    };
 
-    const advanceNarrativeSteps = (allSteps: Step[], fromIndex: number, currentMsgs: PreviewMessage[]) => {
-        if (fromIndex >= allSteps.length) { setStepIndex(allSteps.length); return; }
-        const next = allSteps[fromIndex];
-        if (!next.requires_response) {
-            const delayMs = typeof next.delay_seconds === 'number' ? next.delay_seconds * 1000 : 1200;
-            setTimeout(() => {
-                const msg: PreviewMessage = {
-                    role: 'system', content: next.message_to_send,
-                    timestamp: new Date().toISOString(), evaluation: 'narrative',
-                };
-                const updated = [...currentMsgs, msg];
-                setMessages(updated);
-                setStepIndex(fromIndex);
-                advanceNarrativeSteps(allSteps, fromIndex + 1, updated);
-            }, delayMs);
+    const pushMessageWithEffects = async (msg: PreviewMessage | null, stepOptions: { interrupted_typing?: boolean; delay_seconds?: number } = {}) => {
+        const { interrupted_typing, delay_seconds } = stepOptions;
+
+        // Let React render current state before blocking with async sleep
+        await new Promise(r => setTimeout(r, 50));
+
+        const finalDelay = typeof delay_seconds === 'number' ? delay_seconds * 1000 : 1200;
+
+        if (interrupted_typing) {
+            // Start typing
+            setSystemTyping(true);
+            await new Promise(r => setTimeout(r, 1500)); // Types for 1.5s
+            // Stops typing
+            setSystemTyping(false);
+            await new Promise(r => setTimeout(r, 1500)); // Hesitates for 1.5s
+            // Resume typing
+            setSystemTyping(true);
+            await new Promise(r => setTimeout(r, finalDelay > 0 ? finalDelay : 1000));
         } else {
-            // Reached an interactive step after a narrative chain. Print it!
-            const delayMs = typeof next.delay_seconds === 'number' ? next.delay_seconds * 1000 : 1200;
-            setTimeout(() => {
-                const msg: PreviewMessage = {
-                    role: 'system', content: next.message_to_send,
-                    timestamp: new Date().toISOString(), evaluation: undefined,
-                };
-                const updated = [...currentMsgs, msg];
-                setMessages(updated);
-                setStepIndex(fromIndex); // This reveals the input to the user
-            }, delayMs);
+            // Standard typing effect
+            setSystemTyping(true);
+            await new Promise(r => setTimeout(r, finalDelay));
+        }
+
+        setSystemTyping(false);
+        if (msg) {
+            setMessages(prev => [...prev, msg]);
+        }
+    };
+
+    const advanceNarrativeSteps = async (allSteps: Step[], fromIndex: number) => {
+        if (fromIndex >= allSteps.length) {
+            setStepIndex(allSteps.length);
+            setCompleted(true);
+            return;
+        }
+
+        const next = allSteps[fromIndex];
+
+        if (next.step_type === 'typing') {
+            await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
+
+            // Advance directly to next step without pause
+            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+        } else if (next.step_type === 'narrative' || !next.requires_response) {
+            const msg: PreviewMessage = {
+                role: 'system', content: next.message_to_send,
+                timestamp: new Date().toISOString(), evaluation: 'narrative',
+                media_type: next.media_type, media_url: next.media_url
+            };
+
+            await pushMessageWithEffects(msg, next);
+
+            // recurse to next step
+            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+        } else {
+            // Interactive step: pause execution here
+            setStepIndex(fromIndex);
+
+            // Render it, and then STOP advancing
+            const msg: PreviewMessage = {
+                role: 'system', content: next.message_to_send,
+                timestamp: new Date().toISOString(), evaluation: undefined,
+                media_type: next.media_type, media_url: next.media_url
+            };
+            await pushMessageWithEffects(msg, next);
         }
     };
 
     useEffect(() => {
+        if (initialized.current) return;
+        initialized.current = true;
+
         Promise.all([getExperience(id), getSteps(id)]).then(([exp, stps]) => {
             if (!exp) { setNotFound(true); setLoading(false); return; }
             setExperience(exp);
@@ -119,25 +197,29 @@ export default function PlayPage() {
             setLoading(false);
 
             if (stps.length > 0) {
-                const firstMsg: PreviewMessage = {
-                    role: 'system', content: stps[0].message_to_send,
-                    timestamp: new Date().toISOString(),
-                    evaluation: stps[0].requires_response ? undefined : 'narrative',
+                // Initialize async so we can use await for the typing effect
+                const init = async () => {
+                    await advanceNarrativeSteps(stps, 0);
                 };
-                setMessages([firstMsg]);
-                if (!stps[0].requires_response) advanceNarrativeSteps(stps, 1, [firstMsg]);
+                init();
             }
         });
     }, [id]);
 
-    useEffect(() => { scrollToBottom(); }, [messages]);
-    useEffect(() => { if (!sending) inputRef.current?.focus(); }, [sending]);
+    useEffect(() => { scrollToBottom(); }, [messages, systemTyping]);
+
+    // Auto-focus input when the system finishes sending and it's an interactive step
+    useEffect(() => {
+        if (!sending && !systemTyping && !completed && steps[stepIndex]?.requires_response) {
+            inputRef.current?.focus();
+        }
+    }, [sending, systemTyping, completed, stepIndex, steps]);
 
     const handleSend = async () => {
-        if (!input.trim() || sending || completed) return;
+        if (!input.trim() || sending || completed || systemTyping) return;
+
         const userMsg: PreviewMessage = { role: 'user', content: input.trim(), timestamp: new Date().toISOString() };
-        const withUser = [...messages, userMsg];
-        setMessages(withUser);
+        setMessages(prev => [...prev, userMsg]);
         setInput('');
         setSending(true);
 
@@ -149,29 +231,37 @@ export default function PlayPage() {
             });
             const data = await res.json();
 
+            const isCorrect = data.evaluation === 'correct';
+            const nextIdx = data.nextStepIndex;
+            const nextStepObj = (steps && nextIdx < steps.length) ? steps[nextIdx] : undefined;
+
             const systemMsg: PreviewMessage = {
                 role: 'system',
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
                 evaluation: data.evaluation,
+                // Inherit media from the next step if we successfully advanced
+                media_type: isCorrect && nextStepObj ? nextStepObj.media_type : undefined,
+                media_url: isCorrect && nextStepObj ? nextStepObj.media_url : undefined
             };
-            const withSystem = [...withUser, systemMsg];
-            setMessages(withSystem);
+
+            await pushMessageWithEffects(systemMsg, {
+                delay_seconds: 1.0,
+                // Only use interrupted typing on correct evaluation if the next step has it
+                interrupted_typing: isCorrect && nextStepObj ? nextStepObj.interrupted_typing : false
+            });
 
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
-            } else if (data.evaluation === 'correct') {
-                const nextIdx = data.nextStepIndex;
-                setStepIndex(nextIdx); // Hide input immediately if next is narrative
-                if (nextIdx < steps.length && !steps[nextIdx].requires_response) {
-                    const delayMs = typeof steps[nextIdx].delay_seconds === 'number' ? steps[nextIdx].delay_seconds! * 1000 : 800;
-                    setTimeout(() => advanceNarrativeSteps(steps, nextIdx, withSystem), delayMs);
+            } else if (isCorrect) {
+                if (nextIdx < steps.length) {
+                    await advanceNarrativeSteps(steps, nextIdx);
                 }
             }
         } catch {
             setMessages(prev => [...prev, {
-                role: 'system', content: 'Error de conexión. Por favor recargá la página.', timestamp: new Date().toISOString(),
+                role: 'system', content: 'Ups, no se pudo enviar el mensaje.', timestamp: new Date().toISOString(),
             }]);
         }
         setSending(false);
@@ -182,43 +272,29 @@ export default function PlayPage() {
         setStepIndex(0);
         setCompleted(false);
         setInput('');
+
         if (steps.length > 0) {
-            const firstMsg: PreviewMessage = {
-                role: 'system', content: steps[0].message_to_send,
-                timestamp: new Date().toISOString(),
-                evaluation: steps[0].requires_response ? undefined : 'narrative',
+            const init = async () => {
+                await advanceNarrativeSteps(steps, 0);
             };
-            setMessages([firstMsg]);
-            if (!steps[0].requires_response) advanceNarrativeSteps(steps, 1, [firstMsg]);
+            init();
         }
     };
 
     // ─── States ────────────────────────────────────────────────────────────────
 
     if (loading) return (
-        <div style={{
-            minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1a0a2e 0%, #0f0a1e 60%, #0a0a14 100%)',
-        }}>
-            <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                border: '3px solid rgba(124,58,237,0.3)',
-                borderTopColor: '#7c3aed',
-                animation: 'spin 0.8s linear infinite',
-            }} />
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF' }}>
+            <div style={{ width: 30, height: 30, border: '3px solid #E5E5EA', borderTopColor: '#8E8E93', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     );
 
     if (notFound) return (
-        <div style={{
-            minHeight: '100vh', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 12,
-            background: 'linear-gradient(135deg, #1a0a2e 0%, #0f0a1e 60%, #0a0a14 100%)',
-            color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter, sans-serif',
-        }}>
-            <div style={{ fontSize: 48 }}>🗺️</div>
-            <h2 style={{ color: 'white', margin: 0 }}>Experiencia no encontrada</h2>
-            <p style={{ margin: 0 }}>Este link puede haber expirado o ser inválido.</p>
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF', color: '#8E8E93', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ fontSize: 18, color: 'black', margin: 0, fontWeight: 600 }}>Chat no encontrado</h2>
+            <p style={{ margin: '8px 0 0', fontSize: 15 }}>Esta experiencia no existe.</p>
         </div>
     );
 
@@ -226,193 +302,146 @@ export default function PlayPage() {
     const currentStep = steps[stepIndex];
     const waitingForResponse = !completed && currentStep?.requires_response;
 
+    const isSystemDisable = sending || systemTyping || completed || !waitingForResponse;
+
     return (
         <div style={{
-            minHeight: '100vh',
-            background: 'linear-gradient(160deg, #1a0a2e 0%, #0f0a1e 50%, #0a0a14 100%)',
+            height: '100vh',
+            background: '#FFFFFF',
             display: 'flex', flexDirection: 'column',
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            WebkitFontSmoothing: 'antialiased',
         }}>
-            {/* Ambient glow */}
-            <div style={{
-                position: 'fixed', inset: 0, pointerEvents: 'none',
-                background: 'radial-gradient(ellipse 70% 50% at 50% -5%, rgba(124,58,237,0.2) 0%, transparent 70%)',
-            }} />
-
             {/* Header */}
             <div style={{
-                padding: '16px 20px',
-                background: 'rgba(255,255,255,0.04)',
-                backdropFilter: 'blur(12px)',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(249,249,249,0.85)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderBottom: '0.5px solid rgba(0,0,0,0.15)',
+                padding: '12px 16px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 position: 'sticky', top: 0, zIndex: 10,
+                color: 'black'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
-                        width: 36, height: 36, borderRadius: 10,
-                        background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #A2AAAD 0%, #8E8E93 100%)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 800, color: 'white',
-                    }}>SH</div>
-                    <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{experience?.name}</div>
-                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                            {completed ? '¡Completada!' : steps.length > 0 ? `Paso ${Math.min(stepIndex + 1, steps.length)} de ${steps.length}` : ''}
-                        </div>
+                        fontSize: 18, fontWeight: 500, color: 'white',
+                    }}>
+                        {narratorInitial}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 17, fontWeight: 600 }}>{experience?.name}</span>
+                        <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
+                            {experience?.description?.substring(0, 30) || 'Experiencia interactiva'}
+                        </span>
                     </div>
                 </div>
 
-                {/* Progress dots */}
-                <ProgressDots total={steps.length} current={stepIndex} />
-
-                <button
-                    onClick={handleReset}
-                    style={{
-                        background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
-                        display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
-                        transition: 'all 0.15s',
-                    }}
-                    title="Reiniciar"
-                >
-                    <RotateCcw size={13} /> Reiniciar
-                </button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                        onClick={handleReset}
+                        style={{
+                            background: '#E5E5EA', border: 'none', cursor: 'pointer',
+                            color: 'black', width: 32, height: 32, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}
+                    >
+                        <RotateCcw size={16} />
+                    </button>
+                </div>
             </div>
 
             {/* Chat area */}
             <div
                 ref={chatRef}
                 style={{
-                    flex: 1, overflowY: 'auto', padding: '20px 16px',
-                    maxWidth: 640, width: '100%', margin: '0 auto',
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: 'rgba(124,58,237,0.3) transparent',
+                    flex: 1, overflowY: 'auto', padding: '16px 12px',
+                    display: 'flex', flexDirection: 'column',
+                    maxWidth: 720, margin: '0 auto', width: '100%',
                 }}
             >
-                {messages.map((msg, i) => (
-                    <ChatBubble key={i} msg={msg} narratorInitial={narratorInitial} />
-                ))}
+                <div style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', margin: '8px 0 24px', fontWeight: 500 }}>
+                    Hoy {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                </div>
 
-                {sending && (
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginBottom: 10 }}>
-                        <div style={{
-                            width: 32, height: 32, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 13, fontWeight: 700, color: 'white',
-                        }}>{narratorInitial}</div>
-                        <div style={{
-                            background: 'white', borderRadius: '4px 18px 18px 18px',
-                            padding: '12px 16px', display: 'flex', gap: 5,
-                        }}>
-                            {[0, 1, 2].map(i => (
-                                <div key={i} style={{
-                                    width: 7, height: 7, borderRadius: '50%',
-                                    background: '#a78bfa',
-                                    animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
-                                }} />
-                            ))}
-                        </div>
-                    </div>
-                )}
+                {messages.map((msg, i) => {
+                    const nextMsg = messages[i + 1];
+                    const prevMsg = messages[i - 1];
+                    const isLastInSequence = !nextMsg || nextMsg.role !== msg.role;
+                    const isFirstInSequence = !prevMsg || prevMsg.role !== msg.role;
+                    return <ChatBubble key={i} msg={msg} isLastSequence={isLastInSequence} isFirstSequence={isFirstInSequence} narratorInitial={narratorInitial} narratorAvatar={experience?.narrator_avatar} />
+                })}
+
+                {systemTyping && <TypingIndicator narratorInitial={narratorInitial} narratorAvatar={experience?.narrator_avatar} />}
 
                 {completed && (
-                    <div style={{
-                        textAlign: 'center', padding: '32px 20px',
-                        background: 'rgba(124,58,237,0.1)',
-                        border: '1px solid rgba(124,58,237,0.25)',
-                        borderRadius: 20, margin: '16px 0',
-                    }}>
-                        <CheckCircle size={40} style={{ color: '#a78bfa', marginBottom: 12 }} />
-                        <h3 style={{ color: 'white', margin: '0 0 8px', fontSize: 22 }}>¡Experiencia completada!</h3>
-                        <p style={{ color: 'rgba(255,255,255,0.5)', margin: 0, fontSize: 14 }}>
-                            Llegaste hasta el final. Gracias por participar.
-                        </p>
-                        <button
-                            onClick={handleReset}
-                            style={{
-                                marginTop: 20, padding: '10px 24px',
-                                background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
-                                border: 'none', borderRadius: 12, cursor: 'pointer',
-                                color: 'white', fontWeight: 600, fontSize: 14,
-                            }}
-                        >
-                            Volver a empezar
-                        </button>
+                    <div style={{ textAlign: 'center', margin: '24px 0', fontSize: 13, color: '#8E8E93' }}>
+                        Has completado la experiencia.
                     </div>
                 )}
+
+                {/* Spacer to push input into view properly if needed */}
+                <div style={{ flexShrink: 0, height: 8 }} />
             </div>
 
             {/* Input area */}
-            {!completed && (
+            <div style={{
+                background: 'rgba(249,249,249,0.85)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderTop: '0.5px solid rgba(0,0,0,0.15)',
+                padding: '8px 16px 24px',
+            }}>
                 <div style={{
-                    padding: '12px 16px',
-                    background: 'rgba(255,255,255,0.04)',
-                    backdropFilter: 'blur(12px)',
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                    maxWidth: 720, margin: '0 auto',
+                    display: 'flex', gap: 12, alignItems: 'flex-end',
                 }}>
                     <div style={{
-                        maxWidth: 640, margin: '0 auto',
-                        display: 'flex', gap: 10, alignItems: 'flex-end',
+                        flex: 1,
+                        background: '#FFFFFF',
+                        border: '1px solid #E5E5EA',
+                        borderRadius: 20,
+                        padding: '6px 6px 6px 14px',
+                        display: 'flex', alignItems: 'center',
                     }}>
-                        {waitingForResponse ? (
-                            <>
-                                <input
-                                    ref={inputRef}
-                                    value={input}
-                                    onChange={e => setInput(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                                    placeholder="Escribí tu respuesta..."
-                                    disabled={sending}
-                                    style={{
-                                        flex: 1, padding: '12px 16px',
-                                        background: 'rgba(255,255,255,0.08)',
-                                        border: '1px solid rgba(255,255,255,0.15)',
-                                        borderRadius: 24, outline: 'none',
-                                        color: 'white', fontSize: 14,
-                                        fontFamily: 'inherit',
-                                        transition: 'border-color 0.15s',
-                                    }}
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!input.trim() || sending}
-                                    style={{
-                                        width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
-                                        background: !input.trim() || sending
-                                            ? 'rgba(124,58,237,0.3)'
-                                            : 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
-                                        border: 'none', cursor: !input.trim() || sending ? 'not-allowed' : 'pointer',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        color: 'white', transition: 'all 0.15s',
-                                        boxShadow: !input.trim() || sending ? 'none' : '0 4px 12px rgba(124,58,237,0.4)',
-                                    }}
-                                >
-                                    <Send size={18} />
-                                </button>
-                            </>
-                        ) : (
-                            <div style={{
-                                flex: 1, padding: '12px 16px',
-                                background: 'rgba(255,255,255,0.04)',
-                                border: '1px solid rgba(255,255,255,0.08)',
-                                borderRadius: 24, fontSize: 13,
-                                color: 'rgba(255,255,255,0.3)', textAlign: 'center',
-                            }}>
-                                {sending ? 'Procesando...' : 'Esperá mientras el narrador continúa la historia...'}
-                            </div>
-                        )}
+                        <input
+                            ref={inputRef}
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                            placeholder={isSystemDisable ? (completed ? 'Chat terminado' : 'Mensaje iMessage') : 'Mensaje iMessage'}
+                            disabled={isSystemDisable}
+                            style={{
+                                flex: 1, border: 'none', background: 'transparent',
+                                outline: 'none', color: 'black', fontSize: 16,
+                                padding: '6px 0', fontFamily: 'inherit'
+                            }}
+                        />
+                        <button
+                            onClick={handleSend}
+                            disabled={!input.trim() || isSystemDisable}
+                            style={{
+                                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                                background: !input.trim() || isSystemDisable ? '#E5E5EA' : '#0B84FF',
+                                border: 'none', padding: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: !input.trim() || isSystemDisable ? '#C7C7CC' : 'white',
+                                transition: 'all 0.2s', cursor: !input.trim() || isSystemDisable ? 'default' : 'pointer'
+                            }}
+                        >
+                            <ArrowUp size={16} strokeWidth={3} />
+                        </button>
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* Animations */}
             <style>{`
-                @keyframes spin { to { transform: rotate(360deg); } }
-                @keyframes bounce {
-                    0%, 80%, 100% { transform: translateY(0); }
-                    40% { transform: translateY(-6px); }
+                @keyframes iosBounce {
+                    0%, 100% { transform: scale(1); opacity: 0.3; }
+                    50% { transform: scale(1.4); opacity: 1; }
                 }
             `}</style>
         </div>

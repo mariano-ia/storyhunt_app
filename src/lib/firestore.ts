@@ -20,6 +20,14 @@ export async function getExperience(id: string): Promise<Experience | null> {
     return { id: snap.id, ...snap.data() } as Experience;
 }
 
+export async function getExperienceBySlug(slug: string): Promise<Experience | null> {
+    const q = query(collection(db, 'experiences'), where('slug', '==', slug));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    const doc = snap.docs[0];
+    return { id: doc.id, ...doc.data() } as Experience;
+}
+
 export async function createExperience(data: ExperienceFormData): Promise<string> {
     const ref = await addDoc(collection(db, 'experiences'), {
         ...data,
@@ -54,15 +62,17 @@ export async function getSteps(experienceId: string): Promise<Step[]> {
 }
 
 export async function createStep(experienceId: string, data: StepFormData): Promise<string> {
+    const cleanData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
     const ref = await addDoc(collection(db, 'experiences', experienceId, 'steps'), {
-        ...data,
+        ...cleanData,
         experience_id: experienceId,
     });
     return ref.id;
 }
 
 export async function updateStep(experienceId: string, stepId: string, data: Partial<StepFormData>): Promise<void> {
-    await updateDoc(doc(db, 'experiences', experienceId, 'steps', stepId), data);
+    const cleanData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+    await updateDoc(doc(db, 'experiences', experienceId, 'steps', stepId), cleanData);
 }
 
 export async function deleteStep(experienceId: string, stepId: string): Promise<void> {

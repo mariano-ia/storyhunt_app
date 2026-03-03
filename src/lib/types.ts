@@ -9,8 +9,9 @@ export interface Experience {
     name: string;
     description: string;
     narrator_personality: string; // Used as LLM system prompt
+    narrator_avatar?: string;     // URL to the narrator's profile picture
     llm_api_key: string;
-    twilio_trigger: string;       // Phone number or sender ID
+    slug?: string;                // URL slug for the public page
     mode: ExperienceMode;
     activation_keyword: string;
     status: ExperienceStatus;
@@ -22,6 +23,7 @@ export interface Step {
     id: string;
     experience_id: string;
     order: number;
+    step_type?: 'interactive' | 'narrative' | 'typing';
     message_to_send: string;
     // If false, this is a narrative step — no user answer expected.
     // System auto-advances to the next step immediately.
@@ -34,6 +36,13 @@ export interface Step {
     context?: string;
     // Seconds to wait before showing this step's message (0 = no delay). Default: 1.2
     delay_seconds?: number;
+
+    // Multimedia attach to the system message
+    media_url?: string;
+    media_type?: 'image' | 'video' | 'audio';
+
+    // Special writing effect. If true, simulates a user starting to type and stopping abruptly.
+    interrupted_typing?: boolean;
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
@@ -43,6 +52,8 @@ export interface PreviewMessage {
     content: string;
     timestamp: string;
     evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic';
+    media_url?: string;
+    media_type?: 'image' | 'video' | 'audio';
 }
 
 export interface UserSession {

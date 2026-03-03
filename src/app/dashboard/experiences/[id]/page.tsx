@@ -126,6 +126,10 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
         wrong_answer_message: step.wrong_answer_message,
         context: step.context || '',
         delay_seconds: step.delay_seconds ?? 1.2,
+        media_url: step.media_url || '',
+        media_type: step.media_type || undefined,
+        interrupted_typing: step.interrupted_typing || false,
+        step_type: step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative')),
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -166,9 +170,11 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
                                 {step.message_to_send.slice(0, 70)}{step.message_to_send.length > 70 ? '…' : ''}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                                {isNarrative
-                                    ? <span style={{ color: 'var(--brand-primary-light)' }}>📖 Narrativo — sin respuesta</span>
-                                    : <>Espera: {step.expected_answer} &middot; {step.hints.length} pista(s)</>}
+                                {step.step_type === 'typing' || (step.interrupted_typing && !step.message_to_send)
+                                    ? <span style={{ color: 'var(--brand-primary-light)' }}>💬 Sólo efecto de escritura</span>
+                                    : isNarrative
+                                        ? <span style={{ color: 'var(--brand-primary-light)' }}>📖 Narrativo — sin respuesta</span>
+                                        : <>Espera: {step.expected_answer} &middot; {step.hints?.length || 0} pista(s)</>}
                             </div>
                         </div>
                     </div>
@@ -184,25 +190,69 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
     return (
         <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* requires_response toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                    <input
-                        type="checkbox"
-                        id={`req-resp-edit-${step.id}`}
-                        checked={form.requires_response}
-                        onChange={e => handleFormChange({ ...form, requires_response: e.target.checked })}
-                        style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                    />
-                    <label htmlFor={`req-resp-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                        Requiere respuesta del usuario
-                    </label>
-                    {!form.requires_response && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Narrativo: avanza automáticamente</span>}
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Tipo de Paso</label>
+                    <select
+                        className="form-input"
+                        value={form.step_type || (form.requires_response ? 'interactive' : (form.interrupted_typing && !form.message_to_send ? 'typing' : 'narrative'))}
+                        onChange={e => {
+                            const val = e.target.value as 'interactive' | 'narrative' | 'typing';
+                            handleFormChange({
+                                ...form,
+                                step_type: val,
+                                requires_response: val === 'interactive',
+                                interrupted_typing: val === 'typing' ? true : false,
+                                message_to_send: val === 'typing' ? '' : form.message_to_send
+                            });
+                        }}
+                    >
+                        <option value="interactive">Paso Interactivo (espera respuesta)</option>
+                        <option value="narrative">Paso Narrativo (avanza automáticamente)</option>
+                        <option value="typing">Efecto "Escribiendo" (solo genera intriga, sin mensaje)</option>
+                    </select>
                 </div>
 
-                <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
-                    <textarea className="form-textarea" style={{ minHeight: 80 }} value={form.message_to_send} onChange={e => handleFormChange({ ...form, message_to_send: e.target.value })} />
-                </div>
+                {form.step_type !== 'typing' && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
+                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={form.message_to_send} onChange={e => handleFormChange({ ...form, message_to_send: e.target.value })} />
+                    </div>
+                )}
+
+                {form.step_type !== 'typing' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Agregar Multimedia (Opcional)</label>
+                            <select className="form-input" value={form.media_type || ''} onChange={e => handleFormChange({ ...form, media_type: e.target.value as any || undefined, media_url: e.target.value ? form.media_url : undefined })}>
+                                <option value="">Sin multimedia</option>
+                                <option value="image">Imagen</option>
+                                <option value="video">Ver video</option>
+                                <option value="audio">Audio</option>
+                            </select>
+                        </div>
+                        {form.media_type && (
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">URL del archivo</label>
+                                <input className="form-input" placeholder="https://..." value={form.media_url || ''} onChange={e => handleFormChange({ ...form, media_url: e.target.value })} />
+                            </div>
+                        )}
+                    </div>
+                )}
+                {form.step_type !== 'typing' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <input
+                            type="checkbox"
+                            id={`interrupted-typing-edit-${step.id}`}
+                            checked={form.interrupted_typing || false}
+                            onChange={e => handleFormChange({ ...form, interrupted_typing: e.target.checked })}
+                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                        />
+                        <label htmlFor={`interrupted-typing-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                            Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
+                        </label>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Genera intriga</span>
+                    </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div className="form-group" style={{ margin: 0 }}>
@@ -369,6 +419,20 @@ export default function ExperienceDetailPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button
                         className="btn btn-secondary"
+                        onClick={() => {
+                            if (!exp.slug) {
+                                alert("Por favor, guardá un slug válido en la pestaña 'General' primero.");
+                                return;
+                            }
+                            window.open(`/${exp.slug}`, '_blank');
+                        }}
+                        id="publish-btn"
+                        title="Ver experiencia publicada"
+                    >
+                        <ExternalLink size={15} /> Publicar
+                    </button>
+                    <button
+                        className="btn btn-secondary"
                         onClick={() => setShowShare(true)}
                         id="share-btn"
                         title="Compartir experiencia"
@@ -389,22 +453,41 @@ export default function ExperienceDetailPage() {
             {/* General Tab */}
             {tab === 'general' && (
                 <div style={{ maxWidth: 640 }}>
+                    <div className="section-header">
+                        <h2>Información General</h2>
+                    </div>
                     <div className="form-group">
-                        <label className="form-label">Nombre <span className="required">*</span></label>
+                        <label className="form-label">Nombre de la experiencia <span className="required">*</span></label>
                         <input className="form-input" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Descripción</label>
-                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                        <label className="form-label">URL pública (Slug) <span className="required">*</span></label>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span style={{ padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRight: 'none', borderRadius: '8px 0 0 8px', color: 'var(--text-muted)', fontSize: 14 }}>midominio.com/</span>
+                            <input className="form-input" style={{ borderRadius: '0 8px 8px 0' }} placeholder="mi-experiencia" value={formData.slug || ''} onChange={e => {
+                                const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                                setFormData({ ...formData, slug: val });
+                            }} />
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Descripción <span className="required">*</span></label>
+                        <textarea className="form-textarea" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ minHeight: 80 }} />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Personalidad del narrador</label>
                         <textarea className="form-textarea" style={{ minHeight: 140 }} value={formData.narrator_personality || ''} onChange={e => setFormData({ ...formData, narrator_personality: e.target.value })} />
-                        <span className="form-hint">System prompt del LLM que define el tono y carácter del narrador.</span>
+                        <span className="form-hint">Este texto define la personalidad y objetivos del asistente que acompaña al jugador.</span>
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Palabra clave de activación</label>
+                        <label className="form-label">Foto de perfil del narrador (Opcional)</label>
+                        <input className="form-input" placeholder="https://ejemplo.com/foto.jpg" value={formData.narrator_avatar || ''} onChange={e => setFormData({ ...formData, narrator_avatar: e.target.value })} />
+                        <span className="form-hint">URL de la imagen que se mostrará en el chat (avatar redondo).</span>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Palabra clave de activación <span className="required">*</span></label>
                         <input className="form-input" value={formData.activation_keyword || ''} onChange={e => setFormData({ ...formData, activation_keyword: e.target.value.toUpperCase() })} />
+                        <span className="form-hint">El usuario envía esto para comenzar.</span>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button className="btn btn-primary" onClick={handleSaveGeneral} disabled={saving} id="save-general-btn">
@@ -437,24 +520,69 @@ export default function ExperienceDetailPage() {
                         <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
                             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, color: 'var(--text-brand)' }}>Nuevo paso #{steps.length + 1}</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                {/* requires_response toggle for new step */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                                    <input
-                                        type="checkbox"
-                                        id="new-step-requires-resp"
-                                        checked={newStep.requires_response}
-                                        onChange={e => setNewStep({ ...newStep, requires_response: e.target.checked })}
-                                        style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                                    />
-                                    <label htmlFor="new-step-requires-resp" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                        Requiere respuesta del usuario
-                                    </label>
-                                    {!newStep.requires_response && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Narrativo</span>}
-                                </div>
                                 <div className="form-group" style={{ margin: 0 }}>
-                                    <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
-                                    <textarea className="form-textarea" style={{ minHeight: 80 }} value={newStep.message_to_send} onChange={e => setNewStep({ ...newStep, message_to_send: e.target.value })} />
+                                    <label className="form-label">Tipo de Paso</label>
+                                    <select
+                                        className="form-input"
+                                        value={newStep.step_type || (newStep.requires_response ? 'interactive' : (newStep.interrupted_typing && !newStep.message_to_send ? 'typing' : 'narrative'))}
+                                        onChange={e => {
+                                            const val = e.target.value as 'interactive' | 'narrative' | 'typing';
+                                            setNewStep({
+                                                ...newStep,
+                                                step_type: val,
+                                                requires_response: val === 'interactive',
+                                                interrupted_typing: val === 'typing' ? true : false,
+                                                message_to_send: val === 'typing' ? '' : newStep.message_to_send
+                                            });
+                                        }}
+                                    >
+                                        <option value="interactive">Paso Interactivo (espera respuesta)</option>
+                                        <option value="narrative">Paso Narrativo (avanza automáticamente)</option>
+                                        <option value="typing">Efecto "Escribiendo" (solo genera intriga, sin mensaje)</option>
+                                    </select>
                                 </div>
+
+                                {newStep.step_type !== 'typing' && (
+                                    <div className="form-group" style={{ margin: 0 }}>
+                                        <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
+                                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={newStep.message_to_send} onChange={e => setNewStep({ ...newStep, message_to_send: e.target.value })} />
+                                    </div>
+                                )}
+
+                                {newStep.step_type !== 'typing' && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                        <div className="form-group" style={{ margin: 0 }}>
+                                            <label className="form-label">Agregar Multimedia (Opcional)</label>
+                                            <select className="form-input" value={newStep.media_type || ''} onChange={e => setNewStep({ ...newStep, media_type: e.target.value as any || undefined, media_url: e.target.value ? newStep.media_url : undefined })}>
+                                                <option value="">Sin multimedia</option>
+                                                <option value="image">Imagen</option>
+                                                <option value="video">Ver video</option>
+                                                <option value="audio">Audio</option>
+                                            </select>
+                                        </div>
+                                        {newStep.media_type && (
+                                            <div className="form-group" style={{ margin: 0 }}>
+                                                <label className="form-label">URL del archivo</label>
+                                                <input className="form-input" placeholder="https://..." value={newStep.media_url || ''} onChange={e => setNewStep({ ...newStep, media_url: e.target.value })} />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {newStep.step_type !== 'typing' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="interrupted-typing-new"
+                                            checked={newStep.interrupted_typing || false}
+                                            onChange={e => setNewStep({ ...newStep, interrupted_typing: e.target.checked })}
+                                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="interrupted-typing-new" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                            Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
+                                        </label>
+                                    </div>
+                                )}
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="form-group" style={{ margin: 0 }}>
@@ -484,7 +612,7 @@ export default function ExperienceDetailPage() {
                                     <button
                                         className="btn btn-primary btn-sm"
                                         onClick={handleAddStep}
-                                        disabled={!newStep.message_to_send || (newStep.requires_response && !newStep.expected_answer)}
+                                        disabled={(newStep.step_type !== 'typing' && !newStep.message_to_send) || (newStep.requires_response && !newStep.expected_answer)}
                                         id="save-new-step-btn"
                                     >
                                         <Check size={13} /> Guardar paso
@@ -493,7 +621,7 @@ export default function ExperienceDetailPage() {
                             </div>
                         </div>
                     ) : (
-                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2 })} id="add-new-step-btn">
+                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false })} id="add-new-step-btn">
                             <Plus size={16} /> Agregar paso
                         </button>
                     )}
@@ -506,10 +634,6 @@ export default function ExperienceDetailPage() {
                     <div className="form-group">
                         <label className="form-label">API Key del LLM</label>
                         <input className="form-input" type="password" value={formData.llm_api_key || ''} onChange={e => setFormData({ ...formData, llm_api_key: e.target.value })} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Número / Trigger de Twilio</label>
-                        <input className="form-input" value={formData.twilio_trigger || ''} onChange={e => setFormData({ ...formData, twilio_trigger: e.target.value })} />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Modo de operación</label>
