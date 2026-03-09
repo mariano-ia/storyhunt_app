@@ -105,3 +105,12 @@ export interface DashboardStats {
     total_cost_usd: number;
     completion_rate: number;
 }
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+export interface Contact {
+    id: string;
+    email: string;
+    created_at: string;
+    status: 'new' | 'contacted';
+}

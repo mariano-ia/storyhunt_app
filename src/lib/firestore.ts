@@ -3,7 +3,7 @@ import {
     deleteDoc, query, where, orderBy, Timestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Experience, ExperienceFormData, Step, StepFormData, UserSession, Interaction, ExperienceMetrics } from './types';
+import type { Experience, ExperienceFormData, Step, StepFormData, UserSession, Interaction, ExperienceMetrics, Contact } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -181,4 +181,16 @@ export async function getCostByExperience(): Promise<Record<string, number>> {
         }
     });
     return map;
+}
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+export async function getContacts(): Promise<Contact[]> {
+    const q = query(collection(db, 'contacts'), orderBy('created_at', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Contact));
+}
+
+export async function updateContactStatus(id: string, status: Contact['status']): Promise<void> {
+    await updateDoc(doc(db, 'contacts', id), { status });
 }

@@ -13,6 +13,7 @@ const navItems = [
 
 const adminItems = [
     { label: 'Usuarios', icon: UserCog, href: '/dashboard/users' },
+    { label: 'Contactos', icon: Users, href: '/dashboard/contacts' },
 ];
 
 export default function Sidebar() {
