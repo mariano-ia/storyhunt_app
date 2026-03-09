@@ -2,8 +2,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, ChevronLeft, ChevronRight,
-    BarChart2, AlertCircle, Save, Zap, CheckCircle, XCircle, Play, BookOpen, Share2, X, Copy, ExternalLink
+    ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, Clock,
+    BarChart2, Save, Play, Share2, X, Copy, ExternalLink, Zap
 } from 'lucide-react';
 import {
     getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps
@@ -111,12 +111,16 @@ function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: 
 }
 
 // ─── Inline Step Editor with Auto-Save ────────────────────────────────────────
-function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMoveDown }: {
-    step: Step; index: number; total: number;
+function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd }: {
+    step: Step; index: number;
     onSave: (data: Partial<StepFormData>) => Promise<void>;
-    onDelete: () => void; onMoveUp: () => void; onMoveDown: () => void;
+    onDelete: () => void;
+    isDragging: boolean; isDragOver: boolean;
+    onDragStart: () => void; onDragOver: (e: React.DragEvent) => void;
+    onDrop: () => void; onDragEnd: () => void;
 }) {
     const [editing, setEditing] = useState(false);
+    const [localDelay, setLocalDelay] = useState(step.delay_seconds ?? 1.2);
     const [form, setForm] = useState<StepFormData>({
         order: step.order,
         message_to_send: step.message_to_send,
@@ -129,6 +133,7 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
         media_url: step.media_url || '',
         media_type: step.media_type || undefined,
         interrupted_typing: step.interrupted_typing || false,
+        glitch_effect: step.glitch_effect || false,
         step_type: step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative')),
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -157,13 +162,23 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
     if (!editing) {
         const isNarrative = !(step.requires_response ?? true);
         return (
-            <div className="step-item" style={{ borderColor: isNarrative ? 'rgba(167,139,250,0.3)' : undefined }}>
+            <div
+                className="step-item"
+                draggable
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+                onDragEnd={onDragEnd}
+                style={{
+                    borderColor: isDragOver ? 'var(--brand-primary)' : isNarrative ? 'rgba(167,139,250,0.3)' : undefined,
+                    opacity: isDragging ? 0.4 : 1,
+                    cursor: 'grab',
+                    transition: 'opacity 0.15s, border-color 0.15s',
+                }}
+            >
                 <div className="step-item-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <button className="btn btn-ghost btn-icon btn-sm" onClick={onMoveUp} disabled={index === 0} type="button"><ChevronLeft size={13} style={{ transform: 'rotate(90deg)' }} /></button>
-                            <button className="btn btn-ghost btn-icon btn-sm" onClick={onMoveDown} disabled={index === total - 1} type="button"><ChevronRight size={13} style={{ transform: 'rotate(90deg)' }} /></button>
-                        </div>
+                        <GripVertical size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                         <div className="step-item-number">{index + 1}</div>
                         <div>
                             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -178,7 +193,48 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
                             </div>
                         </div>
                     </div>
-                    <div className="step-item-actions">
+                    <div className="step-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {/* Inline delay editor */}
+                        <div
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'default' }}
+                            onClick={e => e.stopPropagation()}
+                            onDragStart={e => e.preventDefault()}
+                        >
+                            <Clock size={13} style={{ color: 'var(--text-muted)' }} />
+                            <input
+                                type="number" step="0.1" min="0"
+                                value={localDelay}
+                                onChange={e => setLocalDelay(parseFloat(e.target.value) || 0)}
+                                onBlur={() => {
+                                    setForm(f => ({ ...f, delay_seconds: localDelay }));
+                                    onSave({ delay_seconds: localDelay });
+                                }}
+                                style={{
+                                    width: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                                    borderRadius: 6, color: 'var(--text-secondary)', fontSize: 12,
+                                    padding: '2px 4px', outline: 'none', textAlign: 'center',
+                                }}
+                            />
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>s</span>
+                        </div>
+                        {/* Glitch toggle */}
+                        <label
+                            title="Efecto glitch"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: form.glitch_effect ? 'var(--brand-primary)' : 'var(--text-muted)' }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={form.glitch_effect || false}
+                                onChange={e => {
+                                    const val = e.target.checked;
+                                    setForm(f => ({ ...f, glitch_effect: val }));
+                                    onSave({ glitch_effect: val });
+                                }}
+                                style={{ accentColor: 'var(--brand-primary)', width: 13, height: 13 }}
+                            />
+                            ⚡
+                        </label>
                         <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditing(true)} id={`edit-step-${step.id}`}><Edit2 size={14} /></button>
                         <button className="btn btn-danger btn-icon btn-sm" onClick={onDelete} id={`del-step-${step.id}`}><Trash2 size={14} /></button>
                     </div>
@@ -239,18 +295,33 @@ function InlineStepEditor({ step, index, total, onSave, onDelete, onMoveUp, onMo
                     </div>
                 )}
                 {form.step_type !== 'typing' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                        <input
-                            type="checkbox"
-                            id={`interrupted-typing-edit-${step.id}`}
-                            checked={form.interrupted_typing || false}
-                            onChange={e => handleFormChange({ ...form, interrupted_typing: e.target.checked })}
-                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                        />
-                        <label htmlFor={`interrupted-typing-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                            Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
-                        </label>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Genera intriga</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                            <input
+                                type="checkbox"
+                                id={`interrupted-typing-edit-${step.id}`}
+                                checked={form.interrupted_typing || false}
+                                onChange={e => handleFormChange({ ...form, interrupted_typing: e.target.checked })}
+                                style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                            />
+                            <label htmlFor={`interrupted-typing-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
+                            </label>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Genera intriga</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                            <input
+                                type="checkbox"
+                                id={`glitch-effect-edit-${step.id}`}
+                                checked={form.glitch_effect || false}
+                                onChange={e => { handleFormChange({ ...form, glitch_effect: e.target.checked }); setLocalDelay(form.delay_seconds ?? 1.2); }}
+                                style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                            />
+                            <label htmlFor={`glitch-effect-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                ⚡ Efecto glitch al aparecer el mensaje
+                            </label>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Falla de la matrix</span>
+                        </div>
                     </div>
                 )}
 
@@ -343,6 +414,8 @@ export default function ExperienceDetailPage() {
     const [toDeleteStep, setToDeleteStep] = useState<Step | null>(null);
     const [deletingStep, setDeletingStep] = useState(false);
     const [showShare, setShowShare] = useState(false);
+    const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
     const load = async () => {
         setLoading(true);
@@ -363,18 +436,17 @@ export default function ExperienceDetailPage() {
         setSaving(false);
     };
 
-    const handleMoveUp = async (i: number) => {
-        if (i === 0) return;
-        const s = [...steps];[s[i - 1], s[i]] = [s[i], s[i - 1]];
+    const handleDrop = async (dropIdx: number) => {
+        if (draggedIdx === null || draggedIdx === dropIdx) {
+            setDraggedIdx(null); setDragOverIdx(null); return;
+        }
+        const s = [...steps];
+        const [removed] = s.splice(draggedIdx, 1);
+        s.splice(dropIdx, 0, removed);
         const reordered = s.map((st, idx) => ({ ...st, order: idx + 1 }));
-        setSteps(reordered); await reorderSteps(id, reordered);
-    };
-
-    const handleMoveDown = async (i: number) => {
-        if (i === steps.length - 1) return;
-        const s = [...steps];[s[i], s[i + 1]] = [s[i + 1], s[i]];
-        const reordered = s.map((st, idx) => ({ ...st, order: idx + 1 }));
-        setSteps(reordered); await reorderSteps(id, reordered);
+        setSteps(reordered);
+        setDraggedIdx(null); setDragOverIdx(null);
+        await reorderSteps(id, reordered);
     };
 
     const handleAddStep = async () => {
@@ -405,7 +477,7 @@ export default function ExperienceDetailPage() {
 
     return (
         <div>
-            <div className="page-header">
+            <div className="page-header" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', marginBottom: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button className="btn btn-ghost btn-icon" onClick={() => router.push('/dashboard/experiences')}><ArrowLeft size={18} /></button>
                     <div>
@@ -509,11 +581,15 @@ export default function ExperienceDetailPage() {
                     )}
                     {steps.map((step, i) => (
                         <InlineStepEditor
-                            key={step.id} step={step} index={i} total={steps.length}
+                            key={step.id} step={step} index={i}
                             onSave={async (data) => { await updateStep(id, step.id, data); }}
                             onDelete={() => setToDeleteStep(step)}
-                            onMoveUp={() => handleMoveUp(i)}
-                            onMoveDown={() => handleMoveDown(i)}
+                            isDragging={draggedIdx === i}
+                            isDragOver={dragOverIdx === i}
+                            onDragStart={() => setDraggedIdx(i)}
+                            onDragOver={(e) => { e.preventDefault(); setDragOverIdx(i); }}
+                            onDrop={() => handleDrop(i)}
+                            onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null); }}
                         />
                     ))}
                     {newStep ? (
@@ -583,6 +659,21 @@ export default function ExperienceDetailPage() {
                                         </label>
                                     </div>
                                 )}
+                                {newStep.step_type !== 'typing' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="glitch-effect-new"
+                                            checked={newStep.glitch_effect || false}
+                                            onChange={e => setNewStep({ ...newStep, glitch_effect: e.target.checked })}
+                                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="glitch-effect-new" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                            ⚡ Efecto glitch al aparecer el mensaje
+                                        </label>
+                                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Falla de la matrix</span>
+                                    </div>
+                                )}
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="form-group" style={{ margin: 0 }}>
@@ -621,7 +712,7 @@ export default function ExperienceDetailPage() {
                             </div>
                         </div>
                     ) : (
-                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false })} id="add-new-step-btn">
+                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false, glitch_effect: false })} id="add-new-step-btn">
                             <Plus size={16} /> Agregar paso
                         </button>
                     )}

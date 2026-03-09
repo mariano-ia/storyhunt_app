@@ -43,6 +43,9 @@ export interface Step {
 
     // Special writing effect. If true, simulates a user starting to type and stopping abruptly.
     interrupted_typing?: boolean;
+
+    // Visual glitch effect applied to the message bubble when it appears.
+    glitch_effect?: boolean;
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
@@ -54,6 +57,7 @@ export interface PreviewMessage {
     evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic';
     media_url?: string;
     media_type?: 'image' | 'video' | 'audio';
+    glitch_effect?: boolean;
 }
 
 export interface UserSession {

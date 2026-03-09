@@ -55,7 +55,7 @@ function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, nar
                         : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 14, fontWeight: 500, color: 'white',
-                    visibility: isFirstSequence ? 'visible' : 'hidden', // maintain spacing if hidden
+                    visibility: isFirstSequence ? 'visible' : 'hidden',
                     marginBottom: 2
                 }}>
                     {!narratorAvatar && isFirstSequence && narratorInitial}
@@ -72,6 +72,7 @@ function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, nar
                 fontSize: 15,
                 lineHeight: 1.4,
                 wordBreak: 'break-word',
+                animation: msg.glitch_effect ? 'matrixGlitch 1.6s ease-out forwards' : undefined,
             }}>
                 {msg.media_url && msg.media_type && <ChatMedia type={msg.media_type} url={msg.media_url} />}
                 {renderMessage(msg.content)}
@@ -188,7 +189,8 @@ export default function PlayPage() {
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
                 timestamp: new Date().toISOString(), evaluation: 'narrative',
-                media_type: next.media_type, media_url: next.media_url
+                media_type: next.media_type, media_url: next.media_url,
+                glitch_effect: next.glitch_effect,
             };
 
             await pushMessageWithEffects(msg, next);
@@ -203,7 +205,8 @@ export default function PlayPage() {
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
                 timestamp: new Date().toISOString(), evaluation: undefined,
-                media_type: next.media_type, media_url: next.media_url
+                media_type: next.media_type, media_url: next.media_url,
+                glitch_effect: next.glitch_effect,
             };
             await pushMessageWithEffects(msg, next);
         }
@@ -465,6 +468,19 @@ export default function PlayPage() {
                 @keyframes iosBounce {
                     0%, 100% { transform: scale(1); opacity: 0.3; }
                     50% { transform: scale(1.4); opacity: 1; }
+                }
+                @keyframes matrixGlitch {
+                    0%   { transform: translate(0); text-shadow: none; }
+                    4%   { transform: translate(-4px, 0); text-shadow: 3px 0 rgba(255,0,60,0.9), -3px 0 rgba(0,255,180,0.9); }
+                    8%   { transform: translate(4px, 1px); text-shadow: -3px 0 rgba(255,0,60,0.7), 3px 0 rgba(0,255,180,0.7); }
+                    12%  { transform: translate(-2px, 0); text-shadow: 2px 0 rgba(255,0,60,0.4), -2px 0 rgba(0,255,180,0.4); }
+                    16%  { transform: translate(0); text-shadow: none; }
+                    55%  { transform: translate(0); text-shadow: none; }
+                    58%  { transform: translate(-3px, 0) skewX(-2deg); text-shadow: 2px 0 rgba(255,0,60,0.8), -2px 0 rgba(0,255,180,0.8); }
+                    62%  { transform: translate(3px, -1px) skewX(0); text-shadow: none; }
+                    65%  { transform: translate(-1px, 0); text-shadow: 1px 0 rgba(255,0,60,0.4), -1px 0 rgba(0,255,180,0.4); }
+                    68%  { transform: translate(0); text-shadow: none; }
+                    100% { transform: translate(0); text-shadow: none; }
                 }
             `}</style>
         </div>
