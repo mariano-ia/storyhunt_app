@@ -2,14 +2,15 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-    ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, Clock,
+    ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, Clock, ChevronDown, ChevronRight, BookOpen,
     BarChart2, Save, Play, Share2, X, Copy, ExternalLink, Zap
 } from 'lucide-react';
 import {
-    getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps
+    getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps,
+    getScenes, createScene, updateScene, deleteScene, reorderScenes, ensureScenesExist
 } from '@/lib/firestore';
 import ConfirmModal from '@/components/ConfirmModal';
-import type { Experience, ExperienceFormData, Step, StepFormData } from '@/lib/types';
+import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, Choice } from '@/lib/types';
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
@@ -111,13 +112,16 @@ function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: 
 }
 
 // ─── Inline Step Editor with Auto-Save ────────────────────────────────────────
-function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd, scenes, onPlayFrom, globalStepIndex }: {
     step: Step; index: number;
     onSave: (data: Partial<StepFormData>) => Promise<void>;
     onDelete: () => void;
     isDragging: boolean; isDragOver: boolean;
     onDragStart: () => void; onDragOver: (e: React.DragEvent) => void;
     onDrop: () => void; onDragEnd: () => void;
+    scenes: Scene[];
+    onPlayFrom?: (stepIndex: number) => void;
+    globalStepIndex: number;
 }) {
     const [editing, setEditing] = useState(false);
     const [localDelay, setLocalDelay] = useState(step.delay_seconds ?? 1.2);
@@ -135,6 +139,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         interrupted_typing: step.interrupted_typing || false,
         glitch_effect: step.glitch_effect || false,
         step_type: step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative')),
+        choices: step.choices?.length ? step.choices : (step.step_type === 'choice' ? [{ label: '', condition: '', target_scene_id: '' }] : undefined),
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,9 +191,9 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                                 {step.step_type === 'typing' || (step.interrupted_typing && !step.message_to_send)
-                                    ? <span style={{ color: 'var(--brand-primary-light)' }}>💬 Sólo efecto de escritura</span>
+                                    ? <span style={{ color: 'var(--brand-primary-light)', display: 'flex', alignItems: 'center', gap: 4 }}><Zap size={12} /> Sólo efecto de escritura</span>
                                     : isNarrative
-                                        ? <span style={{ color: 'var(--brand-primary-light)' }}>📖 Narrativo — sin respuesta</span>
+                                        ? <span style={{ color: 'var(--brand-primary-light)', display: 'flex', alignItems: 'center', gap: 4 }}><BookOpen size={12} /> Narrativo — sin respuesta</span>
                                         : <>Espera: {step.expected_answer} &middot; {step.hints?.length || 0} pista(s)</>}
                             </div>
                         </div>
@@ -233,8 +238,14 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                                 }}
                                 style={{ accentColor: 'var(--brand-primary)', width: 13, height: 13 }}
                             />
-                            ⚡
+                            <Zap size={12} />
                         </label>
+                        <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            title="Probar desde este paso"
+                            onClick={e => { e.stopPropagation(); onPlayFrom?.(globalStepIndex); }}
+                            style={{ color: 'var(--brand-primary)' }}
+                        ><Play size={14} /></button>
                         <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditing(true)} id={`edit-step-${step.id}`}><Edit2 size={14} /></button>
                         <button className="btn btn-danger btn-icon btn-sm" onClick={onDelete} id={`del-step-${step.id}`}><Trash2 size={14} /></button>
                     </div>
@@ -252,19 +263,21 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                         className="form-input"
                         value={form.step_type || (form.requires_response ? 'interactive' : (form.interrupted_typing && !form.message_to_send ? 'typing' : 'narrative'))}
                         onChange={e => {
-                            const val = e.target.value as 'interactive' | 'narrative' | 'typing';
+                            const val = e.target.value as StepFormData['step_type'];
                             handleFormChange({
                                 ...form,
                                 step_type: val,
-                                requires_response: val === 'interactive',
-                                interrupted_typing: val === 'typing' ? true : false,
-                                message_to_send: val === 'typing' ? '' : form.message_to_send
+                                requires_response: val === 'interactive' || val === 'choice',
+                                interrupted_typing: val === 'typing',
+                                message_to_send: val === 'typing' ? '' : form.message_to_send,
+                                choices: val === 'choice' ? (form.choices?.length ? form.choices : [{ label: '', condition: '', target_scene_id: '' }]) : form.choices,
                             });
                         }}
                     >
-                        <option value="interactive">Paso Interactivo (espera respuesta)</option>
-                        <option value="narrative">Paso Narrativo (avanza automáticamente)</option>
-                        <option value="typing">Efecto "Escribiendo" (solo genera intriga, sin mensaje)</option>
+                        <option value="interactive">Interactivo (espera respuesta)</option>
+                        <option value="narrative">Narrativo (avanza automáticamente)</option>
+                        <option value="typing">Efecto "Escribiendo" (solo intriga)</option>
+                        <option value="choice">Elección / Condicional (bifurca el flujo)</option>
                     </select>
                 </div>
 
@@ -318,7 +331,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                                 style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
                             />
                             <label htmlFor={`glitch-effect-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                ⚡ Efecto glitch al aparecer el mensaje
+                                <Zap size={13} style={{ marginRight: 4 }} /> Efecto glitch al aparecer el mensaje
                             </label>
                             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Falla de la matrix</span>
                         </div>
@@ -339,7 +352,45 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                     </div>
                 </div>
 
-                {form.requires_response && (
+                {/* Choice step: options editor */}
+                {form.step_type === 'choice' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <label className="form-label">Opciones del condicional</label>
+                        {(form.choices || []).map((ch, ci) => (
+                            <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Etiqueta</label>}
+                                    <input className="form-input" placeholder="Ej: Seguir" value={ch.label} onChange={e => {
+                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
+                                    }} />
+                                </div>
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Condición (para el LLM)</label>}
+                                    <input className="form-input" placeholder="Ej: el usuario quiere seguir" value={ch.condition} onChange={e => {
+                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
+                                    }} />
+                                </div>
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Escena destino</label>}
+                                    <select className="form-input" value={ch.target_scene_id || ''} onChange={e => {
+                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; handleFormChange({ ...form, choices });
+                                    }}>
+                                        <option value="">(seleccionar)</option>
+                                        {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
+                                    const choices = (form.choices || []).filter((_, i) => i !== ci); handleFormChange({ ...form, choices });
+                                }}><Trash2 size={13} /></button>
+                            </div>
+                        ))}
+                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start' }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
+                            <Plus size={13} /> Agregar opción
+                        </button>
+                    </div>
+                )}
+
+                {form.requires_response && form.step_type !== 'choice' && (
                     <>
                         <div className="form-group" style={{ margin: 0 }}>
                             <label className="form-label">Respuesta esperada <span className="required">*</span></label>
@@ -386,6 +437,158 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
     );
 }
 
+// ─── New Step Form ────────────────────────────────────────────────────────────
+function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
+    data: StepFormData;
+    onChange: (d: StepFormData) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    scenes: Scene[];
+}) {
+    const d = data;
+    const set = (patch: Partial<StepFormData>) => onChange({ ...d, ...patch });
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Tipo de Paso</label>
+                <select
+                    className="form-input"
+                    value={d.step_type || 'interactive'}
+                    onChange={e => {
+                        const val = e.target.value as StepFormData['step_type'];
+                        set({
+                            step_type: val,
+                            requires_response: val === 'interactive' || val === 'choice',
+                            interrupted_typing: val === 'typing',
+                            message_to_send: val === 'typing' ? '' : d.message_to_send,
+                            choices: val === 'choice' ? (d.choices?.length ? d.choices : [{ label: '', condition: '', target_scene_id: '' }]) : undefined,
+                        });
+                    }}
+                >
+                    <option value="interactive">Interactivo (espera respuesta)</option>
+                    <option value="narrative">Narrativo (avanza automáticamente)</option>
+                    <option value="typing">Efecto "Escribiendo" (solo intriga)</option>
+                    <option value="choice">Elección / Condicional (bifurca el flujo)</option>
+                </select>
+            </div>
+
+            {d.step_type !== 'typing' && (
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
+                    <textarea className="form-textarea" style={{ minHeight: 80 }} value={d.message_to_send} onChange={e => set({ message_to_send: e.target.value })} />
+                </div>
+            )}
+
+            {d.step_type !== 'typing' && d.step_type !== 'choice' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Multimedia (Opcional)</label>
+                        <select className="form-input" value={d.media_type || ''} onChange={e => set({ media_type: (e.target.value as any) || undefined, media_url: e.target.value ? d.media_url : undefined })}>
+                            <option value="">Sin multimedia</option>
+                            <option value="image">Imagen</option>
+                            <option value="video">Video</option>
+                            <option value="audio">Audio</option>
+                        </select>
+                    </div>
+                    {d.media_type && (
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">URL del archivo</label>
+                            <input className="form-input" placeholder="https://..." value={d.media_url || ''} onChange={e => set({ media_url: e.target.value })} />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {d.step_type !== 'typing' && d.step_type !== 'choice' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <input type="checkbox" checked={d.interrupted_typing || false} onChange={e => set({ interrupted_typing: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Efecto "Escribió y borró" antes del mensaje</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <input type="checkbox" checked={d.glitch_effect || false} onChange={e => set({ glitch_effect: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><Zap size={13} /> Efecto glitch — Falla de la matrix</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Choice step: options editor */}
+            {d.step_type === 'choice' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <label className="form-label">Opciones</label>
+                    {(d.choices || []).map((ch, ci) => (
+                        <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Etiqueta</label>}
+                                <input className="form-input" placeholder="Ej: Seguir" value={ch.label} onChange={e => {
+                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; set({ choices });
+                                }} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Condición (para el LLM)</label>}
+                                <input className="form-input" placeholder="Ej: el usuario quiere seguir" value={ch.condition} onChange={e => {
+                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; set({ choices });
+                                }} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Escena destino</label>}
+                                <select className="form-input" value={ch.target_scene_id || ''} onChange={e => {
+                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; set({ choices });
+                                }}>
+                                    <option value="">(seleccionar)</option>
+                                    {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
+                                const choices = (d.choices || []).filter((_, i) => i !== ci); set({ choices });
+                            }}><Trash2 size={13} /></button>
+                        </div>
+                    ))}
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start' }} onClick={() => set({ choices: [...(d.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
+                        <Plus size={13} /> Agregar opción
+                    </button>
+                </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Contexto heredable (Opcional)</label>
+                    <input className="form-input" placeholder="Ej: Usa un tono urgente..." value={d.context || ''} onChange={e => set({ context: e.target.value })} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Delay (segundos)</label>
+                    <input className="form-input" type="number" step="0.1" min="0" value={d.delay_seconds} onChange={e => set({ delay_seconds: parseFloat(e.target.value) || 0 })} />
+                </div>
+            </div>
+
+            {d.requires_response && d.step_type !== 'choice' && (
+                <>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Respuesta esperada <span className="required">*</span></label>
+                        <input className="form-input" value={d.expected_answer} onChange={e => set({ expected_answer: e.target.value })} />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Mensaje si respuesta incorrecta</label>
+                        <input className="form-input" value={d.wrong_answer_message} onChange={e => set({ wrong_answer_message: e.target.value })} />
+                    </div>
+                </>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary btn-sm" onClick={onCancel}>Cancelar</button>
+                <button
+                    className="btn btn-primary btn-sm"
+                    onClick={onSave}
+                    disabled={(d.step_type !== 'typing' && !d.message_to_send) || (d.requires_response && d.step_type !== 'choice' && !d.expected_answer)}
+                >
+                    <Check size={13} /> Guardar paso
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ─── Tabs ──────────────────────────────────────────────────────────
 function TabNav({ active, onChange }: { active: string; onChange: (t: string) => void }) {
     return (
@@ -404,23 +607,30 @@ export default function ExperienceDetailPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
     const [exp, setExp] = useState<Experience | null>(null);
+    const [scenes, setScenes] = useState<Scene[]>([]);
     const [steps, setSteps] = useState<Step[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState('general');
     const [formData, setFormData] = useState<Partial<ExperienceFormData>>({});
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [newStep, setNewStep] = useState<StepFormData | null>(null);
+    const [newStep, setNewStep] = useState<{ sceneId: string; data: StepFormData } | null>(null);
     const [toDeleteStep, setToDeleteStep] = useState<Step | null>(null);
     const [deletingStep, setDeletingStep] = useState(false);
     const [showShare, setShowShare] = useState(false);
-    const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
-    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+    const [collapsedScenes, setCollapsedScenes] = useState<Set<string>>(new Set());
+    const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+    const [dragState, setDragState] = useState<{ sceneId: string; index: number } | null>(null);
+    const [dragOverState, setDragOverState] = useState<{ sceneId: string; index: number } | null>(null);
+    const [previewFromStep, setPreviewFromStep] = useState<number | null>(null);
 
     const load = async () => {
         setLoading(true);
-        const [e, s] = await Promise.all([getExperience(id), getSteps(id)]);
+        const e = await getExperience(id);
         if (e) { setExp(e); setFormData(e); }
+        const { scenes: sc } = await ensureScenesExist(id);
+        setScenes(sc);
+        const s = await getSteps(id);
         setSteps(s);
         setLoading(false);
     };
@@ -436,25 +646,67 @@ export default function ExperienceDetailPage() {
         setSaving(false);
     };
 
-    const handleDrop = async (dropIdx: number) => {
-        if (draggedIdx === null || draggedIdx === dropIdx) {
-            setDraggedIdx(null); setDragOverIdx(null); return;
+    const handleDrop = async (sceneId: string, dropIdx: number) => {
+        if (!dragState || dragState.sceneId !== sceneId || dragState.index === dropIdx) {
+            setDragState(null); setDragOverState(null); return;
         }
-        const s = [...steps];
-        const [removed] = s.splice(draggedIdx, 1);
-        s.splice(dropIdx, 0, removed);
-        const reordered = s.map((st, idx) => ({ ...st, order: idx + 1 }));
-        setSteps(reordered);
-        setDraggedIdx(null); setDragOverIdx(null);
+        const sceneSteps = steps.filter(s => s.scene_id === sceneId);
+        const [removed] = sceneSteps.splice(dragState.index, 1);
+        sceneSteps.splice(dropIdx, 0, removed);
+        const reordered = sceneSteps.map((st, idx) => ({ ...st, order: idx + 1 }));
+        setSteps(prev => [...prev.filter(s => s.scene_id !== sceneId), ...reordered].sort((a, b) => a.order - b.order));
+        setDragState(null); setDragOverState(null);
         await reorderSteps(id, reordered);
     };
 
     const handleAddStep = async () => {
         if (!newStep) return;
-        await createStep(id, { ...newStep, order: steps.length + 1 });
+        const sceneSteps = steps.filter(s => s.scene_id === newStep.sceneId);
+        await createStep(id, { ...newStep.data, scene_id: newStep.sceneId, order: sceneSteps.length + 1 });
         setNewStep(null);
         load();
     };
+
+    const handleAddScene = async () => {
+        await createScene(id, { name: `Escena ${scenes.length + 1}`, order: scenes.length + 1 });
+        load();
+    };
+
+    const handleDeleteScene = async (sceneId: string) => {
+        const sceneSteps = steps.filter(s => s.scene_id === sceneId);
+        if (sceneSteps.length > 0) {
+            alert('No podés eliminar una escena que tiene pasos. Mové o eliminá los pasos primero.');
+            return;
+        }
+        await deleteScene(id, sceneId);
+        load();
+    };
+
+    const handleSceneRename = async (sceneId: string, name: string) => {
+        await updateScene(id, sceneId, { name });
+        setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, name } : s));
+        setEditingSceneId(null);
+    };
+
+    const handleSceneLink = async (sceneId: string, nextSceneId: string | undefined) => {
+        await updateScene(id, sceneId, { next_scene_id: nextSceneId || undefined });
+        setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, next_scene_id: nextSceneId || undefined } : s));
+    };
+
+    const stepsForScene = (sceneId: string) => steps.filter(s => s.scene_id === sceneId);
+
+    const toggleSceneCollapse = (sceneId: string) => {
+        setCollapsedScenes(prev => {
+            const next = new Set(prev);
+            next.has(sceneId) ? next.delete(sceneId) : next.add(sceneId);
+            return next;
+        });
+    };
+
+    const newStepDefault = (sceneId: string): { sceneId: string; data: StepFormData } => ({
+        sceneId,
+        data: { order: 0, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false, glitch_effect: false },
+    });
 
     const handleDeleteStep = async () => {
         if (!toDeleteStep) return;
@@ -569,153 +821,134 @@ export default function ExperienceDetailPage() {
                 </div>
             )}
 
-            {/* Steps Tab */}
+            {/* Steps Tab — Scenes-based with preview panel */}
             {tab === 'pasos' && (
-                <div>
-                    {steps.length === 0 && !newStep && (
-                        <div className="empty-state">
-                            <div className="empty-state-icon"><GripVertical size={24} /></div>
-                            <div className="empty-state-title">Sin pasos</div>
-                            <p className="empty-state-text">Esta experiencia no tiene pasos. Agregá el primero.</p>
-                        </div>
-                    )}
-                    {steps.map((step, i) => (
-                        <InlineStepEditor
-                            key={step.id} step={step} index={i}
-                            onSave={async (data) => { await updateStep(id, step.id, data); }}
-                            onDelete={() => setToDeleteStep(step)}
-                            isDragging={draggedIdx === i}
-                            isDragOver={dragOverIdx === i}
-                            onDragStart={() => setDraggedIdx(i)}
-                            onDragOver={(e) => { e.preventDefault(); setDragOverIdx(i); }}
-                            onDrop={() => handleDrop(i)}
-                            onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null); }}
-                        />
-                    ))}
-                    {newStep ? (
-                        <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, color: 'var(--text-brand)' }}>Nuevo paso #{steps.length + 1}</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    <label className="form-label">Tipo de Paso</label>
-                                    <select
-                                        className="form-input"
-                                        value={newStep.step_type || (newStep.requires_response ? 'interactive' : (newStep.interrupted_typing && !newStep.message_to_send ? 'typing' : 'narrative'))}
-                                        onChange={e => {
-                                            const val = e.target.value as 'interactive' | 'narrative' | 'typing';
-                                            setNewStep({
-                                                ...newStep,
-                                                step_type: val,
-                                                requires_response: val === 'interactive',
-                                                interrupted_typing: val === 'typing' ? true : false,
-                                                message_to_send: val === 'typing' ? '' : newStep.message_to_send
-                                            });
-                                        }}
-                                    >
-                                        <option value="interactive">Paso Interactivo (espera respuesta)</option>
-                                        <option value="narrative">Paso Narrativo (avanza automáticamente)</option>
-                                        <option value="typing">Efecto "Escribiendo" (solo genera intriga, sin mensaje)</option>
-                                    </select>
+                <div style={{ display: 'flex', gap: 20 }}>
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    {scenes.map(scene => {
+                        const scSteps = stepsForScene(scene.id);
+                        const isCollapsed = collapsedScenes.has(scene.id);
+                        const isEditing = editingSceneId === scene.id;
+
+                        return (
+                            <div key={scene.id} style={{ marginBottom: 24, border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+                                {/* Scene header */}
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: isCollapsed ? 'none' : '1px solid var(--border-subtle)',
+                                    cursor: 'pointer',
+                                }} onClick={() => toggleSceneCollapse(scene.id)}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                        {isEditing ? (
+                                            <input
+                                                className="form-input"
+                                                autoFocus
+                                                defaultValue={scene.name}
+                                                onClick={e => e.stopPropagation()}
+                                                onBlur={e => handleSceneRename(scene.id, e.target.value || scene.name)}
+                                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                style={{ padding: '4px 8px', fontSize: 14, fontWeight: 700, width: 200 }}
+                                            />
+                                        ) : (
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{scene.name}</span>
+                                        )}
+                                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({scSteps.length} pasos)</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                                        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditingSceneId(scene.id)} title="Renombrar"><Edit2 size={13} /></button>
+                                        <button className="btn btn-danger btn-icon btn-sm" onClick={() => handleDeleteScene(scene.id)} title="Eliminar escena"><Trash2 size={13} /></button>
+                                    </div>
                                 </div>
 
-                                {newStep.step_type !== 'typing' && (
-                                    <div className="form-group" style={{ margin: 0 }}>
-                                        <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
-                                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={newStep.message_to_send} onChange={e => setNewStep({ ...newStep, message_to_send: e.target.value })} />
-                                    </div>
-                                )}
-
-                                {newStep.step_type !== 'typing' && (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                                        <div className="form-group" style={{ margin: 0 }}>
-                                            <label className="form-label">Agregar Multimedia (Opcional)</label>
-                                            <select className="form-input" value={newStep.media_type || ''} onChange={e => setNewStep({ ...newStep, media_type: e.target.value as any || undefined, media_url: e.target.value ? newStep.media_url : undefined })}>
-                                                <option value="">Sin multimedia</option>
-                                                <option value="image">Imagen</option>
-                                                <option value="video">Ver video</option>
-                                                <option value="audio">Audio</option>
-                                            </select>
-                                        </div>
-                                        {newStep.media_type && (
-                                            <div className="form-group" style={{ margin: 0 }}>
-                                                <label className="form-label">URL del archivo</label>
-                                                <input className="form-input" placeholder="https://..." value={newStep.media_url || ''} onChange={e => setNewStep({ ...newStep, media_url: e.target.value })} />
+                                {/* Scene body (steps + link) */}
+                                {!isCollapsed && (
+                                    <div style={{ padding: '12px 16px' }}>
+                                        {scSteps.length === 0 && !(newStep?.sceneId === scene.id) && (
+                                            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                                                Sin pasos en esta escena.
                                             </div>
                                         )}
-                                    </div>
-                                )}
 
-                                {newStep.step_type !== 'typing' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                                        <input
-                                            type="checkbox"
-                                            id="interrupted-typing-new"
-                                            checked={newStep.interrupted_typing || false}
-                                            onChange={e => setNewStep({ ...newStep, interrupted_typing: e.target.checked })}
-                                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                                        />
-                                        <label htmlFor="interrupted-typing-new" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                            Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
-                                        </label>
-                                    </div>
-                                )}
-                                {newStep.step_type !== 'typing' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                                        <input
-                                            type="checkbox"
-                                            id="glitch-effect-new"
-                                            checked={newStep.glitch_effect || false}
-                                            onChange={e => setNewStep({ ...newStep, glitch_effect: e.target.checked })}
-                                            style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                                        />
-                                        <label htmlFor="glitch-effect-new" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                            ⚡ Efecto glitch al aparecer el mensaje
-                                        </label>
-                                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Falla de la matrix</span>
-                                    </div>
-                                )}
+                                        {scSteps.map((step, i) => {
+                                            const globalIdx = steps.findIndex(s => s.id === step.id);
+                                            return (
+                                            <InlineStepEditor
+                                                key={step.id} step={step} index={i}
+                                                onSave={async (data) => { await updateStep(id, step.id, data); }}
+                                                onDelete={() => setToDeleteStep(step)}
+                                                isDragging={dragState?.sceneId === scene.id && dragState.index === i}
+                                                isDragOver={dragOverState?.sceneId === scene.id && dragOverState.index === i}
+                                                onDragStart={() => setDragState({ sceneId: scene.id, index: i })}
+                                                onDragOver={(e) => { e.preventDefault(); setDragOverState({ sceneId: scene.id, index: i }); }}
+                                                onDrop={() => handleDrop(scene.id, i)}
+                                                onDragEnd={() => { setDragState(null); setDragOverState(null); }}
+                                                scenes={scenes}
+                                                onPlayFrom={(idx) => setPreviewFromStep(idx)}
+                                                globalStepIndex={globalIdx}
+                                            />
+                                            );
+                                        })}
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                                    <div className="form-group" style={{ margin: 0 }}>
-                                        <label className="form-label">Contexto heredable (Opcional)</label>
-                                        <input className="form-input" placeholder="Ej: Usa un tono muy urgente..." value={newStep.context} onChange={e => setNewStep({ ...newStep, context: e.target.value })} />
-                                    </div>
+                                        {/* New step form for this scene */}
+                                        {newStep?.sceneId === scene.id ? (
+                                            <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
+                                                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, color: 'var(--text-brand)' }}>Nuevo paso #{scSteps.length + 1}</div>
+                                                <NewStepForm
+                                                    data={newStep.data}
+                                                    onChange={(d) => setNewStep({ sceneId: scene.id, data: d })}
+                                                    onSave={handleAddStep}
+                                                    onCancel={() => setNewStep(null)}
+                                                    scenes={scenes}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setNewStep(newStepDefault(scene.id))}>
+                                                <Plus size={14} /> Agregar paso
+                                            </button>
+                                        )}
 
-                                    <div className="form-group" style={{ margin: 0 }}>
-                                        <label className="form-label">Delay (segundos)</label>
-                                        <input className="form-input" type="number" step="0.1" min="0" value={newStep.delay_seconds} onChange={e => setNewStep({ ...newStep, delay_seconds: parseFloat(e.target.value) || 0 })} />
-                                    </div>
-                                </div>
-                                {newStep.requires_response && (
-                                    <>
-                                        <div className="form-group" style={{ margin: 0 }}>
-                                            <label className="form-label">Respuesta esperada <span className="required">*</span></label>
-                                            <input className="form-input" value={newStep.expected_answer} onChange={e => setNewStep({ ...newStep, expected_answer: e.target.value })} />
+                                        {/* Scene link */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                                            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Siguiente escena:</span>
+                                            <select
+                                                className="form-input"
+                                                style={{ fontSize: 13, padding: '4px 8px', flex: 1 }}
+                                                value={scene.next_scene_id || ''}
+                                                onChange={e => handleSceneLink(scene.id, e.target.value || undefined)}
+                                            >
+                                                <option value="">(siguiente por orden)</option>
+                                                {scenes.filter(s => s.id !== scene.id).map(s => (
+                                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                                ))}
+                                            </select>
                                         </div>
-                                        <div className="form-group" style={{ margin: 0 }}>
-                                            <label className="form-label">Mensaje si respuesta incorrecta</label>
-                                            <input className="form-input" value={newStep.wrong_answer_message} onChange={e => setNewStep({ ...newStep, wrong_answer_message: e.target.value })} />
-                                        </div>
-                                    </>
+                                    </div>
                                 )}
-                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                    <button className="btn btn-secondary btn-sm" onClick={() => setNewStep(null)}>Cancelar</button>
-                                    <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={handleAddStep}
-                                        disabled={(newStep.step_type !== 'typing' && !newStep.message_to_send) || (newStep.requires_response && !newStep.expected_answer)}
-                                        id="save-new-step-btn"
-                                    >
-                                        <Check size={13} /> Guardar paso
-                                    </button>
-                                </div>
                             </div>
-                        </div>
+                        );
+                    })}
+
+                    <button className="btn btn-secondary" onClick={handleAddScene} style={{ marginTop: 8 }}>
+                        <Plus size={16} /> Nueva escena
+                    </button>
+                </div>
+
+                {/* Preview panel — always visible */}
+                <div style={{ flex: '0 0 340px', position: 'sticky', top: 'calc(var(--topbar-height) + 16px)', height: 'calc(90vh - var(--topbar-height))', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-subtle)', background: '#fff', alignSelf: 'flex-start' }}>
+                    {previewFromStep !== null ? (
+                        <iframe
+                            key={previewFromStep}
+                            src={`/play/${id}?from=${previewFromStep}`}
+                            style={{ width: '100%', height: '100%', border: 'none' }}
+                        />
                     ) : (
-                        <button className="btn btn-secondary" onClick={() => setNewStep({ order: steps.length + 1, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false, glitch_effect: false })} id="add-new-step-btn">
-                            <Plus size={16} /> Agregar paso
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: 12, padding: 32, textAlign: 'center' }}>
+                            <Play size={32} style={{ opacity: 0.2 }} />
+                            <span style={{ fontSize: 13 }}>Tocá ▶ en cualquier paso para previsualizar desde ahí</span>
+                        </div>
                     )}
+                </div>
                 </div>
             )}
 

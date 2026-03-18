@@ -19,33 +19,51 @@ export interface Experience {
     updated_at: string;
 }
 
+// ─── Scenes ──────────────────────────────────────────────────────────────────
+
+export interface Scene {
+    id: string;
+    experience_id: string;
+    name: string;
+    order: number;
+    next_scene_id?: string; // default linear flow to next scene
+}
+
+export type SceneFormData = Omit<Scene, 'id' | 'experience_id'>;
+
+// ─── Choice (for branching steps) ────────────────────────────────────────────
+
+export interface Choice {
+    label: string;              // "Seguir caminando"
+    condition: string;          // "el usuario quiere continuar/seguir"
+    target_scene_id?: string;   // jump to this scene
+    target_step_id?: string;    // or jump to this specific step
+}
+
+// ─── Steps ───────────────────────────────────────────────────────────────────
+
 export interface Step {
     id: string;
     experience_id: string;
+    scene_id?: string;          // which scene this step belongs to
     order: number;
-    step_type?: 'interactive' | 'narrative' | 'typing';
+    step_type?: 'interactive' | 'narrative' | 'typing' | 'choice';
     message_to_send: string;
-    // If false, this is a narrative step — no user answer expected.
-    // System auto-advances to the next step immediately.
     requires_response: boolean;
-    expected_answer: string;    // Ignored when requires_response = false
-    hints: string[];            // Ignored when requires_response = false
-    wrong_answer_message: string; // Ignored when requires_response = false
-    // Optional LLM context hint — helps AI guide user without skipping steps.
-    // If empty, inherits the most recent non-empty context from previous steps.
+    expected_answer: string;
+    hints: string[];
+    wrong_answer_message: string;
     context?: string;
-    // Seconds to wait before showing this step's message (0 = no delay). Default: 1.2
     delay_seconds?: number;
 
-    // Multimedia attach to the system message
     media_url?: string;
     media_type?: 'image' | 'video' | 'audio';
 
-    // Special writing effect. If true, simulates a user starting to type and stopping abruptly.
     interrupted_typing?: boolean;
-
-    // Visual glitch effect applied to the message bubble when it appears.
     glitch_effect?: boolean;
+
+    // For step_type === 'choice': branching options
+    choices?: Choice[];
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
@@ -54,7 +72,7 @@ export interface PreviewMessage {
     role: 'system' | 'user';
     content: string;
     timestamp: string;
-    evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic';
+    evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic' | 'choice';
     media_url?: string;
     media_type?: 'image' | 'video' | 'audio';
     glitch_effect?: boolean;

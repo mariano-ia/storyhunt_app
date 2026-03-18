@@ -1,6 +1,7 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Sun, Moon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const breadcrumbs: Record<string, { parent?: string; label: string }> = {
     '/dashboard': { label: 'Dashboard' },
@@ -11,8 +12,29 @@ const breadcrumbs: Record<string, { parent?: string; label: string }> = {
     '/dashboard/settings': { parent: 'Dashboard', label: 'Configuración' },
 };
 
+function useTheme() {
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+    useEffect(() => {
+        const saved = localStorage.getItem('sh-theme') as 'dark' | 'light' | null;
+        const initial = saved || 'dark';
+        setTheme(initial);
+        document.documentElement.setAttribute('data-theme', initial);
+    }, []);
+
+    const toggle = () => {
+        const next = theme === 'dark' ? 'light' : 'dark';
+        setTheme(next);
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('sh-theme', next);
+    };
+
+    return { theme, toggle };
+}
+
 export default function Topbar() {
     const pathname = usePathname();
+    const { theme, toggle } = useTheme();
 
     // Find best matching breadcrumb
     const crumb = Object.entries(breadcrumbs)
@@ -45,10 +67,18 @@ export default function Topbar() {
                 </div>
             </div>
             <div className="topbar-actions">
-                <button className="btn btn-ghost btn-icon" title="Buscar" id="topbar-search-btn">
+                <button
+                    className="btn btn-ghost btn-icon"
+                    onClick={toggle}
+                    title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+                    aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                >
+                    {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
+                <button className="btn btn-ghost btn-icon" title="Buscar" aria-label="Buscar">
                     <Search size={18} />
                 </button>
-                <button className="btn btn-ghost btn-icon" title="Notificaciones" id="topbar-notifications-btn">
+                <button className="btn btn-ghost btn-icon" title="Notificaciones" aria-label="Notificaciones">
                     <Bell size={18} />
                 </button>
                 <div style={{

@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowUp, RotateCcw } from 'lucide-react';
-import { getExperience, getSteps } from '@/lib/firestore';
-import type { Experience, Step, PreviewMessage } from '@/lib/types';
+import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import type { Experience, Step, PreviewMessage, Scene } from '@/lib/types';
 
 // ─── Message Renderer ─────────────────────────────────────────────────────────
 function renderMessage(content: string): React.ReactNode {
@@ -118,8 +118,12 @@ function TypingIndicator({ narratorInitial, narratorAvatar }: { narratorInitial:
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PlayPage() {
     const { id } = useParams() as { id: string };
+    const searchParams = useSearchParams();
+    const fromStepParam = searchParams.get('from');
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
+    const [scenes, setScenes] = useState<Scene[]>([]);
+    const [currentSceneId, setCurrentSceneId] = useState<string | null>(null);
     const [messages, setMessages] = useState<PreviewMessage[]>([]);
     const [input, setInput] = useState('');
     const [stepIndex, setStepIndex] = useState(0);
@@ -139,6 +143,24 @@ export default function PlayPage() {
         if (chatRef.current) {
             chatRef.current.scrollTop = chatRef.current.scrollHeight;
         }
+    };
+
+    // ─── Scene helpers ────────────────────────────────────────────────────────
+    const getSceneSteps = (allSteps: Step[], sceneId: string | null): Step[] => {
+        if (!sceneId) return allSteps; // no scenes — flat fallback
+        return allSteps.filter(s => s.scene_id === sceneId).sort((a, b) => a.order - b.order);
+    };
+
+    const getNextSceneId = (allScenes: Scene[], currentId: string): string | null => {
+        const current = allScenes.find(s => s.id === currentId);
+        if (!current) return null;
+        // Explicit next_scene_id takes priority
+        if (current.next_scene_id) return current.next_scene_id;
+        // Otherwise, next scene by order
+        const sorted = [...allScenes].sort((a, b) => a.order - b.order);
+        const idx = sorted.findIndex(s => s.id === currentId);
+        if (idx >= 0 && idx < sorted.length - 1) return sorted[idx + 1].id;
+        return null; // last scene
     };
 
     const pushMessageWithEffects = async (msg: PreviewMessage | null, stepOptions: { interrupted_typing?: boolean; delay_seconds?: number } = {}) => {
@@ -171,20 +193,39 @@ export default function PlayPage() {
         }
     };
 
-    const advanceNarrativeSteps = async (allSteps: Step[], fromIndex: number) => {
-        if (fromIndex >= allSteps.length) {
+    const advanceNarrativeSteps = async (
+        sceneSteps: Step[],
+        fromIndex: number,
+        allScenes: Scene[],
+        sceneId: string | null,
+        allSteps: Step[],
+    ) => {
+        if (fromIndex >= sceneSteps.length) {
+            // All steps in current scene are done — navigate to next scene
+            if (sceneId && allScenes.length > 0) {
+                const nextId = getNextSceneId(allScenes, sceneId);
+                if (nextId) {
+                    setCurrentSceneId(nextId);
+                    const nextSceneSteps = getSceneSteps(allSteps, nextId);
+                    if (nextSceneSteps.length > 0) {
+                        await advanceNarrativeSteps(nextSceneSteps, 0, allScenes, nextId, allSteps);
+                        return;
+                    }
+                }
+            }
+            // No next scene or no scenes at all — experience complete
             setStepIndex(allSteps.length);
             setCompleted(true);
             return;
         }
 
-        const next = allSteps[fromIndex];
+        const next = sceneSteps[fromIndex];
+        // Keep stepIndex pointing to position in the full steps array
+        const globalIndex = allSteps.findIndex(s => s.id === next.id);
 
         if (next.step_type === 'typing') {
             await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
-
-            // Advance directly to next step without pause
-            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+            await advanceNarrativeSteps(sceneSteps, fromIndex + 1, allScenes, sceneId, allSteps);
         } else if (next.step_type === 'narrative' || !next.requires_response) {
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
@@ -194,14 +235,11 @@ export default function PlayPage() {
             };
 
             await pushMessageWithEffects(msg, next);
-
-            // recurse to next step
-            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+            await advanceNarrativeSteps(sceneSteps, fromIndex + 1, allScenes, sceneId, allSteps);
         } else {
             // Interactive step: pause execution here
-            setStepIndex(fromIndex);
+            setStepIndex(globalIndex >= 0 ? globalIndex : fromIndex);
 
-            // Render it, and then STOP advancing
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
                 timestamp: new Date().toISOString(), evaluation: undefined,
@@ -216,16 +254,35 @@ export default function PlayPage() {
         if (initialized.current) return;
         initialized.current = true;
 
-        Promise.all([getExperience(id), getSteps(id)]).then(([exp, stps]) => {
+        Promise.all([getExperience(id), getSteps(id), getScenes(id)]).then(([exp, stps, scns]) => {
             if (!exp) { setNotFound(true); setLoading(false); return; }
             setExperience(exp);
             setSteps(stps);
+
+            const sortedScenes = [...scns].sort((a, b) => a.order - b.order);
+            setScenes(sortedScenes);
+
+            // Determine starting scene
+            const firstSceneId = sortedScenes.length > 0 ? sortedScenes[0].id : null;
+            setCurrentSceneId(firstSceneId);
+
             setLoading(false);
 
             if (stps.length > 0) {
-                // Initialize async so we can use await for the typing effect
+                const fromIdx = fromStepParam ? parseInt(fromStepParam, 10) : null;
                 const init = async () => {
-                    await advanceNarrativeSteps(stps, 0);
+                    if (fromIdx !== null && fromIdx >= 0 && fromIdx < stps.length) {
+                        // Start from a specific step (via ?from= param)
+                        const targetStep = stps[fromIdx];
+                        const targetSceneId = targetStep.scene_id || firstSceneId;
+                        if (targetSceneId) setCurrentSceneId(targetSceneId);
+                        const sceneSteps = getSceneSteps(stps, targetSceneId);
+                        const localIdx = sceneSteps.findIndex(s => s.id === targetStep.id);
+                        await advanceNarrativeSteps(sceneSteps, localIdx >= 0 ? localIdx : 0, sortedScenes, targetSceneId, stps);
+                    } else {
+                        const initialSceneSteps = getSceneSteps(stps, firstSceneId);
+                        await advanceNarrativeSteps(initialSceneSteps, 0, sortedScenes, firstSceneId, stps);
+                    }
                 };
                 init();
             }
@@ -280,9 +337,35 @@ export default function PlayPage() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
+            } else if (data.evaluation === 'choice' && data.target_scene_id) {
+                // Choice step: jump to target scene
+                const targetSceneId = data.target_scene_id;
+                setCurrentSceneId(targetSceneId);
+                const targetSteps = steps.filter(s => s.scene_id === targetSceneId).sort((a, b) => a.order - b.order);
+                if (targetSteps.length > 0) {
+                    await advanceNarrativeSteps(targetSteps, 0, scenes, targetSceneId, steps);
+                }
             } else if (isCorrect) {
-                if (nextIdx < steps.length) {
-                    await advanceNarrativeSteps(steps, nextIdx);
+                const sceneSteps = currentSceneId
+                    ? steps.filter(s => s.scene_id === currentSceneId).sort((a, b) => a.order - b.order)
+                    : steps;
+                if (nextIdx < sceneSteps.length) {
+                    await advanceNarrativeSteps(sceneSteps, nextIdx, scenes, currentSceneId, steps);
+                } else if (scenes.length > 0 && currentSceneId) {
+                    // Scene ended, navigate to next
+                    const currentScene = scenes.find(s => s.id === currentSceneId);
+                    const nextScene = currentScene?.next_scene_id
+                        ? scenes.find(s => s.id === currentScene.next_scene_id)
+                        : scenes[scenes.findIndex(s => s.id === currentSceneId) + 1];
+                    if (nextScene) {
+                        setCurrentSceneId(nextScene.id);
+                        const nextSceneSteps = steps.filter(s => s.scene_id === nextScene.id).sort((a, b) => a.order - b.order);
+                        if (nextSceneSteps.length > 0) {
+                            await advanceNarrativeSteps(nextSceneSteps, 0, scenes, nextScene.id, steps);
+                        }
+                    } else {
+                        setCompleted(true);
+                    }
                 }
             }
         } catch {
@@ -299,11 +382,15 @@ export default function PlayPage() {
         setCompleted(false);
         setInput('');
 
-        if (steps.length > 0) {
-            const init = async () => {
-                await advanceNarrativeSteps(steps, 0);
-            };
-            init();
+        if (scenes.length > 0) {
+            const firstScene = scenes[0];
+            setCurrentSceneId(firstScene.id);
+            const firstSceneSteps = steps.filter(s => s.scene_id === firstScene.id).sort((a, b) => a.order - b.order);
+            if (firstSceneSteps.length > 0) {
+                (async () => { await advanceNarrativeSteps(firstSceneSteps, 0, scenes, firstScene.id, steps); })();
+            }
+        } else if (steps.length > 0) {
+            (async () => { await advanceNarrativeSteps(steps, 0, [], null, steps); })();
         }
     };
 

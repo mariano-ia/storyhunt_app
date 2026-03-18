@@ -52,6 +52,7 @@ export default function Sidebar() {
                         <span style={{ flex: 1 }}>{label}</span>
                         {isActive(href) && <ChevronRight size={14} style={{ opacity: 0.5 }} />}
                     </button>
+
                 ))}
 
                 <span className="sidebar-section-label" style={{ marginTop: 8 }}>Administración</span>
@@ -65,6 +66,7 @@ export default function Sidebar() {
                         <span style={{ flex: 1 }}>{label}</span>
                         {isActive(href) && <ChevronRight size={14} style={{ opacity: 0.5 }} />}
                     </button>
+
                 ))}
             </nav>
 

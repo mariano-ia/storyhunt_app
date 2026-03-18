@@ -3,7 +3,7 @@ import {
     deleteDoc, query, where, orderBy, Timestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Experience, ExperienceFormData, Step, StepFormData, UserSession, Interaction, ExperienceMetrics, Contact } from './types';
+import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, UserSession, Interaction, ExperienceMetrics, Contact } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -50,15 +50,74 @@ export async function deleteExperience(id: string): Promise<void> {
     await batch.commit();
 }
 
+// ─── Scenes ──────────────────────────────────────────────────────────────────
+
+export async function getScenes(experienceId: string): Promise<Scene[]> {
+    const q = query(
+        collection(db, 'experiences', experienceId, 'scenes'),
+        orderBy('order', 'asc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Scene));
+}
+
+export async function createScene(experienceId: string, data: SceneFormData): Promise<string> {
+    const ref = await addDoc(collection(db, 'experiences', experienceId, 'scenes'), {
+        ...data,
+        experience_id: experienceId,
+    });
+    return ref.id;
+}
+
+export async function updateScene(experienceId: string, sceneId: string, data: Partial<SceneFormData>): Promise<void> {
+    await updateDoc(doc(db, 'experiences', experienceId, 'scenes', sceneId), data);
+}
+
+export async function deleteScene(experienceId: string, sceneId: string): Promise<void> {
+    await deleteDoc(doc(db, 'experiences', experienceId, 'scenes', sceneId));
+}
+
+export async function reorderScenes(experienceId: string, scenes: Scene[]): Promise<void> {
+    const batch = writeBatch(db);
+    scenes.forEach((scene, idx) => {
+        batch.update(doc(db, 'experiences', experienceId, 'scenes', scene.id), { order: idx + 1 });
+    });
+    await batch.commit();
+}
+
+/** Auto-migration: if no scenes exist, create a default one and assign all steps to it */
+export async function ensureScenesExist(experienceId: string): Promise<{ scenes: Scene[]; migrated: boolean }> {
+    const scenes = await getScenes(experienceId);
+    if (scenes.length > 0) return { scenes, migrated: false };
+
+    // Create default scene
+    const sceneId = await createScene(experienceId, { name: 'Escena 1', order: 1 });
+
+    // Assign all existing steps to this scene
+    const steps = await getSteps(experienceId);
+    if (steps.length > 0) {
+        const batch = writeBatch(db);
+        steps.forEach(step => {
+            batch.update(doc(db, 'experiences', experienceId, 'steps', step.id), { scene_id: sceneId });
+        });
+        await batch.commit();
+    }
+
+    const newScenes = await getScenes(experienceId);
+    return { scenes: newScenes, migrated: true };
+}
+
 // ─── Steps ────────────────────────────────────────────────────────────────────
 
-export async function getSteps(experienceId: string): Promise<Step[]> {
+export async function getSteps(experienceId: string, sceneId?: string): Promise<Step[]> {
     const q = query(
         collection(db, 'experiences', experienceId, 'steps'),
         orderBy('order', 'asc')
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Step));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Step));
+    if (sceneId) return all.filter(s => s.scene_id === sceneId);
+    return all;
 }
 
 export async function createStep(experienceId: string, data: StepFormData): Promise<string> {

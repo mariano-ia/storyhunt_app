@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowUp, RotateCcw, AlertTriangle, BookOpen, Zap, CheckCircle } from 'lucide-react';
-import { getExperience, getSteps } from '@/lib/firestore';
-import type { Experience, Step, PreviewMessage } from '@/lib/types';
+import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import type { Experience, Step, Scene, PreviewMessage } from '@/lib/types';
 
 // ─── Message Renderer ─────────────────────────────────────────────────────────
 function renderMessage(content: string): React.ReactNode {
@@ -136,8 +136,13 @@ function TypingIndicator({ narratorInitial, narratorAvatar }: { narratorInitial:
 export default function ExperiencePreview() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const fromStepParam = searchParams.get('from');
+    const isEmbed = searchParams.get('embed') === '1';
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
+    const [scenes, setScenes] = useState<Scene[]>([]);
+    const [currentSceneId, setCurrentSceneId] = useState<string | null>(null);
     const [messages, setMessages] = useState<PreviewMessage[]>([]);
     const [input, setInput] = useState('');
     const [stepIndex, setStepIndex] = useState(0);
@@ -187,20 +192,65 @@ export default function ExperiencePreview() {
         }
     };
 
-    const advanceNarrativeSteps = async (allSteps: Step[], fromIndex: number) => {
-        if (fromIndex >= allSteps.length) {
+    // Helper: get steps for a given scene, sorted by order
+    const getSceneSteps = (allSteps: Step[], sceneId: string | null, allScenes: Scene[]): Step[] => {
+        if (!allScenes.length || !sceneId) {
+            // No scenes defined — treat all steps as a single flat list (backward compat)
+            return [...allSteps].sort((a, b) => a.order - b.order);
+        }
+        return allSteps.filter(s => s.scene_id === sceneId).sort((a, b) => a.order - b.order);
+    };
+
+    // Helper: determine the next scene after the given one
+    const getNextScene = (currentId: string, allScenes: Scene[]): Scene | null => {
+        const current = allScenes.find(s => s.id === currentId);
+        if (!current) return null;
+        // Explicit next_scene_id takes precedence
+        if (current.next_scene_id) {
+            return allScenes.find(s => s.id === current.next_scene_id) ?? null;
+        }
+        // Otherwise fall through to next scene by order
+        const sorted = [...allScenes].sort((a, b) => a.order - b.order);
+        const idx = sorted.findIndex(s => s.id === currentId);
+        return idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : null;
+    };
+
+    // Navigate to a scene and start advancing its narrative steps
+    const navigateToScene = async (sceneId: string, allSteps: Step[], allScenes: Scene[]) => {
+        setCurrentSceneId(sceneId);
+        const sceneSteps = getSceneSteps(allSteps, sceneId, allScenes);
+        await advanceNarrativeSteps(sceneSteps, 0, sceneId, allSteps, allScenes);
+    };
+
+    const advanceNarrativeSteps = async (
+        sceneSteps: Step[],
+        fromIndex: number,
+        sceneId: string | null,
+        allSteps: Step[],
+        allScenes: Scene[],
+    ) => {
+        if (fromIndex >= sceneSteps.length) {
+            // All steps in this scene are done — try to advance to next scene
+            if (sceneId && allScenes.length > 0) {
+                const nextScene = getNextScene(sceneId, allScenes);
+                if (nextScene) {
+                    await navigateToScene(nextScene.id, allSteps, allScenes);
+                    return;
+                }
+            }
+            // No more scenes — experience is completed
             setStepIndex(allSteps.length);
             setCompleted(true);
             return;
         }
 
-        const next = allSteps[fromIndex];
+        const next = sceneSteps[fromIndex];
+        // Keep global stepIndex in sync (find index in allSteps)
+        const globalIdx = allSteps.findIndex(s => s.id === next.id);
 
         if (next.step_type === 'typing') {
             await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
-
-            // Advance directly to next step without pause
-            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+            await advanceNarrativeSteps(sceneSteps, fromIndex + 1, sceneId, allSteps, allScenes);
         } else if (next.step_type === 'narrative' || !next.requires_response) {
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
@@ -210,14 +260,11 @@ export default function ExperiencePreview() {
             };
 
             await pushMessageWithEffects(msg, next);
-
-            // recurse to next step
-            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+            await advanceNarrativeSteps(sceneSteps, fromIndex + 1, sceneId, allSteps, allScenes);
         } else {
-            // Reached an interactive step
-            setStepIndex(fromIndex);
+            // Reached an interactive step (interactive or choice) — stop and wait
+            setStepIndex(globalIdx >= 0 ? globalIdx : fromIndex);
 
-            // Render it, and then STOP advancing
             const msg: PreviewMessage = {
                 role: 'system', content: next.message_to_send,
                 timestamp: new Date().toISOString(), evaluation: undefined,
@@ -232,20 +279,37 @@ export default function ExperiencePreview() {
         if (initialized.current) return;
         initialized.current = true;
 
-        Promise.all([getExperience(id), getSteps(id)]).then(([exp, stps]) => {
+        Promise.all([getExperience(id), getSteps(id), getScenes(id)]).then(([exp, stps, scns]) => {
             if (!exp) { setNotFound(true); setLoading(false); return; }
             setExperience(exp);
             setSteps(stps);
+            const sortedScenes = [...scns].sort((a, b) => a.order - b.order);
+            setScenes(sortedScenes);
             setLoading(false);
             if (!exp.llm_api_key) setHasApiKey(false);
 
             if (stps.length > 0) {
+                const fromIdx = fromStepParam ? parseInt(fromStepParam, 10) : null;
                 const init = async () => {
-                    // Kick off narrative steps starting from index 0
-                    // Our recursive function will handle both the typing/narrative steps 
-                    // and correctly stop + display the first interactive step.
-                    // Doing pushMessage + advance was causing duplicates.
-                    await advanceNarrativeSteps(stps, 0);
+                    if (fromIdx !== null && fromIdx >= 0 && fromIdx < stps.length) {
+                        // Start from a specific step (via ?from= param)
+                        const targetStep = stps[fromIdx];
+                        const targetSceneId = targetStep.scene_id || null;
+                        if (targetSceneId) setCurrentSceneId(targetSceneId);
+                        const sceneSteps = getSceneSteps(stps, targetSceneId, sortedScenes);
+                        const localIdx = sceneSteps.findIndex(s => s.id === targetStep.id);
+                        await advanceNarrativeSteps(sceneSteps, localIdx >= 0 ? localIdx : 0, targetSceneId, stps, sortedScenes);
+                    } else if (sortedScenes.length > 0) {
+                        // Start from the first scene
+                        const firstScene = sortedScenes[0];
+                        setCurrentSceneId(firstScene.id);
+                        const sceneSteps = getSceneSteps(stps, firstScene.id, sortedScenes);
+                        await advanceNarrativeSteps(sceneSteps, 0, firstScene.id, stps, sortedScenes);
+                    } else {
+                        // No scenes — flat list (backward compat)
+                        const allStepsSorted = getSceneSteps(stps, null, []);
+                        await advanceNarrativeSteps(allStepsSorted, 0, null, stps, []);
+                    }
                 };
                 init();
             }
@@ -298,10 +362,31 @@ export default function ExperiencePreview() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
+            } else if (data.evaluation === 'choice' && data.target_scene_id) {
+                // Choice step with scene branching — jump to target scene
+                await navigateToScene(data.target_scene_id, steps, scenes);
             } else if (isCorrect) {
-                // Since this interactive step is passed, we advance starting from the next
-                if (nextIdx < steps.length) {
-                    await advanceNarrativeSteps(steps, nextIdx);
+                // Interactive step passed — advance within current scene
+                const currentSceneSteps = getSceneSteps(steps, currentSceneId, scenes);
+                const currentLocalIdx = currentSceneSteps.findIndex(s => s.id === steps[stepIndex]?.id);
+                const nextLocalIdx = currentLocalIdx + 1;
+
+                if (nextLocalIdx < currentSceneSteps.length) {
+                    await advanceNarrativeSteps(currentSceneSteps, nextLocalIdx, currentSceneId, steps, scenes);
+                } else {
+                    // Scene is done — advance to next scene
+                    if (currentSceneId && scenes.length > 0) {
+                        const nextScene = getNextScene(currentSceneId, scenes);
+                        if (nextScene) {
+                            await navigateToScene(nextScene.id, steps, scenes);
+                        } else {
+                            setCompleted(true);
+                            setStepIndex(steps.length);
+                        }
+                    } else {
+                        setCompleted(true);
+                        setStepIndex(steps.length);
+                    }
                 }
             }
         } catch {
@@ -321,7 +406,16 @@ export default function ExperiencePreview() {
 
         if (steps.length > 0) {
             const init = async () => {
-                await advanceNarrativeSteps(steps, 0);
+                if (scenes.length > 0) {
+                    const firstScene = scenes[0];
+                    setCurrentSceneId(firstScene.id);
+                    const sceneSteps = getSceneSteps(steps, firstScene.id, scenes);
+                    await advanceNarrativeSteps(sceneSteps, 0, firstScene.id, steps, scenes);
+                } else {
+                    setCurrentSceneId(null);
+                    const allStepsSorted = getSceneSteps(steps, null, []);
+                    await advanceNarrativeSteps(allStepsSorted, 0, null, steps, []);
+                }
             };
             init();
         }
@@ -344,6 +438,9 @@ export default function ExperiencePreview() {
     const narratorInitial = experience?.name?.[0]?.toUpperCase() ?? 'N';
     const currentStep = steps[stepIndex];
     const waitingForResponse = !completed && currentStep?.requires_response;
+    const currentScene = scenes.find(s => s.id === currentSceneId);
+    const currentSceneSteps = getSceneSteps(steps, currentSceneId, scenes);
+    const currentLocalStepIdx = currentStep ? currentSceneSteps.findIndex(s => s.id === currentStep.id) : -1;
 
     const isSystemDisable = sending || systemTyping || completed || !waitingForResponse;
 
@@ -355,8 +452,8 @@ export default function ExperiencePreview() {
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             WebkitFontSmoothing: 'antialiased',
         }}>
-            {/* Header */}
-            <div style={{
+            {/* Header — hidden in embed mode */}
+            {!isEmbed && <div style={{
                 background: 'rgba(249,249,249,0.85)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
@@ -387,7 +484,11 @@ export default function ExperiencePreview() {
                                 {experience?.name}
                             </span>
                             <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
-                                {stepIndex >= steps.length ? '¡Completada!' : `Paso ${stepIndex + 1} de ${steps.length}`}
+                                {stepIndex >= steps.length ? '¡Completada!' : (
+                                    currentScene
+                                        ? `${currentScene.name} · Paso ${currentLocalStepIdx + 1} de ${currentSceneSteps.length}`
+                                        : `Paso ${stepIndex + 1} de ${steps.length}`
+                                )}
                             </span>
                         </div>
                     </div>
@@ -410,7 +511,7 @@ export default function ExperiencePreview() {
                         <RotateCcw size={14} /> Reiniciar
                     </button>
                 </div>
-            </div>
+            </div>}
 
             {/* Chat area */}
             <div
@@ -444,10 +545,18 @@ export default function ExperiencePreview() {
                 <div style={{ flexShrink: 0, height: 8 }} />
             </div>
 
-            {/* Optional Current step info bar for creator debugging */}
-            {currentStep && !completed && (
-                <div style={{ padding: '8px 16px', background: '#F9F9F9', borderTop: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, color: '#8E8E93', display: 'flex', alignItems: 'center', gap: 8, maxWidth: 720, margin: '0 auto', width: '100%' }}>
-                    {currentStep.requires_response ? (
+            {/* Optional Current step info bar for creator debugging — hidden in embed */}
+            {!isEmbed && currentStep && !completed && (
+                <div style={{ padding: '8px 16px', background: '#F9F9F9', borderTop: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, color: '#8E8E93', display: 'flex', alignItems: 'center', gap: 8, maxWidth: 720, margin: '0 auto', width: '100%', flexWrap: 'wrap' }}>
+                    {currentScene && (
+                        <span style={{ color: '#6366F1', fontWeight: 600, marginRight: 4 }}>🎬 {currentScene.name}</span>
+                    )}
+                    {currentStep.step_type === 'choice' ? (
+                        <>
+                            <Zap size={14} style={{ color: '#F59E0B' }} />
+                            <span>Decisión: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.choices?.map(c => c.label).join(' / ')}</strong></span>
+                        </>
+                    ) : currentStep.requires_response ? (
                         <>
                             <Zap size={14} style={{ color: '#0B84FF' }} />
                             <span>Esperando: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.expected_answer}</strong></span>
