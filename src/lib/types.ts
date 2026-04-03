@@ -21,7 +21,8 @@ export interface Experience {
     // ─── Web Info (public landing) ──────────────────────────────
     price?: number;               // USD
     web_image?: string;           // URL hero image for the card
-    web_description?: string;     // Short marketing description (different from admin description)
+    web_tagline?: string;         // Card front tagline (max 80 chars)
+    web_description?: string;     // Card back full description (max 280 chars)
     distance?: string;            // "2.5 km", "1.2 mi"
     duration?: string;            // "45 min", "1.5 hs"
     difficulty?: 'easy' | 'medium' | 'hard';

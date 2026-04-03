@@ -1085,9 +1085,16 @@ export default function ExperienceDetailPage() {
                         </div>
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Descripcion para la web</label>
-                        <textarea className="form-textarea" style={{ minHeight: 100 }} placeholder="Descripcion atractiva para los visitantes de la web (puede ser diferente a la descripcion interna)"
+                        <label className="form-label">Tagline (frente de la card)</label>
+                        <input className="form-input" placeholder="Ej: The Midtown Protocol" maxLength={80}
+                            value={(formData as any).web_tagline || ''} onChange={e => setFormData({ ...formData, web_tagline: e.target.value } as any)} />
+                        <span className="form-hint">{((formData as any).web_tagline || '').length}/80 — Texto corto que se ve en la card sin hacer flip.</span>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Descripcion (reverso de la card)</label>
+                        <textarea className="form-textarea" style={{ minHeight: 80 }} placeholder="Descripcion completa que se ve al hacer flip en la card" maxLength={280}
                             value={(formData as any).web_description || ''} onChange={e => setFormData({ ...formData, web_description: e.target.value } as any)} />
+                        <span className="form-hint">{((formData as any).web_description || '').length}/280 — Se muestra al hacer tap en la card.</span>
                     </div>
                     <div className="form-group">
                         <label className="form-label">Imagen de portada (URL)</label>

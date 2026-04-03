@@ -16,6 +16,7 @@ export async function GET() {
                 name: exp.name,
                 slug: exp.slug,
                 status: exp.status,
+                web_tagline: (exp as any).web_tagline || '',
                 web_description: (exp as any).web_description || exp.description,
                 web_image: (exp as any).web_image || '',
                 price: (exp as any).price || 0,
