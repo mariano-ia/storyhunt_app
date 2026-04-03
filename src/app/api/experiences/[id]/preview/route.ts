@@ -111,49 +111,6 @@ TAREA ACTUAL: ${task}
             return result.text;
         };
 
-        // ─── Choice step: evaluate which option the player chose ─────────────────
-        if (currentStep.step_type === 'choice' && currentStep.choices?.length) {
-            const choicesList = currentStep.choices.map((ch, i) => `${i + 1}. "${ch.label}" (condición: ${ch.condition})`).join('\n');
-            const choiceEvalSystem = [
-                'Sos un evaluador para un juego interactivo.',
-                'El jugador recibió una pregunta con múltiples opciones.',
-                'Tu tarea: determinar cuál opción eligió el jugador basándote en su respuesta.',
-                'Respondé ÚNICAMENTE con el número de la opción (1, 2, 3, etc).',
-                'Si la respuesta no coincide con ninguna opción, respondé NINGUNA.',
-            ].join('\n');
-            const choiceEvalUser = [
-                `Pregunta que recibió el jugador: "${currentStep.message_to_send}"`,
-                `Opciones:\n${choicesList}`,
-                `Respuesta del jugador: "${userMessage}"`,
-                '¿Cuál opción eligió?',
-            ].join('\n');
-
-            const choiceResult = await callLLM(apiKey, isOpenAI, choiceEvalSystem, choiceEvalUser);
-            saveInteraction({ session_id: sessionId, experience_id: id, user_message: choiceEvalUser, system_response: choiceResult.text, tokens_consumed: choiceResult.tokens, estimated_cost: choiceResult.cost });
-
-            const choiceNum = parseInt(choiceResult.text.trim(), 10);
-            const chosenOption = (choiceNum >= 1 && choiceNum <= currentStep.choices.length) ? currentStep.choices[choiceNum - 1] : null;
-
-            if (chosenOption) {
-                // Found a matching choice — generate in-character acknowledgment
-                const ackTask = `El jugador eligió: "${chosenOption.label}". Respondé brevemente en personaje (1-2 oraciones) reconociendo su elección y generando anticipación para lo que viene.`;
-                const response = await llmAndSave(buildSystemPrompt(ackTask), userMessage);
-                return NextResponse.json({
-                    evaluation: 'choice',
-                    chosenIndex: choiceNum - 1,
-                    target_scene_id: chosenOption.target_scene_id,
-                    target_step_id: chosenOption.target_step_id,
-                    nextStepIndex: stepIndex + 1,
-                    response,
-                });
-            } else {
-                // Ambiguous — ask player to clarify
-                const clarifyTask = `El jugador respondió algo ambiguo: "${userMessage}". Las opciones son: ${currentStep.choices.map(c => c.label).join(', ')}. Pedile amablemente que aclare qué quiere hacer, en personaje.`;
-                const response = await llmAndSave(buildSystemPrompt(clarifyTask), userMessage);
-                return NextResponse.json({ evaluation: 'incorrect', nextStepIndex: stepIndex, response });
-            }
-        }
-
         // ─── Evaluate if the answer satisfies the expected intent ──────────────────
         const evalSystemPrompt = [
             'Sos un evaluador de respuestas para un juego interactivo.',

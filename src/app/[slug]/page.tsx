@@ -264,17 +264,6 @@ export default function PlayPage() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
-            } else if (data.evaluation === 'choice') {
-                // Choice step: find target or advance
-                if (data.target_step_id) {
-                    const targetIdx = steps.findIndex(s => s.id === data.target_step_id);
-                    if (targetIdx >= 0) await advanceNarrativeSteps(steps, targetIdx);
-                } else {
-                    const currentLocalIdx = steps.findIndex(s => s.id === steps[stepIndex]?.id);
-                    if (currentLocalIdx >= 0 && currentLocalIdx + 1 < steps.length) {
-                        await advanceNarrativeSteps(steps, currentLocalIdx + 1);
-                    }
-                }
             } else if (isCorrect) {
                 // Check next_step_id override
                 const currentStep = steps[stepIndex];

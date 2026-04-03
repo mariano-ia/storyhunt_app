@@ -14,7 +14,6 @@ import type { AIGeneratedExperience, AIGeneratedStep } from '@/lib/types';
 const STEP_TYPE_CONFIG: Record<string, { label: string; color: string; icon: typeof MessageSquare }> = {
     narrative: { label: 'Narrativo', color: 'var(--info)', icon: MessageSquare },
     interactive: { label: 'Interactivo', color: 'var(--brand-primary)', icon: HelpCircle },
-    choice: { label: 'Decisión', color: 'var(--warning)', icon: GitFork },
     typing: { label: 'Escribiendo...', color: 'var(--text-muted)', icon: MoreHorizontal },
     error_screen: { label: 'Pantalla Error', color: 'var(--danger)', icon: Monitor },
 };
@@ -477,23 +476,10 @@ export default function AIStoriesPage() {
                                                                     }}>
                                                                         {step.message_to_send || (step.step_type === 'typing' ? '(efecto escribiendo...)' : '(sin mensaje)')}
                                                                     </p>
-                                                                    {step.requires_response && step.step_type !== 'choice' && (
+                                                                    {step.requires_response && (
                                                                         <span style={{ fontSize: 11, color: 'var(--brand-primary-light, var(--brand-primary))', opacity: 0.8 }}>
                                                                             Espera: {step.expected_answer}
                                                                         </span>
-                                                                    )}
-                                                                    {step.step_type === 'choice' && step.choices && (
-                                                                        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                                                            {step.choices.map((ch, ci) => (
-                                                                                <span key={ci} style={{
-                                                                                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                                                                                    background: 'var(--bg-input)', color: 'var(--text-secondary)',
-                                                                                    border: '1px solid var(--border-subtle)',
-                                                                                }}>
-                                                                                    {ch.label} {ch.target_scene_name ? `→ ${ch.target_scene_name}` : ''}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
                                                                     )}
                                                                 </div>
 
@@ -539,7 +525,7 @@ export default function AIStoriesPage() {
                                                                             style={{ minHeight: 60, fontSize: 13 }}
                                                                         />
                                                                     </div>
-                                                                    {step.requires_response && step.step_type !== 'choice' && (
+                                                                    {step.requires_response && (
                                                                         <div>
                                                                             <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>
                                                                                 Intención esperada

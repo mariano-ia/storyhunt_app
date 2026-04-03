@@ -11,7 +11,7 @@ import {
 } from '@/lib/firestore';
 import { authFetch } from '@/lib/api';
 import ConfirmModal from '@/components/ConfirmModal';
-import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, Choice } from '@/lib/types';
+import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData } from '@/lib/types';
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
@@ -118,14 +118,12 @@ const STEP_COLORS: Record<string, string> = {
     interactive: 'var(--brand-primary)',
     narrative: 'var(--info)',
     typing: 'var(--text-muted)',
-    choice: 'var(--warning)',
     error_screen: 'var(--danger)',
 };
 const STEP_LABELS: Record<string, string> = {
     interactive: 'Interactivo',
     narrative: 'Narrativo',
     typing: 'Escribiendo...',
-    choice: 'Decisión',
     error_screen: 'Pantalla Error',
 };
 
@@ -143,7 +141,8 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
 }) {
     const [editing, setEditing] = useState(false);
     const [localDelay, setLocalDelay] = useState(step.delay_seconds ?? 1.2);
-    const resolvedType = step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative'));
+    const rawType = (step.step_type as string) === 'choice' ? 'interactive' : step.step_type; // migrate legacy choice
+    const resolvedType = rawType || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative'));
     const [form, setForm] = useState<StepFormData>({
         order: step.order,
         message_to_send: step.message_to_send,
@@ -158,7 +157,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         interrupted_typing: step.interrupted_typing || false,
         glitch_effect: step.glitch_effect || false,
         step_type: resolvedType,
-        choices: step.choices?.length ? step.choices : (step.step_type === 'choice' ? [{ label: '', condition: '', target_scene_id: '' }] : undefined),
         next_step_id: step.next_step_id || '',
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -186,10 +184,9 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         const newForm = {
             ...form,
             step_type: val,
-            requires_response: val === 'interactive' || val === 'choice',
+            requires_response: val === 'interactive',
             interrupted_typing: val === 'typing',
             message_to_send: val === 'typing' ? '' : form.message_to_send,
-            choices: val === 'choice' ? (form.choices?.length ? form.choices : [{ label: '', condition: '', target_scene_id: '' }]) : form.choices,
         };
         setForm(newForm);
         triggerAutoSave(newForm);
@@ -231,7 +228,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                         >
                             <option value="interactive">Interactivo</option>
                             <option value="narrative">Narrativo</option>
-                            <option value="choice">Decisión</option>
                             <option value="error_screen">Pantalla Error</option>
                         </select>
                     </div>
@@ -279,15 +275,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                                 padding: 0, marginTop: 4,
                             }}
                         />
-                    )}
-                    {step.step_type === 'choice' && step.choices && (
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                            {step.choices.map((ch, ci) => (
-                                <span key={ci} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
-                                    {ch.label || '...'}
-                                </span>
-                            ))}
-                        </div>
                     )}
                 </div>
 
@@ -413,50 +400,8 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                     </div>
                 </div>
 
-                {/* Choice options */}
-                {form.step_type === 'choice' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label className="form-label" style={{ fontSize: 12 }}>Opciones</label>
-                        {(form.choices || []).map((ch, ci) => (
-                            <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6 }}>
-                                    <input className="form-input" style={{ fontSize: 12 }} placeholder="Etiqueta" value={ch.label} onChange={e => {
-                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
-                                    }} />
-                                    <input className="form-input" style={{ fontSize: 12 }} placeholder="Condicion LLM" value={ch.condition} onChange={e => {
-                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
-                                    }} />
-                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
-                                        handleFormChange({ ...form, choices: (form.choices || []).filter((_, i) => i !== ci) });
-                                    }}><Trash2 size={12} /></button>
-                                </div>
-                                <select className="form-input" style={{ fontSize: 11, color: 'var(--text-muted)' }} value={ch.target_step_id || ch.target_scene_id || ''} onChange={e => {
-                                    const val = e.target.value;
-                                    const choices = [...(form.choices || [])];
-                                    const isScene = scenes.some(s => s.id === val);
-                                    choices[ci] = { ...choices[ci], target_step_id: isScene ? undefined : (val || undefined), target_scene_id: isScene ? val : undefined };
-                                    handleFormChange({ ...form, choices });
-                                }}>
-                                    <option value="">Siguiente por orden</option>
-                                    <optgroup label="Ir a paso">
-                                        {allSteps.filter(s => s.id !== step.id).map(s => (
-                                            <option key={s.id} value={s.id}>Paso #{allSteps.indexOf(s) + 1}: {s.message_to_send?.slice(0, 40) || '(sin mensaje)'}</option>
-                                        ))}
-                                    </optgroup>
-                                    <optgroup label="Ir a escena">
-                                        {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </optgroup>
-                                </select>
-                            </div>
-                        ))}
-                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start', fontSize: 12 }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '' }] })}>
-                            <Plus size={12} /> Agregar opcion
-                        </button>
-                    </div>
-                )}
-
-                {/* Next step override (for any step type) */}
-                {form.step_type !== 'choice' && (
+                {/* Next step override */}
+                {(
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label" style={{ fontSize: 12 }}>Siguiente paso</label>
                         <select className="form-input" style={{ fontSize: 12 }} value={form.next_step_id || ''} onChange={e => handleFormChange({ ...form, next_step_id: e.target.value || undefined } as any)}>
@@ -470,7 +415,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                 )}
 
                 {/* Interactive: expected answer */}
-                {form.requires_response && form.step_type !== 'choice' && (
+                {form.requires_response && (
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label" style={{ fontSize: 12 }}>Intención esperada</label>
                         <input className="form-input" style={{ fontSize: 13 }} placeholder="Ej: que confirme, que mencione el lugar, cualquier respuesta" value={form.expected_answer} onChange={e => handleFormChange({ ...form, expected_answer: e.target.value })} />
@@ -504,16 +449,14 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                         const val = e.target.value as StepFormData['step_type'];
                         set({
                             step_type: val,
-                            requires_response: val === 'interactive' || val === 'choice',
+                            requires_response: val === 'interactive',
                             interrupted_typing: val === 'typing',
                             message_to_send: val === 'typing' ? '' : d.message_to_send,
-                            choices: val === 'choice' ? (d.choices?.length ? d.choices : [{ label: '', condition: '', target_scene_id: '' }]) : undefined,
                         });
                     }}
                 >
                     <option value="interactive">Interactivo (espera respuesta)</option>
-                    <option value="narrative">Narrativo (avanza automáticamente)</option>
-                    <option value="choice">Elección / Condicional (bifurca el flujo)</option>
+                    <option value="narrative">Narrativo (avanza automaticamente)</option>
                     <option value="error_screen">Pantalla de Error (terminal glitch)</option>
                 </select>
             </div>
@@ -525,7 +468,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 </div>
             )}
 
-            {d.step_type !== 'typing' && d.step_type !== 'choice' && (
+            {d.step_type !== 'typing' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Multimedia (Opcional)</label>
@@ -545,7 +488,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 </div>
             )}
 
-            {d.step_type !== 'typing' && d.step_type !== 'choice' && (
+            {d.step_type !== 'typing' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <input type="checkbox" checked={d.interrupted_typing || false} onChange={e => set({ interrupted_typing: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)' }} />
@@ -555,44 +498,6 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                         <input type="checkbox" checked={d.glitch_effect || false} onChange={e => set({ glitch_effect: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)' }} />
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><Zap size={13} /> Efecto glitch — Falla de la matrix</span>
                     </div>
-                </div>
-            )}
-
-            {/* Choice step: options editor */}
-            {d.step_type === 'choice' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label className="form-label">Opciones</label>
-                    {(d.choices || []).map((ch, ci) => (
-                        <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Etiqueta</label>}
-                                <input className="form-input" placeholder="Ej: Seguir" value={ch.label} onChange={e => {
-                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; set({ choices });
-                                }} />
-                            </div>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Condición (para el LLM)</label>}
-                                <input className="form-input" placeholder="Ej: el usuario quiere seguir" value={ch.condition} onChange={e => {
-                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; set({ choices });
-                                }} />
-                            </div>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Escena destino</label>}
-                                <select className="form-input" value={ch.target_scene_id || ''} onChange={e => {
-                                    const choices = [...(d.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; set({ choices });
-                                }}>
-                                    <option value="">(seleccionar)</option>
-                                    {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
-                                const choices = (d.choices || []).filter((_, i) => i !== ci); set({ choices });
-                            }}><Trash2 size={13} /></button>
-                        </div>
-                    ))}
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start' }} onClick={() => set({ choices: [...(d.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
-                        <Plus size={13} /> Agregar opción
-                    </button>
                 </div>
             )}
 
@@ -607,7 +512,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 </div>
             </div>
 
-            {d.requires_response && d.step_type !== 'choice' && (
+            {d.requires_response && (
                 <>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Respuesta esperada <span className="required">*</span></label>
@@ -625,7 +530,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 <button
                     className="btn btn-primary btn-sm"
                     onClick={onSave}
-                    disabled={(d.step_type !== 'typing' && !d.message_to_send) || (d.requires_response && d.step_type !== 'choice' && !d.expected_answer)}
+                    disabled={(d.step_type !== 'typing' && !d.message_to_send) || (d.requires_response && !d.expected_answer)}
                 >
                     <Check size={13} /> Guardar paso
                 </button>

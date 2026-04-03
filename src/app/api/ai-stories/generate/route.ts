@@ -49,14 +49,6 @@ Una experiencia tiene:
    - delay_seconds: duración en segundos que se muestra la pantalla (3-6 recomendado)
    - Después de la duración, la pantalla desaparece y vuelve el chat normal.
 
-5. **choice**: Bifurcación. El narrador presenta opciones y el usuario elige.
-   - requires_response: true
-   - choices: array de opciones, cada una con:
-     - label: texto de la opción (ej: "Ir al muelle")
-     - condition: descripción semántica para que el LLM evalúe (ej: "el usuario quiere ir al muelle")
-     - target_scene_name: nombre de la escena destino (debe coincidir exactamente con el name de otra escena)
-   - expected_answer: "" (vacío para choices)
-
 ## Reglas de generación
 
 - Asigná delay_seconds proporcional al largo del mensaje: mensajes cortos (1-2 oraciones) → 1-2s, mensajes largos → 2-4s.

@@ -348,9 +348,6 @@ export default function ExperiencePreview() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
-            } else if (data.evaluation === 'choice' && data.target_scene_id) {
-                // Choice step with scene branching — jump to target scene
-                await navigateToScene(data.target_scene_id, steps, scenes);
             } else if (isCorrect) {
                 // Interactive step passed — advance within current scene
                 const currentSceneSteps = getSceneSteps(steps, currentSceneId, scenes);
@@ -544,12 +541,7 @@ export default function ExperiencePreview() {
                     {currentScene && (
                         <span style={{ color: '#6366F1', fontWeight: 600, marginRight: 4 }}>🎬 {currentScene.name}</span>
                     )}
-                    {currentStep.step_type === 'choice' ? (
-                        <>
-                            <Zap size={14} style={{ color: '#F59E0B' }} />
-                            <span>Decisión: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.choices?.map(c => c.label).join(' / ')}</strong></span>
-                        </>
-                    ) : currentStep.requires_response ? (
+                    {currentStep.requires_response ? (
                         <>
                             <Zap size={14} style={{ color: '#0B84FF' }} />
                             <span>Esperando: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.expected_answer}</strong></span>

@@ -32,7 +32,6 @@ Step types:
   - interactive: espera respuesta del usuario, evalúa con LLM
   - narrative: avanza automáticamente, no espera respuesta
   - typing: solo efecto visual de "escribiendo..."
-  - choice: bifurca el flujo a diferentes escenas según la respuesta
   - error_screen: pantalla negra fullscreen estilo terminal con texto glitch verde
 
 Step features:
@@ -40,7 +39,7 @@ Step features:
   - glitch_effect (animación CSS de falla)
   - interrupted_typing (efecto escribió y borró — es un toggle, NO un tipo de paso)
   - delay_seconds (pausa antes de enviar; en error_screen define la duración)
-  - choices[] (para type=choice: label, condition, target_scene_id)
+  - next_step_id (saltar a un paso específico en vez del siguiente por orden)
 ```
 
 ### Evaluación LLM (dual-stage)
@@ -137,7 +136,7 @@ src/
 - Preview inline: usar ruta /play/[id] en iframes (fuera del layout del dashboard)
 - Sidebar: colapsada por defecto, se expande con hover, iconos centrados con underline violeta
 - Tooltips: usar `data-tip` attribute (CSS custom tooltips, no `title` nativo)
-- Step cards: borde de color según tipo (purple=interactive, cyan=narrative, amber=choice, red=error_screen)
+- Step cards: borde de color según tipo (purple=interactive, cyan=narrative, red=error_screen)
 - Acciones de paso: barra inferior con iconos + tooltips (glitch, escribió-y-borró, play, editar, eliminar)
 - "Costo IA" en vez de "Costo LLM" en toda la UI
 - activation_keyword: campo legacy, removido de la UI (se controlará por Stripe/acceso)

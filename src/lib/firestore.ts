@@ -287,13 +287,6 @@ export async function createExperienceFromAI(
     for (const scene of sortedScenes) {
         const sceneId = sceneIdMap[scene.name];
         for (const step of scene.steps) {
-            // Resolve choice target_scene_name → target_scene_id
-            const choices = step.choices?.map(ch => ({
-                label: ch.label,
-                condition: ch.condition,
-                target_scene_id: ch.target_scene_name ? sceneIdMap[ch.target_scene_name] : undefined,
-            }));
-
             await createStep(experienceId, {
                 scene_id: sceneId,
                 order: globalOrder,
@@ -307,7 +300,6 @@ export async function createExperienceFromAI(
                 glitch_effect: step.glitch_effect,
                 interrupted_typing: step.interrupted_typing,
                 context: step.context,
-                choices,
             });
             globalOrder++;
         }

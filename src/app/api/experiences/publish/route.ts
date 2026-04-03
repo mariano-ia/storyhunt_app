@@ -93,23 +93,6 @@ export async function POST(req: NextRequest) {
                 updates.expected_answer_en = answerResult.english;
             }
 
-            // Normalize choice labels and conditions
-            if (step.choices?.length) {
-                const translatedChoices = [];
-                for (const ch of step.choices) {
-                    const labelResult = await processText(ch.label);
-                    const condResult = await processText(ch.condition);
-                    translatedChoices.push({
-                        ...ch,
-                        label: labelResult.normalized,
-                        label_en: labelResult.english,
-                        condition: condResult.normalized,
-                        condition_en: condResult.english,
-                    });
-                }
-                updates.choices = translatedChoices;
-            }
-
             await updateStep(experience_id, step.id, updates);
             processedSteps++;
         }

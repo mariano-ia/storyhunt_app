@@ -354,34 +354,6 @@ export default function PlayPage() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
-            } else if (data.evaluation === 'choice') {
-                if (data.target_step_id) {
-                    // Choice: jump to specific step
-                    const targetStep = steps.find(s => s.id === data.target_step_id);
-                    if (targetStep) {
-                        const targetSceneId = targetStep.scene_id || currentSceneId;
-                        if (targetSceneId !== currentSceneId) setCurrentSceneId(targetSceneId);
-                        const targetSceneSteps = getSceneSteps(steps, targetSceneId);
-                        const targetIdx = targetSceneSteps.findIndex(s => s.id === targetStep.id);
-                        await advanceNarrativeSteps(targetSceneSteps, targetIdx >= 0 ? targetIdx : 0, scenes, targetSceneId, steps);
-                    }
-                } else if (data.target_scene_id) {
-                    // Choice: jump to scene
-                    const targetSceneId = data.target_scene_id;
-                    setCurrentSceneId(targetSceneId);
-                    const targetSteps = getSceneSteps(steps, targetSceneId);
-                    if (targetSteps.length > 0) {
-                        await advanceNarrativeSteps(targetSteps, 0, scenes, targetSceneId, steps);
-                    }
-                } else {
-                    // Choice without target: advance to next step in scene
-                    const sceneSteps = getSceneSteps(steps, currentSceneId);
-                    const currentLocalIdx = sceneSteps.findIndex(s => s.id === steps[stepIndex]?.id);
-                    const nextLocalIdx = currentLocalIdx >= 0 ? currentLocalIdx + 1 : 0;
-                    if (nextLocalIdx < sceneSteps.length) {
-                        await advanceNarrativeSteps(sceneSteps, nextLocalIdx, scenes, currentSceneId, steps);
-                    }
-                }
             } else if (isCorrect) {
                 const currentStep = steps[stepIndex];
                 // Check if current step has a next_step_id override

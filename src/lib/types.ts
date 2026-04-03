@@ -47,15 +47,6 @@ export interface Scene {
 
 export type SceneFormData = Omit<Scene, 'id' | 'experience_id'>;
 
-// ─── Choice (for branching steps) ────────────────────────────────────────────
-
-export interface Choice {
-    label: string;              // "Seguir caminando"
-    condition: string;          // "el usuario quiere continuar/seguir"
-    target_scene_id?: string;   // jump to this scene
-    target_step_id?: string;    // or jump to this specific step
-}
-
 // ─── Steps ───────────────────────────────────────────────────────────────────
 
 export interface Step {
@@ -63,7 +54,7 @@ export interface Step {
     experience_id: string;
     scene_id?: string;          // which scene this step belongs to
     order: number;
-    step_type?: 'interactive' | 'narrative' | 'typing' | 'choice' | 'error_screen';
+    step_type?: 'interactive' | 'narrative' | 'typing' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
     expected_answer: string;
@@ -77,9 +68,6 @@ export interface Step {
 
     interrupted_typing?: boolean;
     glitch_effect?: boolean;
-
-    // For step_type === 'choice': branching options
-    choices?: Choice[];
 
     // Flow control: jump to a specific step after this one (if empty, advances to next by order)
     next_step_id?: string;
@@ -95,7 +83,7 @@ export interface PreviewMessage {
     role: 'system' | 'user';
     content: string;
     timestamp: string;
-    evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic' | 'choice';
+    evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic';
     media_url?: string;
     media_type?: 'image' | 'video' | 'audio';
     glitch_effect?: boolean;
@@ -160,7 +148,7 @@ export interface AIGeneratedScene {
 }
 
 export interface AIGeneratedStep {
-    step_type: 'interactive' | 'narrative' | 'typing' | 'choice' | 'error_screen';
+    step_type: 'interactive' | 'narrative' | 'typing' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
     expected_answer: string;
@@ -170,7 +158,6 @@ export interface AIGeneratedStep {
     glitch_effect?: boolean;
     interrupted_typing?: boolean;
     context?: string;
-    choices?: { label: string; condition: string; target_scene_name?: string }[];
 }
 
 export interface AIGeneratedExperience {
