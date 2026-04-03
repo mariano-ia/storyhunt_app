@@ -106,6 +106,7 @@ export default function PlayPage() {
     const [sending, setSending] = useState(false);
     const [completed, setCompleted] = useState(false);
     const [systemTyping, setSystemTyping] = useState(false);
+    const [errorScreen, setErrorScreen] = useState<{ text: string; active: boolean }>({ text: '', active: false });
 
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -156,7 +157,13 @@ export default function PlayPage() {
 
         const next = allSteps[fromIndex];
 
-        if (next.step_type === 'typing') {
+        if (next.step_type === 'error_screen') {
+            setErrorScreen({ text: next.message_to_send, active: true });
+            const duration = (next.delay_seconds ?? 4) * 1000;
+            await new Promise(resolve => setTimeout(resolve, duration));
+            setErrorScreen({ text: '', active: false });
+            await advanceNarrativeSteps(allSteps, fromIndex + 1);
+        } else if (next.step_type === 'typing') {
             await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
 
             // Advance directly to next step without pause
@@ -314,6 +321,13 @@ export default function PlayPage() {
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             WebkitFontSmoothing: 'antialiased',
         }}>
+            {/* Error Screen Overlay */}
+            {errorScreen.active && (
+                <div className="error-screen-overlay">
+                    <div className="error-screen-text">{errorScreen.text}</div>
+                    <div className="error-screen-cursor" />
+                </div>
+            )}
             {/* Header */}
             <div style={{
                 background: 'rgba(249,249,249,0.85)',

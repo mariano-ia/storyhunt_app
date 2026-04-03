@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const stepNumber = stepIndex + 1;
 
         // ─── Detect LLM provider from key prefix ──────────────────────────────────
-        const apiKey = experience.llm_api_key ?? '';
+        const apiKey = experience.llm_api_key || process.env.OPENAI_API_KEY || '';
         const isOpenAI = apiKey.startsWith('sk-');
         const sessionId = `preview-${id}`;
 

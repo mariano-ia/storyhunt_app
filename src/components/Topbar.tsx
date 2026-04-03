@@ -1,6 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { Bell, Search, Sun, Moon } from 'lucide-react';
+import { Search, Sun, Moon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const breadcrumbs: Record<string, { parent?: string; label: string }> = {
@@ -77,9 +77,6 @@ export default function Topbar() {
                 </button>
                 <button className="btn btn-ghost btn-icon" title="Buscar" aria-label="Buscar">
                     <Search size={18} />
-                </button>
-                <button className="btn btn-ghost btn-icon" title="Notificaciones" aria-label="Notificaciones">
-                    <Bell size={18} />
                 </button>
                 <div style={{
                     width: 32, height: 32, borderRadius: '50%',

@@ -47,7 +47,7 @@ export interface Step {
     experience_id: string;
     scene_id?: string;          // which scene this step belongs to
     order: number;
-    step_type?: 'interactive' | 'narrative' | 'typing' | 'choice';
+    step_type?: 'interactive' | 'narrative' | 'typing' | 'choice' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
     expected_answer: string;
@@ -126,6 +126,38 @@ export interface DashboardStats {
     completed_sessions: number;
     total_cost_usd: number;
     completion_rate: number;
+}
+
+// ─── AI Story Generation ─────────────────────────────────────────────────────
+
+export interface AIGeneratedScene {
+    name: string;
+    order: number;
+    steps: AIGeneratedStep[];
+}
+
+export interface AIGeneratedStep {
+    step_type: 'interactive' | 'narrative' | 'typing' | 'choice' | 'error_screen';
+    message_to_send: string;
+    requires_response: boolean;
+    expected_answer: string;
+    hints: string[];
+    wrong_answer_message: string;
+    delay_seconds?: number;
+    glitch_effect?: boolean;
+    interrupted_typing?: boolean;
+    context?: string;
+    choices?: { label: string; condition: string; target_scene_name?: string }[];
+}
+
+export interface AIGeneratedExperience {
+    name: string;
+    description: string;
+    narrator_personality: string;
+    slug: string;
+    activation_keyword: string;
+    context?: string;
+    scenes: AIGeneratedScene[];
 }
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────

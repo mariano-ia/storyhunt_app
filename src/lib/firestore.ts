@@ -3,7 +3,7 @@ import {
     deleteDoc, query, where, orderBy, Timestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, UserSession, Interaction, ExperienceMetrics, Contact } from './types';
+import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, UserSession, Interaction, ExperienceMetrics, Contact, AIGeneratedExperience } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -240,6 +240,80 @@ export async function getCostByExperience(): Promise<Record<string, number>> {
         }
     });
     return map;
+}
+
+// ─── AI Story: Batch Creation ────────────────────────────────────────────────
+
+export async function createExperienceFromAI(
+    generated: AIGeneratedExperience,
+    llmApiKey: string,
+    narratorAvatar?: string
+): Promise<string> {
+    // 1. Create the experience document
+    const experienceId = await createExperience({
+        name: generated.name,
+        description: generated.description,
+        narrator_personality: generated.narrator_personality,
+        narrator_avatar: narratorAvatar ?? '',
+        llm_api_key: llmApiKey,
+        slug: generated.slug,
+        mode: 'test',
+        activation_keyword: generated.activation_keyword,
+        status: 'inactive',
+    });
+
+    // 2. Create scenes and collect their IDs
+    const sceneIdMap: Record<string, string> = {}; // scene name → Firestore ID
+    for (const scene of generated.scenes) {
+        const sceneId = await createScene(experienceId, {
+            name: scene.name,
+            order: scene.order,
+        });
+        sceneIdMap[scene.name] = sceneId;
+    }
+
+    // 3. Link scenes linearly (next_scene_id)
+    const sortedScenes = [...generated.scenes].sort((a, b) => a.order - b.order);
+    for (let i = 0; i < sortedScenes.length - 1; i++) {
+        const currentId = sceneIdMap[sortedScenes[i].name];
+        const nextId = sceneIdMap[sortedScenes[i + 1].name];
+        if (currentId && nextId) {
+            await updateScene(experienceId, currentId, { next_scene_id: nextId } as Partial<SceneFormData>);
+        }
+    }
+
+    // 4. Create steps with scene references
+    let globalOrder = 1;
+    for (const scene of sortedScenes) {
+        const sceneId = sceneIdMap[scene.name];
+        for (const step of scene.steps) {
+            // Resolve choice target_scene_name → target_scene_id
+            const choices = step.choices?.map(ch => ({
+                label: ch.label,
+                condition: ch.condition,
+                target_scene_id: ch.target_scene_name ? sceneIdMap[ch.target_scene_name] : undefined,
+            }));
+
+            await createStep(experienceId, {
+                scene_id: sceneId,
+                order: globalOrder,
+                step_type: step.step_type,
+                message_to_send: step.message_to_send,
+                requires_response: step.requires_response,
+                expected_answer: step.expected_answer ?? '',
+                hints: step.hints ?? [],
+                wrong_answer_message: step.wrong_answer_message ?? '',
+                delay_seconds: step.delay_seconds,
+                glitch_effect: step.glitch_effect,
+                interrupted_typing: step.interrupted_typing,
+                context: step.context,
+                choices,
+            });
+            globalOrder++;
+        }
+    }
+
+    return experienceId;
 }
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────

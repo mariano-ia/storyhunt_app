@@ -134,6 +134,7 @@ export default function PlayPage() {
     const [sending, setSending] = useState(false);
     const [completed, setCompleted] = useState(false);
     const [systemTyping, setSystemTyping] = useState(false);
+    const [errorScreen, setErrorScreen] = useState<{ text: string; active: boolean }>({ text: '', active: false });
 
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -223,7 +224,15 @@ export default function PlayPage() {
         // Keep stepIndex pointing to position in the full steps array
         const globalIndex = allSteps.findIndex(s => s.id === next.id);
 
-        if (next.step_type === 'typing') {
+        console.log('[advanceNarrativeSteps] step', fromIndex, 'type:', JSON.stringify(next.step_type), 'requires_response:', next.requires_response, 'message:', next.message_to_send?.slice(0, 30));
+        if (next.step_type === 'error_screen') {
+            // Full-screen error overlay with terminal text
+            setErrorScreen({ text: next.message_to_send, active: true });
+            const duration = (next.delay_seconds ?? 4) * 1000;
+            await new Promise(resolve => setTimeout(resolve, duration));
+            setErrorScreen({ text: '', active: false });
+            await advanceNarrativeSteps(sceneSteps, fromIndex + 1, allScenes, sceneId, allSteps);
+        } else if (next.step_type === 'typing') {
             await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
             await advanceNarrativeSteps(sceneSteps, fromIndex + 1, allScenes, sceneId, allSteps);
         } else if (next.step_type === 'narrative' || !next.requires_response) {
@@ -349,8 +358,11 @@ export default function PlayPage() {
                 const sceneSteps = currentSceneId
                     ? steps.filter(s => s.scene_id === currentSceneId).sort((a, b) => a.order - b.order)
                     : steps;
-                if (nextIdx < sceneSteps.length) {
-                    await advanceNarrativeSteps(sceneSteps, nextIdx, scenes, currentSceneId, steps);
+                // Find current step in scene array and advance +1
+                const currentLocalIdx = sceneSteps.findIndex(s => s.id === steps[stepIndex]?.id);
+                const nextLocalIdx = currentLocalIdx >= 0 ? currentLocalIdx + 1 : 0;
+                if (nextLocalIdx < sceneSteps.length) {
+                    await advanceNarrativeSteps(sceneSteps, nextLocalIdx, scenes, currentSceneId, steps);
                 } else if (scenes.length > 0 && currentSceneId) {
                     // Scene ended, navigate to next
                     const currentScene = scenes.find(s => s.id === currentSceneId);
@@ -425,6 +437,16 @@ export default function PlayPage() {
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             WebkitFontSmoothing: 'antialiased',
         }}>
+            {/* Error Screen Overlay */}
+            {errorScreen.active && (
+                <div className="error-screen-overlay">
+                    <div className="error-screen-text">
+                        {errorScreen.text}
+                    </div>
+                    <div className="error-screen-cursor" />
+                </div>
+            )}
+
             {/* Header */}
             <div style={{
                 background: 'rgba(249,249,249,0.85)',

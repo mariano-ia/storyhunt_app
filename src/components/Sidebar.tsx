@@ -1,11 +1,12 @@
 'use client';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog } from 'lucide-react';
+import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const navItems = [
     { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
     { label: 'Experiencias', icon: Zap, href: '/dashboard/experiences' },
+    { label: 'AI Stories', icon: Sparkles, href: '/dashboard/ai-stories' },
     { label: 'Sesiones', icon: Users, href: '/dashboard/sessions' },
     { label: 'Interacciones', icon: MessageSquare, href: '/dashboard/interactions' },
     { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },
@@ -41,79 +42,63 @@ export default function Sidebar() {
             </div>
 
             <nav className="sidebar-nav">
-                <span className="sidebar-section-label">Menú Principal</span>
+                <span className="sidebar-section-label">Menú</span>
                 {navItems.map(({ label, icon: Icon, href }) => (
                     <button
                         key={href}
                         className={`sidebar-link ${isActive(href) ? 'active' : ''}`}
                         onClick={() => router.push(href)}
+                        data-tip={label}
                     >
-                        <Icon size={18} />
-                        <span style={{ flex: 1 }}>{label}</span>
-                        {isActive(href) && <ChevronRight size={14} style={{ opacity: 0.5 }} />}
+                        <Icon size={18} className="sidebar-icon" />
+                        <span>{label}</span>
                     </button>
-
                 ))}
 
-                <span className="sidebar-section-label" style={{ marginTop: 8 }}>Administración</span>
+                <span className="sidebar-section-label">Admin</span>
                 {adminItems.map(({ label, icon: Icon, href }) => (
                     <button
                         key={href}
                         className={`sidebar-link ${isActive(href) ? 'active' : ''}`}
                         onClick={() => router.push(href)}
+                        data-tip={label}
                     >
-                        <Icon size={18} />
-                        <span style={{ flex: 1 }}>{label}</span>
-                        {isActive(href) && <ChevronRight size={14} style={{ opacity: 0.5 }} />}
+                        <Icon size={18} className="sidebar-icon" />
+                        <span>{label}</span>
                     </button>
-
                 ))}
             </nav>
 
-            <div className="sidebar-footer" style={{ flexDirection: 'column', gap: 12 }}>
-                {/* Logged-in user */}
+            <div className="sidebar-footer">
                 {user && (
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '8px 10px', borderRadius: 8,
-                        background: 'var(--bg-elevated)',
-                        border: '1px solid var(--border-subtle)',
+                        padding: '8px', borderRadius: 8,
                     }}>
                         <div style={{
                             width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                             background: 'linear-gradient(135deg, var(--brand-primary) 0%, #a855f7 100%)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 12, fontWeight: 700, color: '#fff',
+                            fontSize: 11, fontWeight: 700, color: '#fff',
                         }}>
                             {user.email?.[0]?.toUpperCase() ?? '?'}
                         </div>
-                        <span style={{
+                        <span className="sidebar-footer-text" style={{
                             fontSize: 12, color: 'var(--text-secondary)',
-                            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
                             {user.email}
                         </span>
+                        <button
+                            className="btn btn-ghost btn-icon btn-sm sidebar-footer-text"
+                            onClick={handleLogout}
+                            data-tip="Cerrar sesión"
+                            style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}
+                        >
+                            <LogOut size={15} />
+                        </button>
                     </div>
                 )}
-
-                {/* System status + Logout */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            background: 'var(--success)', boxShadow: '0 0 6px var(--success)'
-                        }} />
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sistema operativo</span>
-                    </div>
-                    <button
-                        className="btn btn-ghost btn-icon btn-sm"
-                        onClick={handleLogout}
-                        title="Cerrar sesión"
-                        style={{ color: 'var(--text-muted)' }}
-                    >
-                        <LogOut size={15} />
-                    </button>
-                </div>
             </div>
         </aside>
     );

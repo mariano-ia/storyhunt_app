@@ -112,6 +112,22 @@ function ShareModal({ id, name, onClose }: { id: string; name: string; onClose: 
 }
 
 // ─── Inline Step Editor with Auto-Save ────────────────────────────────────────
+// ─── Step type config ─────────────────────────────────────────────────────────
+const STEP_COLORS: Record<string, string> = {
+    interactive: 'var(--brand-primary)',
+    narrative: 'var(--info)',
+    typing: 'var(--text-muted)',
+    choice: 'var(--warning)',
+    error_screen: 'var(--danger)',
+};
+const STEP_LABELS: Record<string, string> = {
+    interactive: 'Interactivo',
+    narrative: 'Narrativo',
+    typing: 'Escribiendo...',
+    choice: 'Decisión',
+    error_screen: 'Pantalla Error',
+};
+
 function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd, scenes, onPlayFrom, globalStepIndex }: {
     step: Step; index: number;
     onSave: (data: Partial<StepFormData>) => Promise<void>;
@@ -125,6 +141,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
 }) {
     const [editing, setEditing] = useState(false);
     const [localDelay, setLocalDelay] = useState(step.delay_seconds ?? 1.2);
+    const resolvedType = step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative'));
     const [form, setForm] = useState<StepFormData>({
         order: step.order,
         message_to_send: step.message_to_send,
@@ -138,14 +155,15 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         media_type: step.media_type || undefined,
         interrupted_typing: step.interrupted_typing || false,
         glitch_effect: step.glitch_effect || false,
-        step_type: step.step_type || (step.requires_response ? 'interactive' : (step.interrupted_typing && !step.message_to_send ? 'typing' : 'narrative')),
+        step_type: resolvedType,
         choices: step.choices?.length ? step.choices : (step.step_type === 'choice' ? [{ label: '', condition: '', target_scene_id: '' }] : undefined),
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstRender = useRef(true);
 
-    // Auto-save with 1.5s debounce whenever form changes while editing
+    const borderColor = STEP_COLORS[form.step_type || 'narrative'] || 'var(--border-default)';
+    const typeLabel = STEP_LABELS[form.step_type || 'narrative'] || 'Paso';
+
     const triggerAutoSave = useCallback((newForm: StepFormData) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         setAutoSaveState('saving');
@@ -161,277 +179,249 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         if (editing) triggerAutoSave(newForm);
     };
 
-    // Cleanup on unmount
+    const handleTypeChange = (val: StepFormData['step_type']) => {
+        const newForm = {
+            ...form,
+            step_type: val,
+            requires_response: val === 'interactive' || val === 'choice',
+            interrupted_typing: val === 'typing',
+            message_to_send: val === 'typing' ? '' : form.message_to_send,
+            choices: val === 'choice' ? (form.choices?.length ? form.choices : [{ label: '', condition: '', target_scene_id: '' }]) : form.choices,
+        };
+        setForm(newForm);
+        triggerAutoSave(newForm);
+    };
+
     useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
+    // ─── Collapsed view ───────────────────────────────────────────────────────
     if (!editing) {
-        const isNarrative = !(step.requires_response ?? true);
         return (
             <div
-                className="step-item"
-                draggable
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                onDragEnd={onDragEnd}
+                draggable onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
                 style={{
-                    borderColor: isDragOver ? 'var(--brand-primary)' : isNarrative ? 'rgba(167,139,250,0.3)' : undefined,
-                    opacity: isDragging ? 0.4 : 1,
-                    cursor: 'grab',
-                    transition: 'opacity 0.15s, border-color 0.15s',
+                    border: `1.5px solid ${isDragOver ? 'var(--brand-primary)' : borderColor}`,
+                    borderRadius: 10, opacity: isDragging ? 0.4 : 1,
+                    cursor: 'grab', transition: 'opacity 0.15s, border-color 0.15s',
+                    background: 'var(--bg-card)', overflow: 'hidden',
                 }}
             >
-                <div className="step-item-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <GripVertical size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        <div className="step-item-number">{index + 1}</div>
-                        <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                {step.message_to_send.slice(0, 70)}{step.message_to_send.length > 70 ? '…' : ''}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                                {step.step_type === 'typing' || (step.interrupted_typing && !step.message_to_send)
-                                    ? <span style={{ color: 'var(--brand-primary-light)', display: 'flex', alignItems: 'center', gap: 4 }}><Zap size={12} /> Sólo efecto de escritura</span>
-                                    : isNarrative
-                                        ? <span style={{ color: 'var(--brand-primary-light)', display: 'flex', alignItems: 'center', gap: 4 }}><BookOpen size={12} /> Narrativo — sin respuesta</span>
-                                        : <>Espera: {step.expected_answer} &middot; {step.hints?.length || 0} pista(s)</>}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="step-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {/* Inline delay editor */}
-                        <div
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'default' }}
+                {/* Type selector bar (outside card body) */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '6px 12px', borderBottom: `1px solid ${borderColor}22`,
+                    background: `${borderColor}08`,
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <GripVertical size={14} style={{ color: 'var(--text-muted)' }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-code)', color: 'var(--text-muted)' }}>#{index + 1}</span>
+                        <select
+                            value={form.step_type || 'narrative'}
+                            onChange={e => { e.stopPropagation(); handleTypeChange(e.target.value as StepFormData['step_type']); }}
                             onClick={e => e.stopPropagation()}
                             onDragStart={e => e.preventDefault()}
+                            style={{
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                fontSize: 12, fontWeight: 600, color: borderColor,
+                                outline: 'none', padding: '2px 4px',
+                            }}
                         >
-                            <Clock size={13} style={{ color: 'var(--text-muted)' }} />
-                            <input
-                                type="number" step="0.1" min="0"
-                                value={localDelay}
-                                onChange={e => setLocalDelay(parseFloat(e.target.value) || 0)}
-                                onBlur={() => {
-                                    setForm(f => ({ ...f, delay_seconds: localDelay }));
-                                    onSave({ delay_seconds: localDelay });
-                                }}
-                                style={{
-                                    width: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                                    borderRadius: 6, color: 'var(--text-secondary)', fontSize: 12,
-                                    padding: '2px 4px', outline: 'none', textAlign: 'center',
-                                }}
-                            />
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>s</span>
-                        </div>
-                        {/* Glitch toggle */}
-                        <label
-                            title="Efecto glitch"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: form.glitch_effect ? 'var(--brand-primary)' : 'var(--text-muted)' }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={form.glitch_effect || false}
-                                onChange={e => {
-                                    const val = e.target.checked;
-                                    setForm(f => ({ ...f, glitch_effect: val }));
-                                    onSave({ glitch_effect: val });
-                                }}
-                                style={{ accentColor: 'var(--brand-primary)', width: 13, height: 13 }}
-                            />
-                            <Zap size={12} />
-                        </label>
-                        <button
-                            className="btn btn-ghost btn-icon btn-sm"
-                            title="Probar desde este paso"
-                            onClick={e => { e.stopPropagation(); onPlayFrom?.(globalStepIndex); }}
-                            style={{ color: 'var(--brand-primary)' }}
-                        ><Play size={14} /></button>
-                        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditing(true)} id={`edit-step-${step.id}`}><Edit2 size={14} /></button>
-                        <button className="btn btn-danger btn-icon btn-sm" onClick={onDelete} id={`del-step-${step.id}`}><Trash2 size={14} /></button>
+                            <option value="interactive">Interactivo</option>
+                            <option value="narrative">Narrativo</option>
+                            <option value="choice">Decisión</option>
+                            <option value="error_screen">Pantalla Error</option>
+                        </select>
                     </div>
+                    {autoSaveState === 'saving' && <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>Guardando...</span>}
+                    {autoSaveState === 'saved' && <span style={{ fontSize: 10, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={10} /> Guardado</span>}
+                </div>
+
+                {/* Card body: message */}
+                <div style={{ padding: '10px 14px' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                        {form.step_type === 'typing'
+                            ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Efecto de escritura</span>
+                            : form.step_type === 'error_screen'
+                                ? <span style={{ fontFamily: 'var(--font-code)', color: 'var(--danger)' }}>{step.message_to_send || '(sin texto)'}</span>
+                                : step.message_to_send
+                                    ? <>{step.message_to_send.slice(0, 120)}{step.message_to_send.length > 120 ? '...' : ''}</>
+                                    : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>(sin mensaje)</span>}
+                    </div>
+                    {step.requires_response && step.step_type === 'interactive' && step.expected_answer && (
+                        <div style={{ fontSize: 11, color: borderColor, marginTop: 4, opacity: 0.8 }}>
+                            Espera: {step.expected_answer}
+                        </div>
+                    )}
+                    {step.step_type === 'choice' && step.choices && (
+                        <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                            {step.choices.map((ch, ci) => (
+                                <span key={ci} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+                                    {ch.label || '...'}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Action bar */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2,
+                    padding: '4px 8px', borderTop: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-elevated)',
+                }}>
+                    {/* Delay */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginRight: 'auto', paddingLeft: 4 }}
+                        onClick={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}>
+                        <Clock size={12} style={{ color: 'var(--text-muted)' }} />
+                        <input type="number" step="0.1" min="0" value={localDelay}
+                            onChange={e => setLocalDelay(parseFloat(e.target.value) || 0)}
+                            onBlur={() => { setForm(f => ({ ...f, delay_seconds: localDelay })); onSave({ delay_seconds: localDelay }); }}
+                            style={{ width: 38, background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 4, color: 'var(--text-secondary)', fontSize: 11, padding: '1px 3px', outline: 'none', textAlign: 'center' }}
+                        />
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>s</span>
+                    </div>
+                    {/* Glitch */}
+                    <button className="btn btn-ghost btn-icon btn-sm" data-tip="Efecto glitch"
+                        onClick={e => { e.stopPropagation(); const val = !form.glitch_effect; setForm(f => ({ ...f, glitch_effect: val })); onSave({ glitch_effect: val }); }}
+                        style={{
+                            color: form.glitch_effect ? 'var(--brand-primary)' : 'var(--text-muted)',
+                            background: form.glitch_effect ? 'rgba(124,58,237,0.15)' : undefined,
+                        }}>
+                        <Zap size={13} />
+                    </button>
+                    {/* Interrupted typing */}
+                    <button className="btn btn-ghost btn-icon btn-sm" data-tip="Escribió y borró"
+                        onClick={e => { e.stopPropagation(); const val = !form.interrupted_typing; setForm(f => ({ ...f, interrupted_typing: val })); onSave({ interrupted_typing: val }); }}
+                        style={{
+                            color: form.interrupted_typing ? 'var(--info)' : 'var(--text-muted)',
+                            background: form.interrupted_typing ? 'rgba(6,182,212,0.15)' : undefined,
+                        }}>
+                        <BookOpen size={13} />
+                    </button>
+                    {/* Play */}
+                    <button className="btn btn-ghost btn-icon btn-sm" data-tip="Preview"
+                        onClick={e => { e.stopPropagation(); onPlayFrom?.(globalStepIndex); }}
+                        style={{ color: 'var(--success)' }}>
+                        <Play size={13} />
+                    </button>
+                    {/* Edit */}
+                    <button className="btn btn-ghost btn-icon btn-sm" data-tip="Editar"
+                        onClick={() => setEditing(true)}>
+                        <Edit2 size={13} />
+                    </button>
+                    {/* Delete */}
+                    <button className="btn btn-ghost btn-icon btn-sm" data-tip="Eliminar"
+                        onClick={onDelete} style={{ color: 'var(--danger)' }}>
+                        <Trash2 size={13} />
+                    </button>
                 </div>
             </div>
         );
     }
 
+    // ─── Expanded/editing view ────────────────────────────────────────────────
     return (
-        <div className="step-item" style={{ borderColor: 'var(--border-brand)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Tipo de Paso</label>
-                    <select
-                        className="form-input"
-                        value={form.step_type || (form.requires_response ? 'interactive' : (form.interrupted_typing && !form.message_to_send ? 'typing' : 'narrative'))}
-                        onChange={e => {
-                            const val = e.target.value as StepFormData['step_type'];
-                            handleFormChange({
-                                ...form,
-                                step_type: val,
-                                requires_response: val === 'interactive' || val === 'choice',
-                                interrupted_typing: val === 'typing',
-                                message_to_send: val === 'typing' ? '' : form.message_to_send,
-                                choices: val === 'choice' ? (form.choices?.length ? form.choices : [{ label: '', condition: '', target_scene_id: '' }]) : form.choices,
-                            });
-                        }}
-                    >
-                        <option value="interactive">Interactivo (espera respuesta)</option>
-                        <option value="narrative">Narrativo (avanza automáticamente)</option>
-                        <option value="typing">Efecto "Escribiendo" (solo intriga)</option>
-                        <option value="choice">Elección / Condicional (bifurca el flujo)</option>
-                    </select>
+        <div style={{
+            border: `1.5px solid ${borderColor}`,
+            borderRadius: 10, background: 'var(--bg-card)', overflow: 'hidden',
+        }}>
+            {/* Type bar */}
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 14px', borderBottom: `1px solid ${borderColor}22`, background: `${borderColor}08`,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-code)', color: 'var(--text-muted)' }}>#{index + 1}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: borderColor }}>{typeLabel}</span>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {autoSaveState === 'saving' && <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>Guardando...</span>}
+                    {autoSaveState === 'saved' && <span style={{ fontSize: 11, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={11} /> Guardado</span>}
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={() => setEditing(false)} style={{ fontSize: 12, padding: '3px 12px' }}>Cerrar</button>
+                </div>
+            </div>
 
+            <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Message */}
                 {form.step_type !== 'typing' && (
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
-                        <textarea className="form-textarea" style={{ minHeight: 80 }} value={form.message_to_send} onChange={e => handleFormChange({ ...form, message_to_send: e.target.value })} />
+                        <label className="form-label" style={{ fontSize: 12 }}>
+                            {form.step_type === 'error_screen' ? 'Texto de la pantalla' : 'Mensaje'}
+                        </label>
+                        <textarea className="form-textarea" style={{ minHeight: 70, fontSize: 13 }} value={form.message_to_send} onChange={e => handleFormChange({ ...form, message_to_send: e.target.value })} />
                     </div>
                 )}
 
-                {form.step_type !== 'typing' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Multimedia */}
+                {form.step_type !== 'typing' && form.step_type !== 'error_screen' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: form.media_type ? '1fr 1fr' : '1fr', gap: 12 }}>
                         <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label">Agregar Multimedia (Opcional)</label>
-                            <select className="form-input" value={form.media_type || ''} onChange={e => handleFormChange({ ...form, media_type: e.target.value as any || undefined, media_url: e.target.value ? form.media_url : undefined })}>
+                            <label className="form-label" style={{ fontSize: 12 }}>Multimedia</label>
+                            <select className="form-input" style={{ fontSize: 13 }} value={form.media_type || ''} onChange={e => handleFormChange({ ...form, media_type: e.target.value as any || undefined, media_url: e.target.value ? form.media_url : undefined })}>
                                 <option value="">Sin multimedia</option>
                                 <option value="image">Imagen</option>
-                                <option value="video">Ver video</option>
+                                <option value="video">Video</option>
                                 <option value="audio">Audio</option>
                             </select>
                         </div>
                         {form.media_type && (
                             <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">URL del archivo</label>
-                                <input className="form-input" placeholder="https://..." value={form.media_url || ''} onChange={e => handleFormChange({ ...form, media_url: e.target.value })} />
+                                <label className="form-label" style={{ fontSize: 12 }}>URL</label>
+                                <input className="form-input" style={{ fontSize: 13 }} placeholder="https://..." value={form.media_url || ''} onChange={e => handleFormChange({ ...form, media_url: e.target.value })} />
                             </div>
                         )}
                     </div>
                 )}
-                {form.step_type !== 'typing' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                            <input
-                                type="checkbox"
-                                id={`interrupted-typing-edit-${step.id}`}
-                                checked={form.interrupted_typing || false}
-                                onChange={e => handleFormChange({ ...form, interrupted_typing: e.target.checked })}
-                                style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                            />
-                            <label htmlFor={`interrupted-typing-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                Agregar efecto "Escribió y borró" (Escribiendo...) antes del mensaje
-                            </label>
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Genera intriga</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                            <input
-                                type="checkbox"
-                                id={`glitch-effect-edit-${step.id}`}
-                                checked={form.glitch_effect || false}
-                                onChange={e => { handleFormChange({ ...form, glitch_effect: e.target.checked }); setLocalDelay(form.delay_seconds ?? 1.2); }}
-                                style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)', cursor: 'pointer' }}
-                            />
-                            <label htmlFor={`glitch-effect-edit-${step.id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                                <Zap size={13} style={{ marginRight: 4 }} /> Efecto glitch al aparecer el mensaje
-                            </label>
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— Falla de la matrix</span>
-                        </div>
-                    </div>
-                )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Context + Delay */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Contexto heredable (Opcional)</label>
-                        <input className="form-input" placeholder="Ej: Usa un tono muy urgente. El jugador está en Grand Central." value={form.context} onChange={e => handleFormChange({ ...form, context: e.target.value })} />
-                        <span className="form-hint" style={{ fontSize: 11, marginTop: 4, display: 'block', color: 'var(--text-muted)' }}>Mantiene este contexto hasta el próximo paso con contexto.</span>
+                        <label className="form-label" style={{ fontSize: 12 }}>Contexto para el narrador</label>
+                        <input className="form-input" style={{ fontSize: 13 }} placeholder="Ej: El jugador está en Grand Central." value={form.context} onChange={e => handleFormChange({ ...form, context: e.target.value })} />
                     </div>
-
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Delay antes de enviar (segundos)</label>
-                        <input className="form-input" type="number" step="0.1" min="0" value={form.delay_seconds} onChange={e => handleFormChange({ ...form, delay_seconds: parseFloat(e.target.value) || 0 })} />
-                        <span className="form-hint" style={{ fontSize: 11, marginTop: 4, display: 'block', color: 'var(--text-muted)' }}>Tiempo de espera para enviar este mensaje.</span>
+                        <label className="form-label" style={{ fontSize: 12 }}>Delay</label>
+                        <input className="form-input" type="number" step="0.1" min="0" value={form.delay_seconds} onChange={e => handleFormChange({ ...form, delay_seconds: parseFloat(e.target.value) || 0 })} style={{ width: 70, fontSize: 13 }} />
                     </div>
                 </div>
 
-                {/* Choice step: options editor */}
+                {/* Choice options */}
                 {form.step_type === 'choice' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <label className="form-label">Opciones del condicional</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label className="form-label" style={{ fontSize: 12 }}>Opciones</label>
                         {(form.choices || []).map((ch, ci) => (
-                            <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Etiqueta</label>}
-                                    <input className="form-input" placeholder="Ej: Seguir" value={ch.label} onChange={e => {
-                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
-                                    }} />
-                                </div>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Condición (para el LLM)</label>}
-                                    <input className="form-input" placeholder="Ej: el usuario quiere seguir" value={ch.condition} onChange={e => {
-                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
-                                    }} />
-                                </div>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    {ci === 0 && <label className="form-label" style={{ fontSize: 11 }}>Escena destino</label>}
-                                    <select className="form-input" value={ch.target_scene_id || ''} onChange={e => {
-                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; handleFormChange({ ...form, choices });
-                                    }}>
-                                        <option value="">(seleccionar)</option>
-                                        {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
-                                </div>
+                            <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6, alignItems: 'end' }}>
+                                <input className="form-input" style={{ fontSize: 12 }} placeholder="Etiqueta" value={ch.label} onChange={e => {
+                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
+                                }} />
+                                <input className="form-input" style={{ fontSize: 12 }} placeholder="Condición LLM" value={ch.condition} onChange={e => {
+                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
+                                }} />
+                                <select className="form-input" style={{ fontSize: 12 }} value={ch.target_scene_id || ''} onChange={e => {
+                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; handleFormChange({ ...form, choices });
+                                }}>
+                                    <option value="">Escena destino</option>
+                                    {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
                                 <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
-                                    const choices = (form.choices || []).filter((_, i) => i !== ci); handleFormChange({ ...form, choices });
-                                }}><Trash2 size={13} /></button>
+                                    handleFormChange({ ...form, choices: (form.choices || []).filter((_, i) => i !== ci) });
+                                }}><Trash2 size={12} /></button>
                             </div>
                         ))}
-                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start' }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
-                            <Plus size={13} /> Agregar opción
+                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start', fontSize: 12 }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
+                            <Plus size={12} /> Agregar opción
                         </button>
                     </div>
                 )}
 
+                {/* Interactive: expected answer */}
                 {form.requires_response && form.step_type !== 'choice' && (
-                    <>
-                        <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label">Respuesta esperada <span className="required">*</span></label>
-                            <input className="form-input" value={form.expected_answer} onChange={e => handleFormChange({ ...form, expected_answer: e.target.value })} />
-                        </div>
-                        <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label">Mensaje si respuesta incorrecta</label>
-                            <input className="form-input" value={form.wrong_answer_message} onChange={e => handleFormChange({ ...form, wrong_answer_message: e.target.value })} />
-                        </div>
-                        <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label">Pistas</label>
-                            {form.hints.map((h, i) => (
-                                <div className="hint-row" key={i} style={{ marginBottom: 6 }}>
-                                    <input className="form-input" value={h} onChange={e => handleFormChange({ ...form, hints: form.hints.map((hh, ii) => ii === i ? e.target.value : hh) })} />
-                                    <button className="btn btn-ghost btn-icon btn-sm" type="button" onClick={() => handleFormChange({ ...form, hints: form.hints.filter((_, ii) => ii !== i) })}><Trash2 size={13} /></button>
-                                </div>
-                            ))}
-                            <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleFormChange({ ...form, hints: [...form.hints, ''] })} style={{ color: 'var(--text-brand)' }}><Plus size={13} /> Agregar pista</button>
-                        </div>
-                    </>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: 12 }}>Intención esperada</label>
+                        <input className="form-input" style={{ fontSize: 13 }} placeholder="Ej: que confirme, que mencione el lugar, cualquier respuesta" value={form.expected_answer} onChange={e => handleFormChange({ ...form, expected_answer: e.target.value })} />
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>El narrador guía al usuario si la respuesta no cumple esta intención.</span>
+                    </div>
                 )}
-
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
-                    {/* Auto-save indicator */}
-                    <span style={{
-                        fontSize: 12,
-                        color: autoSaveState === 'saved' ? 'var(--success)' : 'var(--text-muted)',
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        transition: 'color 0.3s',
-                    }}>
-                        {autoSaveState === 'saving' && <span style={{ opacity: 0.6 }}>Guardando...</span>}
-                        {autoSaveState === 'saved' && <><Check size={12} /> Auto-guardado</>}
-                    </span>
-                    <button
-                        className="btn btn-secondary btn-sm"
-                        type="button"
-                        onClick={() => setEditing(false)}
-                    >
-                        Listo
-                    </button>
-                </div>
             </div>
         </div>
     );
@@ -468,8 +458,8 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 >
                     <option value="interactive">Interactivo (espera respuesta)</option>
                     <option value="narrative">Narrativo (avanza automáticamente)</option>
-                    <option value="typing">Efecto "Escribiendo" (solo intriga)</option>
                     <option value="choice">Elección / Condicional (bifurca el flujo)</option>
+                    <option value="error_screen">Pantalla de Error (terminal glitch)</option>
                 </select>
             </div>
 
@@ -662,9 +652,38 @@ export default function ExperienceDetailPage() {
     const handleAddStep = async () => {
         if (!newStep) return;
         const sceneSteps = steps.filter(s => s.scene_id === newStep.sceneId);
-        await createStep(id, { ...newStep.data, scene_id: newStep.sceneId, order: sceneSteps.length + 1 });
+        const order = sceneSteps.length + 1;
+        const newId = await createStep(id, { ...newStep.data, scene_id: newStep.sceneId, order });
+        // Optimistic update: add to local state without full reload
+        setSteps(prev => [...prev, {
+            ...newStep.data,
+            id: newId,
+            experience_id: id,
+            scene_id: newStep.sceneId,
+            order,
+        } as Step]);
         setNewStep(null);
-        load();
+    };
+
+    const handleInsertStepAt = async (sceneId: string, atOrder: number) => {
+        // Optimistic: shift local steps, then persist
+        setSteps(prev => prev.map(s =>
+            s.scene_id === sceneId && s.order >= atOrder ? { ...s, order: s.order + 1 } : s
+        ));
+        const sceneSteps = steps.filter(s => s.scene_id === sceneId && s.order >= atOrder);
+        for (const s of sceneSteps) {
+            await updateStep(id, s.id, { order: s.order + 1 } as Partial<StepFormData>);
+        }
+        const newId = await createStep(id, {
+            scene_id: sceneId, order: atOrder,
+            step_type: 'narrative', message_to_send: '', requires_response: false,
+            expected_answer: '', hints: [], wrong_answer_message: '', delay_seconds: 1.2,
+        });
+        setSteps(prev => [...prev, {
+            id: newId, experience_id: id, scene_id: sceneId, order: atOrder,
+            step_type: 'narrative', message_to_send: '', requires_response: false,
+            expected_answer: '', hints: [], wrong_answer_message: '', delay_seconds: 1.2,
+        } as Step]);
     };
 
     const handleAddScene = async () => {
@@ -741,33 +760,21 @@ export default function ExperienceDetailPage() {
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => {
-                            if (!exp.slug) {
-                                alert("Por favor, guardá un slug válido en la pestaña 'General' primero.");
-                                return;
-                            }
-                            window.open(`/${exp.slug}`, '_blank');
-                        }}
-                        id="publish-btn"
-                        title="Ver experiencia publicada"
-                    >
-                        <ExternalLink size={15} /> Publicar
+                    <button className="btn btn-secondary btn-sm" onClick={handleSaveGeneral} disabled={saving} data-tip="Guardar cambios">
+                        {saved ? <><Check size={14} /> Guardado</> : saving ? 'Guardando...' : <><Save size={14} /> Guardar</>}
                     </button>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => setShowShare(true)}
-                        id="share-btn"
-                        title="Compartir experiencia"
-                    >
-                        <Share2 size={15} /> Compartir
+                    <button className="btn btn-secondary btn-sm" data-tip="Publicar"
+                        onClick={() => { if (!exp.slug) { alert("Configurá un slug primero."); return; } window.open(`/${exp.slug}`, '_blank'); }}>
+                        <ExternalLink size={14} />
                     </button>
-                    <button className="btn btn-primary" onClick={() => router.push(`/dashboard/experiences/${id}/preview`)} id="preview-btn">
-                        <Play size={15} /> Probar
+                    <button className="btn btn-secondary btn-sm" data-tip="Compartir" onClick={() => setShowShare(true)}>
+                        <Share2 size={14} />
                     </button>
-                    <button className="btn btn-secondary" onClick={() => router.push(`/dashboard/experiences/${id}/metrics`)} id="view-metrics-btn">
-                        <BarChart2 size={15} /> Métricas
+                    <button className="btn btn-primary btn-sm" data-tip="Preview" onClick={() => router.push(`/dashboard/experiences/${id}/preview`)}>
+                        <Play size={14} />
+                    </button>
+                    <button className="btn btn-secondary btn-sm" data-tip="Métricas" onClick={() => router.push(`/dashboard/experiences/${id}/metrics`)}>
+                        <BarChart2 size={14} />
                     </button>
                 </div>
             </div>
@@ -807,16 +814,6 @@ export default function ExperienceDetailPage() {
                         <label className="form-label">Foto de perfil del narrador (Opcional)</label>
                         <input className="form-input" placeholder="https://ejemplo.com/foto.jpg" value={formData.narrator_avatar || ''} onChange={e => setFormData({ ...formData, narrator_avatar: e.target.value })} />
                         <span className="form-hint">URL de la imagen que se mostrará en el chat (avatar redondo).</span>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Palabra clave de activación <span className="required">*</span></label>
-                        <input className="form-input" value={formData.activation_keyword || ''} onChange={e => setFormData({ ...formData, activation_keyword: e.target.value.toUpperCase() })} />
-                        <span className="form-hint">El usuario envía esto para comenzar.</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={handleSaveGeneral} disabled={saving} id="save-general-btn">
-                            {saved ? <><Check size={15} /> Guardado</> : saving ? 'Guardando...' : <><Save size={15} /> Guardar cambios</>}
-                        </button>
                     </div>
                 </div>
             )}
@@ -873,20 +870,43 @@ export default function ExperienceDetailPage() {
                                         {scSteps.map((step, i) => {
                                             const globalIdx = steps.findIndex(s => s.id === step.id);
                                             return (
-                                            <InlineStepEditor
-                                                key={step.id} step={step} index={i}
-                                                onSave={async (data) => { await updateStep(id, step.id, data); }}
-                                                onDelete={() => setToDeleteStep(step)}
-                                                isDragging={dragState?.sceneId === scene.id && dragState.index === i}
-                                                isDragOver={dragOverState?.sceneId === scene.id && dragOverState.index === i}
-                                                onDragStart={() => setDragState({ sceneId: scene.id, index: i })}
-                                                onDragOver={(e) => { e.preventDefault(); setDragOverState({ sceneId: scene.id, index: i }); }}
-                                                onDrop={() => handleDrop(scene.id, i)}
-                                                onDragEnd={() => { setDragState(null); setDragOverState(null); }}
-                                                scenes={scenes}
-                                                onPlayFrom={(idx) => setPreviewFromStep(idx)}
-                                                globalStepIndex={globalIdx}
-                                            />
+                                            <div key={step.id}>
+                                                {/* Insert step button between steps */}
+                                                <div
+                                                    style={{
+                                                        display: 'flex', justifyContent: 'center',
+                                                        padding: '2px 0', opacity: 0, transition: 'opacity 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.opacity = '0'; }}
+                                                >
+                                                    <button
+                                                        onClick={() => handleInsertStepAt(scene.id, step.order)}
+                                                        style={{
+                                                            background: 'none', border: '1px dashed var(--border-default)',
+                                                            borderRadius: 6, cursor: 'pointer', padding: '1px 12px',
+                                                            color: 'var(--text-muted)', fontSize: 11, display: 'flex',
+                                                            alignItems: 'center', gap: 4,
+                                                        }}
+                                                    >
+                                                        <Plus size={11} /> insertar paso
+                                                    </button>
+                                                </div>
+                                                <InlineStepEditor
+                                                    step={step} index={i}
+                                                    onSave={async (data) => { await updateStep(id, step.id, data); }}
+                                                    onDelete={() => setToDeleteStep(step)}
+                                                    isDragging={dragState?.sceneId === scene.id && dragState.index === i}
+                                                    isDragOver={dragOverState?.sceneId === scene.id && dragOverState.index === i}
+                                                    onDragStart={() => setDragState({ sceneId: scene.id, index: i })}
+                                                    onDragOver={(e) => { e.preventDefault(); setDragOverState({ sceneId: scene.id, index: i }); }}
+                                                    onDrop={() => handleDrop(scene.id, i)}
+                                                    onDragEnd={() => { setDragState(null); setDragOverState(null); }}
+                                                    scenes={scenes}
+                                                    onPlayFrom={(idx) => setPreviewFromStep(idx)}
+                                                    globalStepIndex={globalIdx}
+                                                />
+                                            </div>
                                             );
                                         })}
 

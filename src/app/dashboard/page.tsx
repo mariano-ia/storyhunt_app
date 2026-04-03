@@ -82,14 +82,14 @@ export default function DashboardPage() {
                         <div className="stat-card">
                             <div className="stat-card-icon" style={{ background: 'rgba(16,185,129,0.1)', color: '#34D399' }}><DollarSign size={18} /></div>
                             <div className="stat-card-value">${totalCost.toFixed(4)}</div>
-                            <div className="stat-card-label">Costo LLM (USD)</div>
+                            <div className="stat-card-label">Costo IA (USD)</div>
                         </div>
                     </>
                 )}
             </div>
 
-            {/* Two-column grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {/* Two-column grid — flush with stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
 
                 {/* Recent Experiences */}
                 <div className="card">

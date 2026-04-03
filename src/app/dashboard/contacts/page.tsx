@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getContacts, updateContactStatus } from '@/lib/firestore';
 import type { Contact } from '@/lib/types';
-import { Mail, Clock, CheckCircle2, UserPlus, Search, ArrowUpDown } from 'lucide-react';
+import { Mail, Clock, CheckCircle2, UserPlus, Search, ArrowUpDown, Download } from 'lucide-react';
 
 export default function ContactsPage() {
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -60,11 +60,31 @@ export default function ContactsPage() {
                     </h1>
                     <p className="page-subtitle">Visualiza y gestiona las solicitudes de acceso recibidas a través de la web principal.</p>
                 </div>
-                <div className="header-actions">
+                <div className="header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div className="stat-badge mono">
                         <span>NUEVOS: </span>
                         <span style={{ color: 'var(--brand-primary)', marginLeft: 8 }}>{newContactsCount}</span>
                     </div>
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                            const rows = [['Email', 'Fecha', 'Estado']];
+                            filteredContacts.forEach(c => {
+                                rows.push([c.email, new Date(c.created_at).toISOString(), c.status]);
+                            });
+                            const csv = rows.map(r => r.join(',')).join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `contactos-${new Date().toISOString().slice(0, 10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }}
+                        disabled={filteredContacts.length === 0}
+                    >
+                        <Download size={14} /> Exportar CSV
+                    </button>
                 </div>
             </header>
 

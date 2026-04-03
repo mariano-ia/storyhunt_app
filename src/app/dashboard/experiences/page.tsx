@@ -79,11 +79,11 @@ export default function ExperiencesPage() {
             {loading ? (
                 <div className="table-wrapper">
                     <table>
-                        <thead><tr><th>Nombre</th><th>Estado</th><th>Modo</th><th>Keyword</th><th>Costo LLM</th><th>Creada</th><th>Acciones</th></tr></thead>
+                        <thead><tr><th>Nombre</th><th>Estado</th><th>Modo</th><th>Costo IA</th><th>Creada</th><th>Acciones</th></tr></thead>
                         <tbody>
                             {[1, 2, 3].map(i => (
                                 <tr key={i}>
-                                    {[1, 2, 3, 4, 5, 6, 7].map(j => (
+                                    {[1, 2, 3, 4, 5, 6].map(j => (
                                         <td key={j}><div className="skeleton" style={{ height: 16, borderRadius: 4, width: j === 1 ? 140 : 80 }} /></td>
                                     ))}
                                 </tr>
@@ -114,10 +114,9 @@ export default function ExperiencesPage() {
                                 <th>Nombre</th>
                                 <th>Estado</th>
                                 <th>Modo</th>
-                                <th>Palabra clave</th>
                                 <th>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <DollarSign size={13} /> Costo LLM
+                                        <DollarSign size={13} /> Costo IA
                                     </span>
                                 </th>
                                 <th>Creada</th>
@@ -138,7 +137,6 @@ export default function ExperiencesPage() {
                                         </span>
                                     </td>
                                     <td><span className={`badge badge-${exp.mode}`}>{modeLabel(exp.mode)}</span></td>
-                                    <td><code style={{ fontSize: 12, background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: 4, color: 'var(--text-brand)' }}>{exp.activation_keyword}</code></td>
                                     <td>
                                         <span style={{
                                             fontSize: 13,
