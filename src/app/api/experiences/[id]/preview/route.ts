@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getExperience, getSteps, saveInteraction } from '@/lib/firestore';
+import { getExperience, getSteps, getScenes, saveInteraction } from '@/lib/firestore';
 
 // ─── Preview Evaluation Endpoint ──────────────────────────────────────────────
 // POST /api/experiences/[id]/preview
@@ -8,20 +8,34 @@ import { getExperience, getSteps, saveInteraction } from '@/lib/firestore';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { userMessage, stepIndex: rawStepIndex } = await req.json() as { userMessage: string; stepIndex: number };
-        const [experience, steps] = await Promise.all([getExperience(id), getSteps(id)]);
+        const { userMessage, stepIndex: rawStepIndex, stepId } = await req.json() as { userMessage: string; stepIndex: number; stepId?: string };
+        const [experience, rawSteps, scenes] = await Promise.all([getExperience(id), getSteps(id), getScenes(id)]);
 
         if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });
-        if (!steps.length) return NextResponse.json({ error: 'La experiencia no tiene pasos' }, { status: 400 });
+        if (!rawSteps.length) return NextResponse.json({ error: 'La experiencia no tiene pasos' }, { status: 400 });
 
-        // ─── BUG FIX: if frontend sends a narrative stepIndex, forward to next interactive ──
-        // This handles race conditions or stale closures where stepIndex points to a narrative step
-        let stepIndex = rawStepIndex;
-        while (stepIndex < steps.length && !(steps[stepIndex]?.requires_response ?? true)) {
-            stepIndex++;
+        // ─── Sort steps by scene order, then step order within scene ──────────────
+        const sceneOrder: Record<string, number> = {};
+        scenes.forEach(s => { sceneOrder[s.id] = s.order; });
+        const steps = [...rawSteps].sort((a, b) => {
+            const scA = sceneOrder[a.scene_id ?? ''] ?? 999;
+            const scB = sceneOrder[b.scene_id ?? ''] ?? 999;
+            if (scA !== scB) return scA - scB;
+            return (a.order ?? 0) - (b.order ?? 0);
+        });
+
+        // ─── Find the current step by ID (reliable) or fallback to index ──────────
+        let currentStep = stepId ? steps.find(s => s.id === stepId) : undefined;
+        let stepIndex = currentStep ? steps.indexOf(currentStep) : rawStepIndex;
+
+        // Fallback: if no stepId or not found, use index with narrative skip
+        if (!currentStep) {
+            stepIndex = rawStepIndex;
+            while (stepIndex < steps.length && !(steps[stepIndex]?.requires_response ?? true)) {
+                stepIndex++;
+            }
+            currentStep = steps[stepIndex];
         }
-
-        const currentStep = steps[stepIndex];
         if (!currentStep) {
             // All remaining steps are narrative — experience is effectively complete
             return NextResponse.json({ evaluation: 'correct', nextStepIndex: steps.length, completed: true, response: '¡Llegaste al final de la experiencia!' });

@@ -237,7 +237,7 @@ export default function PlayPage() {
             const res = await fetch(`/api/experiences/${experience?.id}/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userMessage: userMsg.content, stepIndex }),
+                body: JSON.stringify({ userMessage: userMsg.content, stepIndex, stepId: steps[stepIndex]?.id }),
             });
             const data = await res.json();
 

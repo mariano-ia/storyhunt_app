@@ -323,7 +323,7 @@ export default function ExperiencePreview() {
             const res = await fetch(`/api/experiences/${id}/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userMessage: userMsg.content, stepIndex }),
+                body: JSON.stringify({ userMessage: userMsg.content, stepIndex, stepId: steps[stepIndex]?.id }),
             });
             const data = await res.json();
 
