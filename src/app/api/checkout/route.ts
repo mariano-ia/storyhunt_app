@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { getExperience, getCouponByCode } from '@/lib/firestore';
 
 // ─── POST /api/checkout ──────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const session = await stripe.checkout.sessions.create(sessionParams);
+        const session = await getStripe().checkout.sessions.create(sessionParams);
 
         return NextResponse.json({ url: session.url, session_id: session.id });
     } catch (err: unknown) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import type { DiscountCouponFormData } from '@/lib/types';
 
 // ─── POST /api/coupons/sync ──────────────────────────────────────────────────
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
         const data = await req.json() as DiscountCouponFormData;
 
         // Create Stripe coupon
-        const stripeCoupon = await stripe.coupons.create({
+        const stripeCoupon = await getStripe().coupons.create({
             ...(data.discount_type === 'percent'
                 ? { percent_off: data.discount_value }
                 : { amount_off: Math.round(data.discount_value * 100), currency: 'usd' }),
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         });
 
         // Create promotion code (the user-facing code)
-        const promoCode = await stripe.promotionCodes.create({
+        const promoCode = await getStripe().promotionCodes.create({
             promotion: { type: 'coupon', coupon: stripeCoupon.id },
             code: data.code,
             max_redemptions: data.max_redemptions,
