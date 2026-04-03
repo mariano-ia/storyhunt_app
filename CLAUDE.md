@@ -75,11 +75,17 @@ Step features:
 /api/ai-stories/generate            → Convierte guión editorial → JSON estructurado
 /api/experiences/[id]/preview       → Endpoint de evaluación LLM
 /api/contacts                       → Recibe formulario web (JSON y form-urlencoded)
+/api/cron/publish-instagram         → Vercel Cron: publica posts pendientes en Instagram
 ```
 
 ### Deploy
 - Vercel: storyhunt-app.vercel.app
 - Auto-deploy desde GitHub main branch
+
+### Vercel Crons (vercel.json)
+- `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy
+- Lee social-calendar.json del repo StoryHuntWeb en GitHub
+- Env vars requeridas: INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
 - Repo: github.com/mariano-ia/storyhunt_app
 
 ## Estructura de archivos
