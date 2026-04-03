@@ -802,7 +802,7 @@ export default function ExperienceDetailPage() {
 
     return (
         <div>
-            <div className="page-header" style={{ position: 'sticky', top: -32, zIndex: 20, background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', marginBottom: 16, margin: '-32px -32px 16px', padding: '20px 32px' }}>
+            <div className="page-header" style={{ position: 'sticky', top: -32, zIndex: 20, background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', margin: '-32px -32px 16px', padding: '16px 32px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button className="btn btn-ghost btn-icon" onClick={() => router.push('/dashboard/experiences')}><ArrowLeft size={18} /></button>
                     <div>

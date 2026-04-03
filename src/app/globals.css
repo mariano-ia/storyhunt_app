@@ -168,16 +168,18 @@ select {
 /* ─── Layout ───────────────────────────────────────────────────────────────── */
 .dashboard-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .dashboard-main {
   flex: 1;
   margin-left: var(--sidebar-collapsed-width);
   transition: margin-left 0.2s ease;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .dashboard-content {
@@ -185,7 +187,6 @@ select {
   padding: 32px;
   margin-top: var(--topbar-height);
   overflow-y: auto;
-  height: calc(100vh - var(--topbar-height));
 }
 
 /* ─── Sidebar ──────────────────────────────────────────────────────────────── */
