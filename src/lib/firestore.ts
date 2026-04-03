@@ -3,7 +3,7 @@ import {
     deleteDoc, query, where, orderBy, Timestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, UserSession, Interaction, ExperienceMetrics, Contact, AIGeneratedExperience } from './types';
+import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, UserSession, Interaction, ExperienceMetrics, Contact, AIGeneratedExperience, DiscountCoupon, DiscountCouponFormData, AccessToken, Sale } from './types';
 
 const now = () => new Date().toISOString();
 
@@ -326,4 +326,127 @@ export async function getContacts(): Promise<Contact[]> {
 
 export async function updateContactStatus(id: string, status: Contact['status']): Promise<void> {
     await updateDoc(doc(db, 'contacts', id), { status });
+}
+
+// ─── Discount Coupons ────────────────────────────────────────────────────────
+
+export async function getCoupons(): Promise<DiscountCoupon[]> {
+    const q = query(collection(db, 'discount_coupons'), orderBy('created_at', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as DiscountCoupon));
+}
+
+export async function getCoupon(id: string): Promise<DiscountCoupon | null> {
+    const snap = await getDoc(doc(db, 'discount_coupons', id));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as DiscountCoupon;
+}
+
+export async function getCouponByCode(code: string): Promise<DiscountCoupon | null> {
+    const q = query(collection(db, 'discount_coupons'), where('code', '==', code.toUpperCase()));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() } as DiscountCoupon;
+}
+
+export async function createCoupon(data: DiscountCouponFormData & { stripe_coupon_id?: string; stripe_promo_id?: string }): Promise<string> {
+    const ref = await addDoc(collection(db, 'discount_coupons'), {
+        ...data,
+        code: data.code.toUpperCase(),
+        times_redeemed: 0,
+        created_at: now(),
+    });
+    return ref.id;
+}
+
+export async function updateCoupon(id: string, data: Partial<DiscountCoupon>): Promise<void> {
+    await updateDoc(doc(db, 'discount_coupons', id), data);
+}
+
+export async function deleteCoupon(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'discount_coupons', id));
+}
+
+// ─── Access Tokens ───────────────────────────────────────────────────────────
+
+function generateToken(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I for readability
+    let token = 'SH-';
+    for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
+    return token;
+}
+
+export async function createAccessToken(data: {
+    experience_id: string;
+    lang: 'es' | 'en';
+    email: string;
+    max_uses?: number;
+    expires_hours?: number;
+    stripe_session_id?: string;
+}): Promise<AccessToken> {
+    const token = generateToken();
+    const expiresAt = new Date(Date.now() + (data.expires_hours ?? 48) * 60 * 60 * 1000).toISOString();
+    const tokenData = {
+        token,
+        experience_id: data.experience_id,
+        lang: data.lang,
+        email: data.email,
+        max_uses: data.max_uses ?? 2,
+        times_used: 0,
+        status: 'active' as const,
+        expires_at: expiresAt,
+        stripe_session_id: data.stripe_session_id,
+        created_at: now(),
+    };
+    const ref = await addDoc(collection(db, 'access_tokens'), tokenData);
+    return { id: ref.id, ...tokenData };
+}
+
+export async function getAccessToken(token: string): Promise<AccessToken | null> {
+    const q = query(collection(db, 'access_tokens'), where('token', '==', token));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() } as AccessToken;
+}
+
+export async function getAccessTokens(): Promise<AccessToken[]> {
+    const q = query(collection(db, 'access_tokens'), orderBy('created_at', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as AccessToken));
+}
+
+export async function useAccessToken(id: string): Promise<void> {
+    const snap = await getDoc(doc(db, 'access_tokens', id));
+    if (!snap.exists()) return;
+    const data = snap.data() as AccessToken;
+    const newTimesUsed = (data.times_used ?? 0) + 1;
+    const updates: Partial<AccessToken> = {
+        times_used: newTimesUsed,
+        used_at: now(),
+    };
+    if (newTimesUsed >= (data.max_uses ?? 2)) {
+        updates.status = 'used';
+    }
+    await updateDoc(doc(db, 'access_tokens', id), updates);
+}
+
+// ─── Sales ───────────────────────────────────────────────────────────────────
+
+export async function createSale(data: Omit<Sale, 'id' | 'created_at'>): Promise<string> {
+    const ref = await addDoc(collection(db, 'sales'), {
+        ...data,
+        created_at: now(),
+    });
+    return ref.id;
+}
+
+export async function getSales(): Promise<Sale[]> {
+    const q = query(collection(db, 'sales'), orderBy('created_at', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Sale));
+}
+
+export async function getTotalRevenue(): Promise<number> {
+    const sales = await getSales();
+    return sales.reduce((sum, s) => sum + (s.amount ?? 0), 0);
 }

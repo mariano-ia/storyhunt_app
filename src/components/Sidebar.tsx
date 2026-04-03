@@ -1,12 +1,14 @@
 'use client';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog, Sparkles, Ticket, ShoppingCart } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const navItems = [
     { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
     { label: 'Experiencias', icon: Zap, href: '/dashboard/experiences' },
     { label: 'AI Stories', icon: Sparkles, href: '/dashboard/ai-stories' },
+    { label: 'Cupones', icon: Ticket, href: '/dashboard/coupons' },
+    { label: 'Ventas', icon: ShoppingCart, href: '/dashboard/sales' },
     { label: 'Sesiones', icon: Users, href: '/dashboard/sessions' },
     { label: 'Interacciones', icon: MessageSquare, href: '/dashboard/interactions' },
     { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },

@@ -583,9 +583,9 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
 function TabNav({ active, onChange }: { active: string; onChange: (t: string) => void }) {
     return (
         <div className="tab-nav">
-            {['general', 'pasos', 'tecnico'].map(tab => (
+            {['general', 'pasos', 'web', 'tecnico'].map(tab => (
                 <button key={tab} className={`tab-btn ${active === tab ? 'active' : ''}`} onClick={() => onChange(tab)} id={`tab-${tab}`}>
-                    {tab === 'general' ? 'Información General' : tab === 'pasos' ? 'Pasos' : 'Configuración Técnica'}
+                    {tab === 'general' ? 'General' : tab === 'pasos' ? 'Pasos' : tab === 'web' ? 'Info Web' : 'Técnico'}
                 </button>
             ))}
         </div>
@@ -972,6 +972,81 @@ export default function ExperienceDetailPage() {
                 </div>
             )}
 
+            {/* Web Info Tab */}
+            {tab === 'web' && (
+                <div style={{ maxWidth: 640 }}>
+                    <div className="section-header">
+                        <h2>Informacion para la web</h2>
+                        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                            Estos datos se muestran en storyhunt.city cuando la experiencia esta publicada o en "Proximamente".
+                        </p>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Estado de publicacion</label>
+                        <div className="toggle-group" style={{ maxWidth: 460 }}>
+                            <button type="button" className={`toggle-option ${formData.status === 'inactive' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'inactive' })}>Borrador</button>
+                            <button type="button" className={`toggle-option ${formData.status === 'coming_soon' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'coming_soon' })}>Proximamente</button>
+                            <button type="button" className={`toggle-option ${formData.status === 'published' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'published' })}>Publicada</button>
+                        </div>
+                        <span className="form-hint">
+                            {formData.status === 'inactive' && 'No se muestra en la web.'}
+                            {formData.status === 'coming_soon' && 'Se muestra en la web como "Proximamente" sin boton de compra.'}
+                            {formData.status === 'published' && 'Se muestra en la web con boton de compra activo.'}
+                            {formData.status === 'active' && 'Activa internamente. Cambiale el estado para publicar.'}
+                        </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div className="form-group">
+                            <label className="form-label">Precio (USD)</label>
+                            <input className="form-input" type="number" step="0.01" min="0" placeholder="29.99"
+                                value={(formData as any).price || ''} onChange={e => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 } as any)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Ubicacion</label>
+                            <input className="form-input" placeholder="Ej: Midtown Manhattan, NYC"
+                                value={(formData as any).location || ''} onChange={e => setFormData({ ...formData, location: e.target.value } as any)} />
+                        </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                        <div className="form-group">
+                            <label className="form-label">Duracion</label>
+                            <input className="form-input" placeholder="Ej: 45 min"
+                                value={(formData as any).duration || ''} onChange={e => setFormData({ ...formData, duration: e.target.value } as any)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Distancia</label>
+                            <input className="form-input" placeholder="Ej: 2.5 km"
+                                value={(formData as any).distance || ''} onChange={e => setFormData({ ...formData, distance: e.target.value } as any)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Dificultad</label>
+                            <select className="form-input" value={(formData as any).difficulty || ''}
+                                onChange={e => setFormData({ ...formData, difficulty: e.target.value || undefined } as any)}>
+                                <option value="">Sin definir</option>
+                                <option value="easy">Facil</option>
+                                <option value="medium">Media</option>
+                                <option value="hard">Dificil</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Descripcion para la web</label>
+                        <textarea className="form-textarea" style={{ minHeight: 100 }} placeholder="Descripcion atractiva para los visitantes de la web (puede ser diferente a la descripcion interna)"
+                            value={(formData as any).web_description || ''} onChange={e => setFormData({ ...formData, web_description: e.target.value } as any)} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Imagen de portada (URL)</label>
+                        <input className="form-input" placeholder="https://..."
+                            value={(formData as any).web_image || ''} onChange={e => setFormData({ ...formData, web_image: e.target.value } as any)} />
+                        {(formData as any).web_image && (
+                            <img src={(formData as any).web_image} alt="Preview"
+                                style={{ marginTop: 8, maxHeight: 200, borderRadius: 8, objectFit: 'cover', width: '100%', border: '1px solid var(--border-subtle)' }}
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Technical Tab */}
             {tab === 'tecnico' && (
                 <div style={{ maxWidth: 640 }}>
@@ -982,20 +1057,10 @@ export default function ExperienceDetailPage() {
                     <div className="form-group">
                         <label className="form-label">Modo de operación</label>
                         <div className="toggle-group" style={{ maxWidth: 300 }}>
-                            <button type="button" className={`toggle-option ${formData.mode === 'test' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'test' })}>🧪 Prueba</button>
-                            <button type="button" className={`toggle-option ${formData.mode === 'production' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'production' })}>🚀 Producción</button>
+                            <button type="button" className={`toggle-option ${formData.mode === 'test' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'test' })}>Prueba</button>
+                            <button type="button" className={`toggle-option ${formData.mode === 'production' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, mode: 'production' })}>Produccion</button>
                         </div>
                     </div>
-                    <div className="form-group">
-                        <label className="form-label">Estado</label>
-                        <div className="toggle-group" style={{ maxWidth: 300 }}>
-                            <button type="button" className={`toggle-option ${formData.status === 'active' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'active' })}>✅ Activa</button>
-                            <button type="button" className={`toggle-option ${formData.status === 'inactive' ? 'active' : ''}`} onClick={() => setFormData({ ...formData, status: 'inactive' })}>⏸ Inactiva</button>
-                        </div>
-                    </div>
-                    <button className="btn btn-primary" onClick={handleSaveGeneral} disabled={saving} id="save-tech-btn">
-                        {saved ? <><Check size={15} /> Guardado</> : saving ? 'Guardando...' : <><Save size={15} /> Guardar cambios</>}
-                    </button>
                 </div>
             )}
 

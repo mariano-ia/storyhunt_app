@@ -1,7 +1,7 @@
 // ─── Core Domain Types ────────────────────────────────────────────────────────
 
 export type ExperienceMode = 'test' | 'production';
-export type ExperienceStatus = 'active' | 'inactive';
+export type ExperienceStatus = 'active' | 'inactive' | 'coming_soon' | 'published';
 export type SessionStatus = 'in_progress' | 'completed' | 'abandoned';
 
 export interface Experience {
@@ -17,6 +17,15 @@ export interface Experience {
     status: ExperienceStatus;
     created_at: string;           // ISO date string
     updated_at: string;
+
+    // ─── Web Info (public landing) ──────────────────────────────
+    price?: number;               // USD
+    web_image?: string;           // URL hero image for the card
+    web_description?: string;     // Short marketing description (different from admin description)
+    distance?: string;            // "2.5 km", "1.2 mi"
+    duration?: string;            // "45 min", "1.5 hs"
+    difficulty?: 'easy' | 'medium' | 'hard';
+    location?: string;            // "Midtown Manhattan, NYC"
 }
 
 // ─── Scenes ──────────────────────────────────────────────────────────────────
@@ -167,4 +176,55 @@ export interface Contact {
     email: string;
     created_at: string;
     status: 'new' | 'contacted';
+}
+
+// ─── Discount Coupons ────────────────────────────────────────────────────────
+
+export interface DiscountCoupon {
+    id: string;
+    code: string;                           // "PROMO20", "EARLYBIRD"
+    discount_type: 'percent' | 'fixed';     // porcentaje o monto fijo
+    discount_value: number;                 // 20 (= 20% o $20)
+    max_redemptions: number;                // usos maximos totales
+    times_redeemed: number;
+    valid_until: string;                    // ISO date
+    status: 'active' | 'expired' | 'disabled';
+    stripe_coupon_id?: string;              // ID del coupon en Stripe
+    stripe_promo_id?: string;               // ID del promotion code en Stripe
+    created_at: string;
+}
+
+export type DiscountCouponFormData = Omit<DiscountCoupon, 'id' | 'times_redeemed' | 'created_at' | 'stripe_coupon_id' | 'stripe_promo_id'>;
+
+// ─── Access Tokens (post-pago) ───────────────────────────────────────────────
+
+export interface AccessToken {
+    id: string;
+    token: string;                          // "SH-A8F3K2"
+    experience_id: string;
+    lang: 'es' | 'en';
+    email: string;                          // email del comprador
+    max_uses: number;
+    times_used: number;
+    status: 'active' | 'used' | 'expired';
+    expires_at: string;                     // ISO date
+    stripe_session_id?: string;
+    created_at: string;
+    used_at?: string;
+}
+
+// ─── Sales ───────────────────────────────────────────────────────────────────
+
+export interface Sale {
+    id: string;
+    experience_id: string;
+    experience_name: string;
+    email: string;
+    amount: number;                         // monto cobrado en centavos
+    currency: string;                       // "usd"
+    coupon_code?: string;
+    discount_applied?: number;              // descuento en centavos
+    stripe_session_id: string;
+    access_token_id: string;
+    created_at: string;
 }

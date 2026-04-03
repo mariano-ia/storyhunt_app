@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Users, MessageSquare, TrendingUp, Plus, ArrowRight, Activity, DollarSign } from 'lucide-react';
-import { getExperiences, getSessions, getTotalCost } from '@/lib/firestore';
+import { Zap, Users, MessageSquare, TrendingUp, Plus, ArrowRight, Activity, DollarSign, ShoppingCart } from 'lucide-react';
+import { getExperiences, getSessions, getTotalCost, getTotalRevenue } from '@/lib/firestore';
 import type { Experience, UserSession } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -10,11 +10,12 @@ export default function DashboardPage() {
     const [experiences, setExperiences] = useState<Experience[]>([]);
     const [sessions, setSessions] = useState<UserSession[]>([]);
     const [totalCost, setTotalCost] = useState<number>(0);
+    const [totalRevenue, setTotalRevenue] = useState<number>(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        Promise.all([getExperiences(), getSessions(), getTotalCost()])
-            .then(([exp, sess, cost]) => { setExperiences(exp); setSessions(sess); setTotalCost(cost); })
+        Promise.all([getExperiences(), getSessions(), getTotalCost(), getTotalRevenue()])
+            .then(([exp, sess, cost, revenue]) => { setExperiences(exp); setSessions(sess); setTotalCost(cost); setTotalRevenue(revenue); })
             .finally(() => setLoading(false));
     }, []);
 
@@ -56,7 +57,7 @@ export default function DashboardPage() {
             {/* Stats */}
             <div className="stats-grid">
                 {loading ? (
-                    [1, 2, 3, 4, 5].map(i => <StatSkeleton key={i} />)
+                    [1, 2, 3, 4, 5, 6].map(i => <StatSkeleton key={i} />)
                 ) : (
                     <>
                         <div className="stat-card">
@@ -83,6 +84,11 @@ export default function DashboardPage() {
                             <div className="stat-card-icon" style={{ background: 'rgba(16,185,129,0.1)', color: '#34D399' }}><DollarSign size={18} /></div>
                             <div className="stat-card-value">${totalCost.toFixed(4)}</div>
                             <div className="stat-card-label">Costo IA (USD)</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-card-icon green"><ShoppingCart size={18} /></div>
+                            <div className="stat-card-value">${(totalRevenue / 100).toFixed(2)}</div>
+                            <div className="stat-card-label">Ingresos (USD)</div>
                         </div>
                     </>
                 )}
