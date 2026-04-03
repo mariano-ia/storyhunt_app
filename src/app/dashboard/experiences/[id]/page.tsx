@@ -9,6 +9,7 @@ import {
     getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps,
     getScenes, createScene, updateScene, deleteScene, reorderScenes, ensureScenesExist
 } from '@/lib/firestore';
+import { authFetch } from '@/lib/api';
 import ConfirmModal from '@/components/ConfirmModal';
 import type { Experience, ExperienceFormData, Step, StepFormData, Scene, SceneFormData, Choice } from '@/lib/types';
 
@@ -657,6 +658,8 @@ export default function ExperienceDetailPage() {
     const [tab, setTab] = useState('general');
     const [formData, setFormData] = useState<Partial<ExperienceFormData>>({});
     const [saving, setSaving] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [publishResult, setPublishResult] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
     const [newStep, setNewStep] = useState<{ sceneId: string; data: StepFormData } | null>(null);
     const [toDeleteStep, setToDeleteStep] = useState<Step | null>(null);
@@ -1105,6 +1108,46 @@ export default function ExperienceDetailPage() {
                                 style={{ marginTop: 8, maxHeight: 200, borderRadius: 8, objectFit: 'cover', width: '100%', border: '1px solid var(--border-subtle)' }}
                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         )}
+                    </div>
+                    {/* Publish button */}
+                    <div style={{ marginTop: 24, padding: '20px', background: 'var(--bg-elevated)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Publicar experiencia</div>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                            Normaliza el espanol a neutro internacional, traduce todos los mensajes al ingles, y marca la experiencia como publicada.
+                        </p>
+                        {publishResult && (
+                            <div style={{ fontSize: 12, color: publishResult.startsWith('Error') ? 'var(--danger)' : 'var(--success)', marginBottom: 12 }}>
+                                {publishResult}
+                            </div>
+                        )}
+                        <button
+                            className="btn btn-primary"
+                            disabled={publishing}
+                            onClick={async () => {
+                                setPublishing(true);
+                                setPublishResult(null);
+                                try {
+                                    // Save current form first
+                                    await handleSaveGeneral();
+                                    const res = await authFetch('/api/experiences/publish', {
+                                        method: 'POST',
+                                        body: JSON.stringify({ experience_id: id }),
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok) {
+                                        setPublishResult(`Publicada. ${data.steps_processed} pasos procesados. Costo: $${data.cost?.toFixed(4) || '0'}`);
+                                        load();
+                                    } else {
+                                        setPublishResult(`Error: ${data.error}`);
+                                    }
+                                } catch (err) {
+                                    setPublishResult('Error de conexion');
+                                }
+                                setPublishing(false);
+                            }}
+                        >
+                            {publishing ? 'Publicando... (esto puede tardar)' : 'Publicar y traducir'}
+                        </button>
                     </div>
                 </div>
             )}

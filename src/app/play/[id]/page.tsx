@@ -99,6 +99,8 @@ export default function PlayPage() {
     const { id } = useParams() as { id: string };
     const searchParams = useSearchParams();
     const fromStepParam = searchParams.get('from');
+    const langParam = searchParams.get('lang') as 'es' | 'en' | null;
+    const lang = langParam || 'es';
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
     const [scenes, setScenes] = useState<Scene[]>([]);
@@ -118,6 +120,9 @@ export default function PlayPage() {
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
+
+    // Resolve message text based on language
+    const getMsg = (step: Step) => lang === 'en' && (step as any).message_to_send_en ? (step as any).message_to_send_en : step.message_to_send;
 
     const scrollToBottom = () => {
         if (chatRef.current) {
@@ -227,7 +232,7 @@ export default function PlayPage() {
         const globalIndex = allSteps.findIndex(s => s.id === next.id);
 
         if (next.step_type === 'error_screen') {
-            setErrorScreen({ text: next.message_to_send, active: true });
+            setErrorScreen({ text: getMsg(next), active: true });
             const duration = (next.delay_seconds ?? 4) * 1000;
             await new Promise(resolve => setTimeout(resolve, duration));
             setErrorScreen({ text: '', active: false });
@@ -239,7 +244,7 @@ export default function PlayPage() {
             if (resolved) { if (resolved.sceneId !== sceneId) setCurrentSceneId(resolved.sceneId); await advanceNarrativeSteps(resolved.sceneSteps, resolved.nextIndex, allScenes, resolved.sceneId, allSteps); }
         } else if (next.step_type === 'narrative' || !next.requires_response) {
             const msg: PreviewMessage = {
-                role: 'system', content: next.message_to_send,
+                role: 'system', content: getMsg(next),
                 timestamp: new Date().toISOString(), evaluation: 'narrative',
                 media_type: next.media_type, media_url: next.media_url,
                 glitch_effect: next.glitch_effect,
@@ -253,7 +258,7 @@ export default function PlayPage() {
             setStepIndex(globalIndex >= 0 ? globalIndex : fromIndex);
 
             const msg: PreviewMessage = {
-                role: 'system', content: next.message_to_send,
+                role: 'system', content: getMsg(next),
                 timestamp: new Date().toISOString(), evaluation: undefined,
                 media_type: next.media_type, media_url: next.media_url,
                 glitch_effect: next.glitch_effect,
@@ -322,7 +327,7 @@ export default function PlayPage() {
             const res = await fetch(`/api/experiences/${id}/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userMessage: userMsg.content, stepIndex, stepId: steps[stepIndex]?.id }),
+                body: JSON.stringify({ userMessage: userMsg.content, stepIndex, stepId: steps[stepIndex]?.id, lang }),
             });
             const data = await res.json();
 

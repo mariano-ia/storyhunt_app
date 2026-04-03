@@ -8,7 +8,7 @@ import { getExperience, getSteps, getScenes, saveInteraction } from '@/lib/fires
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { userMessage, stepIndex: rawStepIndex, stepId } = await req.json() as { userMessage: string; stepIndex: number; stepId?: string };
+        const { userMessage, stepIndex: rawStepIndex, stepId, lang } = await req.json() as { userMessage: string; stepIndex: number; stepId?: string; lang?: 'es' | 'en' };
         const [experience, rawSteps, scenes] = await Promise.all([getExperience(id), getSteps(id), getScenes(id)]);
 
         if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });
@@ -60,16 +60,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
 
         // ─── Build a context-aware system prompt ───────────────────────────────────
+        const narratorPersonality = lang === 'en' && (experience as any).narrator_personality_en
+            ? (experience as any).narrator_personality_en
+            : experience.narrator_personality;
+        const stepMessage = lang === 'en' && (currentStep as any).message_to_send_en
+            ? (currentStep as any).message_to_send_en
+            : currentStep.message_to_send;
+        const stepExpectedAnswer = lang === 'en' && (currentStep as any).expected_answer_en
+            ? (currentStep as any).expected_answer_en
+            : currentStep.expected_answer;
+        const langInstruction = lang === 'en' ? '- IMPORTANT: Respond in English.' : '- Hablá en español, con el tono y vocabulario de tu personalidad.';
+
         const buildSystemPrompt = (task: string) => `
-${experience.narrator_personality}
+${narratorPersonality}
 
 ---
 
 CONTEXTO DEL JUEGO (invisible para el jugador):
 - El jugador está en el PASO ${stepNumber} de ${totalSteps}.
-- Mensaje que le enviaste al jugador en este paso: "${currentStep.message_to_send}"
+- Mensaje que le enviaste al jugador en este paso: "${stepMessage}"
 ${currentStep.requires_response
-                ? `- La respuesta esperada es (semánticamente): "${currentStep.expected_answer}"
+                ? `- La respuesta esperada es (semánticamente): "${stepExpectedAnswer}"
 - Pistas disponibles si el jugador está trabado: ${currentStep.hints.length ? currentStep.hints.join(' | ') : '(sin pistas)'}
 - Mensaje de reintento configurado: "${currentStep.wrong_answer_message || '(no configurado, inventá uno en personaje)'}"
 ${effectiveContext ? `- Contexto adicional del creador de la experiencia: "${effectiveContext}"` : ''}`
@@ -79,7 +90,7 @@ REGLAS:
 - Nunca salgas del personaje.
 - Nunca des la respuesta correcta directamente.
 - Podés parafrasear el mensaje del paso sin repetirlo textualmente.
-- Hablá en español, con el tono y vocabulario de tu personalidad.
+${langInstruction}
 - Respuestas cortas: 1-3 oraciones máximo.
 ${effectiveContext ? `- Usá el contexto adicional para guiar al jugador si está trabado, sin saltearse los pasos definidos.` : ''}
 

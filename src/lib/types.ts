@@ -27,6 +27,12 @@ export interface Experience {
     duration?: string;            // "45 min", "1.5 hs"
     difficulty?: 'easy' | 'medium' | 'hard';
     location?: string;            // "Midtown Manhattan, NYC"
+
+    // ─── Translations (generated on publish) ────────────────────
+    narrator_personality_en?: string;
+    web_tagline_en?: string;
+    web_description_en?: string;
+    published_at?: string;        // ISO date of last publish
 }
 
 // ─── Scenes ──────────────────────────────────────────────────────────────────
@@ -77,6 +83,10 @@ export interface Step {
 
     // Flow control: jump to a specific step after this one (if empty, advances to next by order)
     next_step_id?: string;
+
+    // Translations (generated on publish)
+    message_to_send_en?: string;
+    expected_answer_en?: string;
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
