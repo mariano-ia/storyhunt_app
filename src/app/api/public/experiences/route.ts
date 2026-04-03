@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getExperiences } from '@/lib/firestore';
+import { getExperiences, getSales } from '@/lib/firestore';
 
 // ─── GET /api/public/experiences ─────────────────────────────────────────────
 // Returns published and coming_soon experiences with web info only.
 // No auth required — consumed by StoryHuntWeb to render cards.
+// Order: published first (sorted by sales count desc), then coming_soon.
 
 export async function GET() {
     try {
-        const all = await getExperiences();
+        const [all, sales] = await Promise.all([getExperiences(), getSales()]);
+
+        // Count sales per experience
+        const salesCount: Record<string, number> = {};
+        for (const sale of sales) {
+            salesCount[sale.experience_id] = (salesCount[sale.experience_id] || 0) + 1;
+        }
 
         const publicExperiences = all
             .filter(exp => exp.status === 'published' || exp.status === 'coming_soon')
@@ -25,7 +32,18 @@ export async function GET() {
                 difficulty: (exp as any).difficulty || '',
                 location: (exp as any).location || '',
                 narrator_avatar: exp.narrator_avatar || '',
-            }));
+            }))
+            .sort((a, b) => {
+                // Published first, coming_soon last
+                if (a.status !== b.status) {
+                    return a.status === 'published' ? -1 : 1;
+                }
+                // Within published, most sales first
+                if (a.status === 'published') {
+                    return (salesCount[b.id] || 0) - (salesCount[a.id] || 0);
+                }
+                return 0;
+            });
 
         return NextResponse.json(publicExperiences, {
             headers: {
