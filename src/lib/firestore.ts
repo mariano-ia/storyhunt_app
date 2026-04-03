@@ -377,7 +377,7 @@ export async function createAccessToken(data: {
     stripe_session_id?: string;
 }): Promise<AccessToken> {
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + (data.expires_hours ?? 48) * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + (data.expires_hours ?? 720) * 60 * 60 * 1000).toISOString();
     const tokenData = {
         token,
         experience_id: data.experience_id,

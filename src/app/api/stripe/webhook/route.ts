@@ -39,13 +39,13 @@ export async function POST(req: NextRequest) {
         }
 
         try {
-            // 1. Create access token (48hs, 2 uses)
+            // 1. Create access token (30 days, 2 uses)
             const accessToken = await createAccessToken({
                 experience_id: experienceId,
                 lang,
                 email,
                 max_uses: 2,
-                expires_hours: 48,
+                expires_hours: 720,
                 stripe_session_id: session.id,
             });
 

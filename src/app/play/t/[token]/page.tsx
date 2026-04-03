@@ -66,7 +66,7 @@ export default function TokenPlayPage() {
             }
 
             setStatus('valid');
-            router.replace(`/play/${accessToken.experience_id}?lang=${accessToken.lang}`);
+            router.replace(`/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`);
 
         } catch (err) {
             console.error('[token-play] Error:', err);

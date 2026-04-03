@@ -101,6 +101,7 @@ export default function PlayPage() {
     const fromStepParam = searchParams.get('from');
     const langParam = searchParams.get('lang') as 'es' | 'en' | null;
     const lang = langParam || 'es';
+    const tokenParam = searchParams.get('token');
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
     const [scenes, setScenes] = useState<Scene[]>([]);
@@ -110,6 +111,10 @@ export default function PlayPage() {
     const [stepIndex, setStepIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
+
+    // Paywall states
+    const [paywallStatus, setPaywallStatus] = useState<'none' | 'checking' | 'blocked' | 'invalid' | 'expired' | 'used'>('none');
+    const [paywallMessage, setPaywallMessage] = useState('');
 
     // Status states
     const [sending, setSending] = useState(false);
@@ -271,7 +276,7 @@ export default function PlayPage() {
         if (initialized.current) return;
         initialized.current = true;
 
-        Promise.all([getExperience(id), getSteps(id), getScenes(id)]).then(([exp, stps, scns]) => {
+        Promise.all([getExperience(id), getSteps(id), getScenes(id)]).then(async ([exp, stps, scns]) => {
             if (!exp) { setNotFound(true); setLoading(false); return; }
             setExperience(exp);
             setSteps(stps);
@@ -282,6 +287,73 @@ export default function PlayPage() {
             // Determine starting scene
             const firstSceneId = sortedScenes.length > 0 ? sortedScenes[0].id : null;
             setCurrentSceneId(firstSceneId);
+
+            // ─── Paywall check: paid experiences require a valid token ─────
+            const isPaid = typeof exp.price === 'number' && exp.price > 0;
+            const isTestMode = exp.mode === 'test';
+
+            if (isPaid && !isTestMode) {
+                if (!tokenParam) {
+                    setPaywallStatus('blocked');
+                    setPaywallMessage('This experience requires a ticket to access.');
+                    setLoading(false);
+                    return;
+                }
+
+                setPaywallStatus('checking');
+                setLoading(false);
+
+                try {
+                    const res = await fetch('/api/access/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: tokenParam }),
+                    });
+
+                    if (!res.ok) {
+                        const data = await res.json();
+                        if (res.status === 402) {
+                            setPaywallStatus('invalid');
+                            setPaywallMessage('Payment was not completed. Please try again.');
+                        } else {
+                            setPaywallStatus('invalid');
+                            setPaywallMessage(data.error || 'This access link is not valid.');
+                        }
+                        return;
+                    }
+
+                    const { access_token: accessToken } = await res.json();
+
+                    // Verify token belongs to this experience
+                    if (accessToken.experience_id !== id) {
+                        setPaywallStatus('invalid');
+                        setPaywallMessage('This token is not valid for this experience.');
+                        return;
+                    }
+
+                    // Check expiration
+                    if (new Date(accessToken.expires_at) < new Date()) {
+                        setPaywallStatus('expired');
+                        setPaywallMessage('This access link has expired.');
+                        return;
+                    }
+
+                    // Check usage
+                    if (accessToken.times_used >= accessToken.max_uses) {
+                        setPaywallStatus('used');
+                        setPaywallMessage('This access link has already been used the maximum number of times.');
+                        return;
+                    }
+
+                    // Valid — clear paywall and continue
+                    setPaywallStatus('none');
+                } catch {
+                    setPaywallStatus('invalid');
+                    setPaywallMessage('An error occurred while verifying your access. Please reload the page.');
+                    return;
+                }
+            }
+            // ─── End paywall check ────────────────────────────────────────
 
             setLoading(false);
 
@@ -433,6 +505,49 @@ export default function PlayPage() {
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <h2 style={{ fontSize: 18, color: 'black', margin: 0, fontWeight: 600 }}>Chat no encontrado</h2>
             <p style={{ margin: '8px 0 0', fontSize: 15 }}>Esta experiencia no existe.</p>
+        </div>
+    );
+
+    if (paywallStatus === 'checking') return (
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', fontFamily: "'Fira Code', monospace" }}>
+            <div style={{ textAlign: 'center', color: '#00ff41' }}>
+                <div style={{ fontSize: 18, marginBottom: 12 }}>Verifying access...</div>
+                <div style={{ fontSize: 13, opacity: 0.6 }}>This may take a few seconds</div>
+            </div>
+        </div>
+    );
+
+    if (paywallStatus === 'blocked' || paywallStatus === 'invalid' || paywallStatus === 'expired' || paywallStatus === 'used') return (
+        <div style={{
+            height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#000', fontFamily: "'Fira Code', monospace",
+        }}>
+            <div style={{ textAlign: 'center', maxWidth: 420, padding: 32 }}>
+                <div style={{
+                    fontSize: 48, marginBottom: 20, opacity: 0.3,
+                    color: paywallStatus === 'expired' ? '#F59E0B' : paywallStatus === 'blocked' ? '#7C3AED' : '#EF4444',
+                }}>
+                    {paywallStatus === 'blocked' ? '$' : paywallStatus === 'expired' ? '!' : 'X'}
+                </div>
+                <div style={{ fontSize: 16, color: '#fff', marginBottom: 12, fontWeight: 600 }}>
+                    {paywallStatus === 'blocked' && 'Access Required'}
+                    {paywallStatus === 'invalid' && 'Invalid Access'}
+                    {paywallStatus === 'expired' && 'Link Expired'}
+                    {paywallStatus === 'used' && 'Link Already Used'}
+                </div>
+                <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginBottom: 24 }}>
+                    {paywallStatus === 'blocked'
+                        ? 'This experience requires a ticket. Visit storyhunt.city to purchase access.'
+                        : paywallMessage}
+                </div>
+                <a href="https://storyhunt.city" style={{
+                    display: 'inline-block', padding: '10px 24px',
+                    background: '#7C3AED', color: '#fff', borderRadius: 8,
+                    textDecoration: 'none', fontSize: 14, fontWeight: 600,
+                }}>
+                    Get your ticket
+                </a>
+            </div>
         </div>
     );
 

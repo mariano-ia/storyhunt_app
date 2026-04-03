@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
             lang,
             email,
             max_uses: 2,
-            expires_hours: 48,
+            expires_hours: 720,
             stripe_session_id: checkoutId,
         });
 
