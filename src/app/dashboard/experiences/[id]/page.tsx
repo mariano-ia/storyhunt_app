@@ -236,21 +236,46 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                     {autoSaveState === 'saved' && <span style={{ fontSize: 10, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={10} /> Guardado</span>}
                 </div>
 
-                {/* Card body: message */}
-                <div style={{ padding: '10px 14px' }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                        {form.step_type === 'typing'
-                            ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Efecto de escritura</span>
-                            : form.step_type === 'error_screen'
-                                ? <span style={{ fontFamily: 'var(--font-code)', color: 'var(--danger)' }}>{step.message_to_send || '(sin texto)'}</span>
-                                : step.message_to_send
-                                    ? <>{step.message_to_send.slice(0, 120)}{step.message_to_send.length > 120 ? '...' : ''}</>
-                                    : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>(sin mensaje)</span>}
-                    </div>
-                    {step.requires_response && step.step_type === 'interactive' && step.expected_answer && (
-                        <div style={{ fontSize: 11, color: borderColor, marginTop: 4, opacity: 0.8 }}>
-                            Espera: {step.expected_answer}
-                        </div>
+                {/* Card body: inline editable message */}
+                <div style={{ padding: '10px 14px' }}
+                    onClick={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}>
+                    {form.step_type === 'typing'
+                        ? <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Efecto de escritura</span>
+                        : <textarea
+                            value={form.message_to_send}
+                            onChange={e => {
+                                const newForm = { ...form, message_to_send: e.target.value };
+                                setForm(newForm);
+                                triggerAutoSave(newForm);
+                            }}
+                            placeholder={form.step_type === 'error_screen' ? 'Texto de la pantalla...' : 'Escribi el mensaje...'}
+                            style={{
+                                width: '100%', border: 'none', background: 'transparent', resize: 'none',
+                                fontSize: 13, color: form.step_type === 'error_screen' ? 'var(--danger)' : 'var(--text-primary)',
+                                fontFamily: form.step_type === 'error_screen' ? 'var(--font-code)' : 'inherit',
+                                lineHeight: 1.5, outline: 'none', padding: 0, minHeight: 20,
+                                overflow: 'hidden',
+                            }}
+                            rows={1}
+                            onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                            onFocus={e => { const t = e.target; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                        />}
+                    {form.requires_response && form.step_type === 'interactive' && (
+                        <input
+                            value={form.expected_answer}
+                            onChange={e => {
+                                const newForm = { ...form, expected_answer: e.target.value };
+                                setForm(newForm);
+                                triggerAutoSave(newForm);
+                            }}
+                            placeholder="Intencion esperada..."
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                                width: '100%', border: 'none', background: 'transparent',
+                                fontSize: 11, color: borderColor, opacity: 0.8, outline: 'none',
+                                padding: 0, marginTop: 4,
+                            }}
+                        />
                     )}
                     {step.step_type === 'choice' && step.choices && (
                         <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
