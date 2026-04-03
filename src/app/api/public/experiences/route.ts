@@ -8,6 +8,7 @@ import { getExperiences } from '@/lib/firestore';
 export async function GET() {
     try {
         const all = await getExperiences();
+        console.log('[public/experiences] Total experiences:', all.length, 'Statuses:', all.map(e => e.status));
 
         const publicExperiences = all
             .filter(exp => exp.status === 'published' || exp.status === 'coming_soon')
