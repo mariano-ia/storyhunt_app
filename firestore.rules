@@ -8,23 +8,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
 
-      // Scenes & steps: same as parent
       match /{subcollection}/{document=**} {
         allow read: if true;
         allow write: if request.auth != null;
       }
-    }
-
-    // Sessions: only server-side writes via API (no direct client access)
-    match /user_sessions/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // Interactions (cost tracking): auth read, server writes
-    match /interactions/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
     }
 
     // Contacts: anyone can create (web form), only auth users can read/update
@@ -43,15 +30,27 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
-    // Access tokens: public read (player needs to verify), auth write
+    // Access tokens: public read/write (server creates post-payment, player verifies)
     match /access_tokens/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if true;
     }
 
-    // Sales: auth only
+    // Sales: public write (server creates post-payment), auth read (dashboard)
     match /sales/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+
+    // Interactions: public write (server logs LLM costs), auth read (dashboard)
+    match /interactions/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+
+    // Sessions: public write (player creates/updates), auth read (dashboard)
+    match /user_sessions/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if true;
     }
 
     // Deny everything else
