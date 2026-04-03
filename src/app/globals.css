@@ -184,6 +184,8 @@ select {
   flex: 1;
   padding: 32px;
   margin-top: var(--topbar-height);
+  overflow-y: auto;
+  height: calc(100vh - var(--topbar-height));
 }
 
 /* ─── Sidebar ──────────────────────────────────────────────────────────────── */
