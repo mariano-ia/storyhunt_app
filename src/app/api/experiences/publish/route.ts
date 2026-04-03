@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callLLM } from '@/lib/llm';
-import { getExperience, getSteps, getScenes, updateExperience, updateStep } from '@/lib/firestore';
-import { verifyAuth } from '@/lib/firebase-admin';
+import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import { verifyAuth, adminUpdateExperience, adminUpdateStep } from '@/lib/firebase-admin';
 import { saveInteraction } from '@/lib/firestore';
 
 // ─── POST /api/experiences/publish ───────────────────────────────────────────
@@ -68,14 +68,14 @@ export async function POST(req: NextRequest) {
         const taglineResult = await processText((experience as any).web_tagline || '');
         const descResult = await processText((experience as any).web_description || '');
 
-        await updateExperience(experience_id, {
+        await adminUpdateExperience(experience_id, {
             narrator_personality: narratorResult.normalized,
             narrator_personality_en: narratorResult.english,
             web_tagline_en: taglineResult.english,
             web_description_en: descResult.english,
             status: 'published',
             published_at: new Date().toISOString(),
-        } as any);
+        });
 
         // ─── Process steps ────────────────────────────────────────────────────────
         let processedSteps = 0;
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
                 updates.expected_answer_en = answerResult.english;
             }
 
-            await updateStep(experience_id, step.id, updates);
+            await adminUpdateStep(experience_id, step.id, updates);
             processedSteps++;
         }
 
