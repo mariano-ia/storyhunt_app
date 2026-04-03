@@ -128,7 +128,7 @@ const STEP_LABELS: Record<string, string> = {
     error_screen: 'Pantalla Error',
 };
 
-function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd, scenes, onPlayFrom, globalStepIndex }: {
+function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd, scenes, allSteps, onPlayFrom, globalStepIndex }: {
     step: Step; index: number;
     onSave: (data: Partial<StepFormData>) => Promise<void>;
     onDelete: () => void;
@@ -136,6 +136,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
     onDragStart: () => void; onDragOver: (e: React.DragEvent) => void;
     onDrop: () => void; onDragEnd: () => void;
     scenes: Scene[];
+    allSteps: Step[];
     onPlayFrom?: (stepIndex: number) => void;
     globalStepIndex: number;
 }) {
@@ -157,6 +158,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
         glitch_effect: step.glitch_effect || false,
         step_type: resolvedType,
         choices: step.choices?.length ? step.choices : (step.step_type === 'choice' ? [{ label: '', condition: '', target_scene_id: '' }] : undefined),
+        next_step_id: step.next_step_id || '',
     });
     const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -415,27 +417,54 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <label className="form-label" style={{ fontSize: 12 }}>Opciones</label>
                         {(form.choices || []).map((ch, ci) => (
-                            <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6, alignItems: 'end' }}>
-                                <input className="form-input" style={{ fontSize: 12 }} placeholder="Etiqueta" value={ch.label} onChange={e => {
-                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
-                                }} />
-                                <input className="form-input" style={{ fontSize: 12 }} placeholder="Condición LLM" value={ch.condition} onChange={e => {
-                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
-                                }} />
-                                <select className="form-input" style={{ fontSize: 12 }} value={ch.target_scene_id || ''} onChange={e => {
-                                    const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], target_scene_id: e.target.value || undefined }; handleFormChange({ ...form, choices });
+                            <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6 }}>
+                                    <input className="form-input" style={{ fontSize: 12 }} placeholder="Etiqueta" value={ch.label} onChange={e => {
+                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], label: e.target.value }; handleFormChange({ ...form, choices });
+                                    }} />
+                                    <input className="form-input" style={{ fontSize: 12 }} placeholder="Condicion LLM" value={ch.condition} onChange={e => {
+                                        const choices = [...(form.choices || [])]; choices[ci] = { ...choices[ci], condition: e.target.value }; handleFormChange({ ...form, choices });
+                                    }} />
+                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
+                                        handleFormChange({ ...form, choices: (form.choices || []).filter((_, i) => i !== ci) });
+                                    }}><Trash2 size={12} /></button>
+                                </div>
+                                <select className="form-input" style={{ fontSize: 11, color: 'var(--text-muted)' }} value={ch.target_step_id || ch.target_scene_id || ''} onChange={e => {
+                                    const val = e.target.value;
+                                    const choices = [...(form.choices || [])];
+                                    const isScene = scenes.some(s => s.id === val);
+                                    choices[ci] = { ...choices[ci], target_step_id: isScene ? undefined : (val || undefined), target_scene_id: isScene ? val : undefined };
+                                    handleFormChange({ ...form, choices });
                                 }}>
-                                    <option value="">Escena destino</option>
-                                    {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    <option value="">Siguiente por orden</option>
+                                    <optgroup label="Ir a paso">
+                                        {allSteps.filter(s => s.id !== step.id).map(s => (
+                                            <option key={s.id} value={s.id}>Paso #{allSteps.indexOf(s) + 1}: {s.message_to_send?.slice(0, 40) || '(sin mensaje)'}</option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="Ir a escena">
+                                        {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </optgroup>
                                 </select>
-                                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => {
-                                    handleFormChange({ ...form, choices: (form.choices || []).filter((_, i) => i !== ci) });
-                                }}><Trash2 size={12} /></button>
                             </div>
                         ))}
-                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start', fontSize: 12 }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '', target_scene_id: '' }] })}>
-                            <Plus size={12} /> Agregar opción
+                        <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--text-brand)', alignSelf: 'flex-start', fontSize: 12 }} onClick={() => handleFormChange({ ...form, choices: [...(form.choices || []), { label: '', condition: '' }] })}>
+                            <Plus size={12} /> Agregar opcion
                         </button>
+                    </div>
+                )}
+
+                {/* Next step override (for any step type) */}
+                {form.step_type !== 'choice' && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: 12 }}>Siguiente paso</label>
+                        <select className="form-input" style={{ fontSize: 12 }} value={form.next_step_id || ''} onChange={e => handleFormChange({ ...form, next_step_id: e.target.value || undefined } as any)}>
+                            <option value="">Siguiente por orden</option>
+                            {allSteps.filter(s => s.id !== step.id).map(s => (
+                                <option key={s.id} value={s.id}>Paso #{allSteps.indexOf(s) + 1}: {s.message_to_send?.slice(0, 50) || '(sin mensaje)'}</option>
+                            ))}
+                        </select>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>Deja en blanco para avanzar al siguiente por orden.</span>
                     </div>
                 )}
 
@@ -773,7 +802,7 @@ export default function ExperienceDetailPage() {
 
     return (
         <div>
-            <div className="page-header" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', marginBottom: 0 }}>
+            <div className="page-header" style={{ position: 'sticky', top: -32, zIndex: 20, background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', marginBottom: 0, margin: '-32px -32px 0', padding: '16px 32px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button className="btn btn-ghost btn-icon" onClick={() => router.push('/dashboard/experiences')}><ArrowLeft size={18} /></button>
                     <div>
@@ -928,6 +957,7 @@ export default function ExperienceDetailPage() {
                                                     onDrop={() => handleDrop(scene.id, i)}
                                                     onDragEnd={() => { setDragState(null); setDragOverState(null); }}
                                                     scenes={scenes}
+                                                    allSteps={steps}
                                                     onPlayFrom={(idx) => setPreviewFromStep(idx)}
                                                     globalStepIndex={globalIdx}
                                                 />

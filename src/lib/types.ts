@@ -73,6 +73,9 @@ export interface Step {
 
     // For step_type === 'choice': branching options
     choices?: Choice[];
+
+    // Flow control: jump to a specific step after this one (if empty, advances to next by order)
+    next_step_id?: string;
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
