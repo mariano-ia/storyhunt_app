@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { ArrowUp, RotateCcw } from 'lucide-react';
 import { getExperienceBySlug, getSteps } from '@/lib/firestore';
+import { renderMessage } from '@/lib/renderMessage';
 import type { Experience, Step, PreviewMessage } from '@/lib/types';
 
 // ─── Chat Bubble ──────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, nar
                 wordBreak: 'break-word',
             }}>
                 {msg.media_url && msg.media_type && <ChatMedia type={msg.media_type} url={msg.media_url} />}
-                {msg.content}
+                {renderMessage(msg.content)}
             </div>
         </div>
     );

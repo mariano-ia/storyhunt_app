@@ -5,28 +5,7 @@ import { ArrowLeft, ArrowUp, RotateCcw, AlertTriangle, BookOpen, Zap, CheckCircl
 import { getExperience, getSteps, getScenes } from '@/lib/firestore';
 import type { Experience, Step, Scene, PreviewMessage } from '@/lib/types';
 
-// ─── Message Renderer ─────────────────────────────────────────────────────────
-function renderMessage(content: string): React.ReactNode {
-    const lines = content.split('\n');
-    return lines.map((line, lineIdx) => {
-        const parts: React.ReactNode[] = [];
-        const boldRegex = /\*\*(.*?)\*\*/g;
-        let lastIndex = 0;
-        let match;
-        while ((match = boldRegex.exec(line)) !== null) {
-            if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
-            parts.push(<strong key={`b-${match.index}`}>{match[1]}</strong>);
-            lastIndex = match.index + match[0].length;
-        }
-        if (lastIndex < line.length) parts.push(line.slice(lastIndex));
-        return (
-            <span key={lineIdx}>
-                {parts.length > 0 ? parts : line}
-                {lineIdx < lines.length - 1 && <br />}
-            </span>
-        );
-    });
-}
+import { renderMessage } from '@/lib/renderMessage';
 
 // ─── Chat Bubble ──────────────────────────────────────────────────────────────
 function ChatMedia({ type, url }: { type: 'image' | 'video' | 'audio'; url: string }) {
