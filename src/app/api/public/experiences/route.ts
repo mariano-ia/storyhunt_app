@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getExperiences, getSales } from '@/lib/firestore';
+import type { Sale } from '@/lib/types';
 
 // ─── GET /api/public/experiences ─────────────────────────────────────────────
 // Returns published and coming_soon experiences with web info only.
@@ -8,7 +9,10 @@ import { getExperiences, getSales } from '@/lib/firestore';
 
 export async function GET() {
     try {
-        const [all, sales] = await Promise.all([getExperiences(), getSales()]);
+        const [all, sales] = await Promise.all([
+            getExperiences(),
+            getSales().catch(() => [] as Sale[]),
+        ]);
 
         // Count sales per experience
         const salesCount: Record<string, number> = {};
