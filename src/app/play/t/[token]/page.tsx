@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getAccessToken, useAccessToken, getExperience } from '@/lib/firestore';
+import { useAccessToken, getExperience } from '@/lib/firestore';
 import type { AccessToken } from '@/lib/types';
 
 // ─── Token-based Player Entry ────────────────────────────────────────────────
-// Validates the access token, increments usage, then redirects to the actual player.
+// Validates access via server-side verification, then redirects to the player.
 
 export default function TokenPlayPage() {
     const { token } = useParams() as { token: string };
@@ -19,33 +19,26 @@ export default function TokenPlayPage() {
 
     const validateToken = async () => {
         try {
-            // Token might be a Stripe session ID (from checkout redirect) or an SH- token
-            let accessToken: AccessToken | null = null;
+            // Call server-side verify endpoint (handles both SH- tokens and cs_ session IDs)
+            const res = await fetch('/api/access/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            });
 
-            if (token.startsWith('cs_')) {
-                // Stripe Checkout Session ID — look up by stripe_session_id
-                // The webhook might not have fired yet, so we wait a bit and retry
-                for (let attempt = 0; attempt < 5; attempt++) {
-                    const { getDocs, collection, query, where } = await import('firebase/firestore');
-                    const { db } = await import('@/lib/firebase');
-                    const q = query(collection(db, 'access_tokens'), where('stripe_session_id', '==', token));
-                    const snap = await getDocs(q);
-                    if (!snap.empty) {
-                        accessToken = { id: snap.docs[0].id, ...snap.docs[0].data() } as AccessToken;
-                        break;
-                    }
-                    // Wait 2 seconds before retrying (webhook might be processing)
-                    if (attempt < 4) await new Promise(r => setTimeout(r, 2000));
+            if (!res.ok) {
+                const data = await res.json();
+                if (res.status === 402) {
+                    setStatus('invalid');
+                    setMessage('El pago no se completo. Intenta nuevamente.');
+                } else {
+                    setStatus('invalid');
+                    setMessage(data.error || 'Este link no es valido o ya no existe.');
                 }
-            } else {
-                accessToken = await getAccessToken(token);
-            }
-
-            if (!accessToken) {
-                setStatus('invalid');
-                setMessage('Este link no es valido o ya no existe.');
                 return;
             }
+
+            const { access_token: accessToken } = await res.json() as { access_token: AccessToken };
 
             // Check expiration
             if (new Date(accessToken.expires_at) < new Date()) {
@@ -73,13 +66,12 @@ export default function TokenPlayPage() {
             }
 
             setStatus('valid');
-            // Redirect to the actual player with lang param
             router.replace(`/play/${accessToken.experience_id}?lang=${accessToken.lang}`);
 
         } catch (err) {
             console.error('[token-play] Error:', err);
             setStatus('invalid');
-            setMessage('Ocurrio un error al validar tu acceso.');
+            setMessage('Ocurrio un error al validar tu acceso. Intenta recargar la pagina.');
         }
     };
 
@@ -118,14 +110,11 @@ export default function TokenPlayPage() {
                     <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>
                         {message}
                     </div>
-                    <a
-                        href="https://storyhunt.city"
-                        style={{
-                            display: 'inline-block', marginTop: 24, padding: '10px 24px',
-                            background: '#7C3AED', color: '#fff', borderRadius: 8,
-                            textDecoration: 'none', fontSize: 14, fontWeight: 600,
-                        }}
-                    >
+                    <a href="https://storyhunt.city" style={{
+                        display: 'inline-block', marginTop: 24, padding: '10px 24px',
+                        background: '#7C3AED', color: '#fff', borderRadius: 8,
+                        textDecoration: 'none', fontSize: 14, fontWeight: 600,
+                    }}>
                         Volver a StoryHunt
                     </a>
                 </div>
