@@ -272,7 +272,7 @@ export default function ExperiencePreview() {
             const sortedScenes = [...scns].sort((a, b) => a.order - b.order);
             setScenes(sortedScenes);
             setLoading(false);
-            if (!exp.llm_api_key) setHasApiKey(false);
+            // Global OPENAI_API_KEY is used as fallback, so no warning needed
 
             if (stps.length > 0) {
                 const fromIdx = fromStepParam ? parseInt(fromStepParam, 10) : null;
