@@ -8,7 +8,6 @@ import { getExperiences } from '@/lib/firestore';
 export async function GET() {
     try {
         const all = await getExperiences();
-        console.log('[public/experiences] Total experiences:', all.length, 'Statuses:', all.map(e => e.status));
 
         const publicExperiences = all
             .filter(exp => exp.status === 'published' || exp.status === 'coming_soon')
@@ -30,7 +29,7 @@ export async function GET() {
         return NextResponse.json(publicExperiences, {
             headers: {
                 'Access-Control-Allow-Origin': '*',
-                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+                'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
             },
         });
     } catch (err) {
