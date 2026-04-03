@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Experiences: public read (needed for player), auth write
+    match /experiences/{experienceId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+
+      // Scenes & steps: same as parent
+      match /{subcollection}/{document=**} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+    }
+
+    // Sessions: only server-side writes via API (no direct client access)
+    match /user_sessions/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Interactions (cost tracking): auth read, server writes
+    match /interactions/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Contacts: anyone can create (web form), only auth users can read/update
+    match /contacts/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Admins: auth only
+    match /admins/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Discount coupons: auth only
+    match /discount_coupons/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Access tokens: public read (player needs to verify), auth write
+    match /access_tokens/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Sales: auth only
+    match /sales/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

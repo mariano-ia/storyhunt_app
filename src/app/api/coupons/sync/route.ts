@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
+import { verifyAuth } from '@/lib/firebase-admin';
 import type { DiscountCouponFormData } from '@/lib/types';
 
-// ─── POST /api/coupons/sync ──────────────────────────────────────────────────
-// Creates a coupon + promotion code in Stripe, returns their IDs.
-
 export async function POST(req: NextRequest) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
     try {
         const data = await req.json() as DiscountCouponFormData;
 
-        // Create Stripe coupon
         const stripeCoupon = await getStripe().coupons.create({
             ...(data.discount_type === 'percent'
                 ? { percent_off: data.discount_value }
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
             redeem_by: Math.floor(new Date(data.valid_until).getTime() / 1000),
         });
 
-        // Create promotion code (the user-facing code)
         const promoCode = await getStripe().promotionCodes.create({
             promotion: { type: 'coupon', coupon: stripeCoupon.id },
             code: data.code,

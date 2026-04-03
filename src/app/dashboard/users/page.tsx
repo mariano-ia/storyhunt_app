@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Users, UserPlus, Mail, Clock, CheckCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { authFetch } from '@/lib/api';
 
 interface AdminUser {
     id: string;
@@ -20,7 +21,7 @@ export default function UsersPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/users/invite');
+            const res = await authFetch('/api/users/invite');
             const data = await res.json();
             setAdmins(data.admins ?? []);
         } catch {
@@ -38,9 +39,8 @@ export default function UsersPage() {
         setError('');
         setSuccess('');
 
-        const res = await fetch('/api/users/invite', {
+        const res = await authFetch('/api/users/invite', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: inviteEmail }),
         });
         const data = await res.json();

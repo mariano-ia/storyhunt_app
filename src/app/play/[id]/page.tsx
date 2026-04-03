@@ -203,7 +203,6 @@ export default function PlayPage() {
         // Keep stepIndex pointing to position in the full steps array
         const globalIndex = allSteps.findIndex(s => s.id === next.id);
 
-        console.log('[advanceNarrativeSteps] step', fromIndex, 'type:', JSON.stringify(next.step_type), 'requires_response:', next.requires_response, 'message:', next.message_to_send?.slice(0, 30));
         if (next.step_type === 'error_screen') {
             // Full-screen error overlay with terminal text
             setErrorScreen({ text: next.message_to_send, active: true });

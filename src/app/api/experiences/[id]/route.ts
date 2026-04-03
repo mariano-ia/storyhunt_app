@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getExperience, updateExperience, deleteExperience } from '@/lib/firestore';
+import { verifyAuth } from '@/lib/firebase-admin';
 import type { ExperienceFormData } from '@/lib/types';
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     try {
         const { id } = await params;
         const data = await getExperience(id);
@@ -14,6 +17,8 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     try {
         const { id } = await params;
         const body = await req.json() as Partial<ExperienceFormData>;
@@ -24,7 +29,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     try {
         const { id } = await params;
         await deleteExperience(id);

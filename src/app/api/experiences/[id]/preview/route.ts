@@ -47,7 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // ─── Detect LLM provider from key prefix ──────────────────────────────────
         const expKey = (experience.llm_api_key ?? '').trim();
         const apiKey = expKey || process.env.OPENAI_API_KEY || '';
-        console.log('[preview] API key source:', expKey ? 'experience' : apiKey ? 'env' : 'NONE', '| key prefix:', apiKey.slice(0, 6));
+        // Key source logged without exposing prefix
+        if (!apiKey) console.warn('[preview] No API key available (experience nor env)');
         const isOpenAI = apiKey.startsWith('sk-');
         const sessionId = `preview-${id}`;
 

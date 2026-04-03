@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Ticket, Plus, Trash2, Copy, Check, Percent, DollarSign, X } from 'lucide-react';
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon, getExperiences } from '@/lib/firestore';
+import { authFetch } from '@/lib/api';
 import ConfirmModal from '@/components/ConfirmModal';
 import type { DiscountCoupon, DiscountCouponFormData, Experience } from '@/lib/types';
 
@@ -112,9 +113,8 @@ export default function CouponsPage() {
     const handleCreate = async (data: DiscountCouponFormData) => {
         // Create coupon in Stripe first, then save to Firestore
         try {
-            const res = await fetch('/api/coupons/sync', {
+            const res = await authFetch('/api/coupons/sync', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             });
             const result = await res.json();

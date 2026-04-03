@@ -8,6 +8,7 @@ import {
     AlertCircle, Check, RotateCcw, Zap, Plus, Play, Image, Monitor,
 } from 'lucide-react';
 import { createExperienceFromAI } from '@/lib/firestore';
+import { authFetch } from '@/lib/api';
 import type { AIGeneratedExperience, AIGeneratedStep } from '@/lib/types';
 
 const STEP_TYPE_CONFIG: Record<string, { label: string; color: string; icon: typeof MessageSquare }> = {
@@ -64,9 +65,8 @@ export default function AIStoriesPage() {
         setGenerated(null);
 
         try {
-            const res = await fetch('/api/ai-stories/generate', {
+            const res = await authFetch('/api/ai-stories/generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ script }),
             });
             const data = await res.json();

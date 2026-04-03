@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callLLM } from '@/lib/llm';
 import { saveInteraction } from '@/lib/firestore';
+import { verifyAuth } from '@/lib/firebase-admin';
 import type { AIGeneratedExperience } from '@/lib/types';
 
 // ─── POST /api/ai-stories/generate ──────────────────────────────────────────
@@ -101,6 +102,9 @@ Respondé ÚNICAMENTE con un JSON válido, sin markdown, sin explicaciones. El J
 }`;
 
 export async function POST(req: NextRequest) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
     try {
         const { script } = await req.json() as { script: string };
 
