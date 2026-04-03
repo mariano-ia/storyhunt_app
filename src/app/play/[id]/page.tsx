@@ -349,7 +349,7 @@ export default function PlayPage() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
-            } else if (data.evaluation === 'choice' && (data.target_step_id || data.target_scene_id)) {
+            } else if (data.evaluation === 'choice') {
                 if (data.target_step_id) {
                     // Choice: jump to specific step
                     const targetStep = steps.find(s => s.id === data.target_step_id);
@@ -360,13 +360,21 @@ export default function PlayPage() {
                         const targetIdx = targetSceneSteps.findIndex(s => s.id === targetStep.id);
                         await advanceNarrativeSteps(targetSceneSteps, targetIdx >= 0 ? targetIdx : 0, scenes, targetSceneId, steps);
                     }
-                } else {
+                } else if (data.target_scene_id) {
                     // Choice: jump to scene
                     const targetSceneId = data.target_scene_id;
                     setCurrentSceneId(targetSceneId);
                     const targetSteps = getSceneSteps(steps, targetSceneId);
                     if (targetSteps.length > 0) {
                         await advanceNarrativeSteps(targetSteps, 0, scenes, targetSceneId, steps);
+                    }
+                } else {
+                    // Choice without target: advance to next step in scene
+                    const sceneSteps = getSceneSteps(steps, currentSceneId);
+                    const currentLocalIdx = sceneSteps.findIndex(s => s.id === steps[stepIndex]?.id);
+                    const nextLocalIdx = currentLocalIdx >= 0 ? currentLocalIdx + 1 : 0;
+                    if (nextLocalIdx < sceneSteps.length) {
+                        await advanceNarrativeSteps(sceneSteps, nextLocalIdx, scenes, currentSceneId, steps);
                     }
                 }
             } else if (isCorrect) {
@@ -497,23 +505,10 @@ export default function PlayPage() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 17, fontWeight: 600 }}>{experience?.name}</span>
-                        <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
-                            {experience?.description?.substring(0, 30) || 'Experiencia interactiva'}
-                        </span>
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button
-                        onClick={handleReset}
-                        style={{
-                            background: '#E5E5EA', border: 'none', cursor: 'pointer',
-                            color: 'black', width: 32, height: 32, borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}
-                    >
-                        <RotateCcw size={16} />
-                    </button>
                 </div>
             </div>
 

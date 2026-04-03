@@ -264,8 +264,24 @@ export default function PlayPage() {
             if (data.completed) {
                 setCompleted(true);
                 setStepIndex(steps.length);
+            } else if (data.evaluation === 'choice') {
+                // Choice step: find target or advance
+                if (data.target_step_id) {
+                    const targetIdx = steps.findIndex(s => s.id === data.target_step_id);
+                    if (targetIdx >= 0) await advanceNarrativeSteps(steps, targetIdx);
+                } else {
+                    const currentLocalIdx = steps.findIndex(s => s.id === steps[stepIndex]?.id);
+                    if (currentLocalIdx >= 0 && currentLocalIdx + 1 < steps.length) {
+                        await advanceNarrativeSteps(steps, currentLocalIdx + 1);
+                    }
+                }
             } else if (isCorrect) {
-                if (nextIdx < steps.length) {
+                // Check next_step_id override
+                const currentStep = steps[stepIndex];
+                if (currentStep?.next_step_id) {
+                    const targetIdx = steps.findIndex(s => s.id === currentStep.next_step_id);
+                    if (targetIdx >= 0) { await advanceNarrativeSteps(steps, targetIdx); }
+                } else if (nextIdx < steps.length) {
                     await advanceNarrativeSteps(steps, nextIdx);
                 }
             }
@@ -351,23 +367,10 @@ export default function PlayPage() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 17, fontWeight: 600 }}>{experience?.name}</span>
-                        <span style={{ fontSize: 12, color: '#8E8E93', fontWeight: 500 }}>
-                            {experience?.description?.substring(0, 30) || 'Experiencia interactiva'}
-                        </span>
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button
-                        onClick={handleReset}
-                        style={{
-                            background: '#E5E5EA', border: 'none', cursor: 'pointer',
-                            color: 'black', width: 32, height: 32, borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}
-                    >
-                        <RotateCcw size={16} />
-                    </button>
                 </div>
             </div>
 
