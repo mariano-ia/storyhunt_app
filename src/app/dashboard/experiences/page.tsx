@@ -47,7 +47,7 @@ export default function ExperiencesPage() {
         load();
     };
 
-    const statusLabel = (s: string) => s === 'active' ? 'Activa' : 'Inactiva';
+    const statusLabel = (s: string) => s === 'published' ? 'Publicada' : s === 'active' ? 'Activa' : s === 'coming_soon' ? 'Próximamente' : 'Inactiva';
     const modeLabel = (m: string) => m === 'test' ? 'Prueba' : 'Producción';
     const fmtCost = (c: number) => c > 0 ? `$${c.toFixed(4)}` : '—';
 
