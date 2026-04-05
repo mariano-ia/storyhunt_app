@@ -26,7 +26,15 @@ Experience
   ├── Steps (all steps flat, filtered by scene_id)
   └── fields: name, description, narrator_personality, narrator_avatar,
               llm_api_key, slug, mode (test/production), activation_keyword,
-              status (active/inactive)
+              status (inactive/coming_soon/published)
+
+Access Tokens (post-payment):
+  - token: "SH-XXXXXX", experience_id, lang (es/en), email
+  - max_uses: 2, expires in 30 days
+  - Created by Stripe webhook or /api/access/verify fallback
+
+Sales:
+  - Tracks purchases per experience (used for card sorting on web)
 
 Step types:
   - interactive: espera respuesta del usuario, evalúa con LLM
@@ -69,17 +77,40 @@ Step features:
 /dashboard/experiences/[id]/metrics → Métricas y analytics
 /dashboard/ai-stories               → AI Story Generator (guión → experiencia)
 /dashboard/contacts                 → Gestión de contactos (con export CSV)
-/play/[id]                          → Player público (chat limpio, sin dashboard)
-/[slug]                             → Player por slug personalizado
+/play/[id]                          → Player público (con paywall para experiencias pagas)
+/play/t/[token]                     → Entrada por token (verifica y redirige a /play/[id])
+/[slug]                             → Player por slug (con paywall)
 /api/ai-stories/generate            → Convierte guión editorial → JSON estructurado
+/api/experiences/publish             → Pipeline: normalizar + traducir + publicar
 /api/experiences/[id]/preview       → Endpoint de evaluación LLM
+/api/public/experiences             → API pública (published first, sorted by sales)
+/api/checkout                       → Crea Stripe Checkout Session
+/api/stripe/webhook                 → Webhook Stripe (crea access token + sale)
+/api/access/verify                  → Verifica access token (fallback si webhook falla)
 /api/contacts                       → Recibe formulario web (JSON y form-urlencoded)
 /api/cron/publish-instagram         → Vercel Cron: publica posts pendientes en Instagram
 ```
 
+### Publish Pipeline (/api/experiences/publish)
+```
+[Publicar y traducir] → normalize Spanish → translate to English → save _en fields → set status=published + mode=production
+```
+- Uses Firebase Admin SDK (bypasses Firestore rules)
+- Requires env var: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON service account)
+- Can re-run on already published experiences to re-translate after edits
+- Sets both `status: 'published'` and `mode: 'production'`
+
+### Paywall (play routes)
+- /play/[id] and /[slug] check if experience has `price > 0`
+- If paid, requires `?token=SH-XXXXX` query param with valid access token
+- Token verified via /api/access/verify
+- Test mode (`mode === 'test'`) bypasses paywall
+- Free experiences (price === 0 or no price) work without token
+
 ### Deploy
 - Vercel: storyhunt-app.vercel.app
 - Auto-deploy desde GitHub main branch
+- Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 
 ### Vercel Crons (vercel.json)
 - `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy
@@ -118,6 +149,7 @@ src/
     ConfirmModal.tsx         → Modal de confirmación reutilizable
   lib/
     firebase.ts              → Configuración Firebase client
+    firebase-admin.ts        → Admin SDK (auth + Firestore admin writes)
     auth.tsx                 → Context de autenticación
     firestore.ts             → Queries a Firestore (CRUD + createExperienceFromAI batch)
     llm.ts                   → Módulo LLM compartido (OpenAI + Gemini, JSON mode)
@@ -127,6 +159,8 @@ src/
 ## Proyecto relacionado
 - **StoryHuntWeb** (../StoryHuntWeb): sitio estático de marketing en storyhunt.city
 - El formulario de contacto de la web POST a /api/contacts de este ABM
+- La web consume /api/public/experiences para las cards (proxy via vercel.json rewrites)
+- Checkout: card → modal idioma (EN/ES) → Stripe → webhook crea token → email con link
 - Son repos separados con deploys independientes
 
 ## Convenciones
