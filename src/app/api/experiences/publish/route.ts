@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
             web_tagline_en: taglineResult.english,
             web_description_en: descResult.english,
             status: 'published',
+            mode: 'production',
             published_at: new Date().toISOString(),
         });
 

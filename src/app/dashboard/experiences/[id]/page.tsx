@@ -716,7 +716,7 @@ export default function ExperienceDetailPage() {
                     <div>
                         <h1 className="page-title">{exp.name}</h1>
                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                            <span className={`badge badge-${exp.status}`}>{exp.status === 'active' ? 'Activa' : 'Inactiva'}</span>
+                            <span className={`badge badge-${exp.status}`}>{exp.status === 'published' ? 'Publicada' : exp.status === 'active' ? 'Activa' : exp.status === 'coming_soon' ? 'Próximamente' : 'Inactiva'}</span>
                             <span className={`badge badge-${exp.mode}`}>{exp.mode === 'test' ? 'Prueba' : 'Producción'}</span>
                         </div>
                     </div>
