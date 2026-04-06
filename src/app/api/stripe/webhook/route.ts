@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
-import { createAccessToken, createSale, getCouponByCode, updateCoupon } from '@/lib/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type Stripe from 'stripe';
 
 // ─── POST /api/stripe/webhook ────────────────────────────────────────────────
@@ -39,42 +39,56 @@ export async function POST(req: NextRequest) {
         }
 
         try {
+            const db = getAdminDb();
+
             // 1. Create access token (30 days, 2 uses)
-            const accessToken = await createAccessToken({
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let token = 'SH-';
+            for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
+
+            const expiresAt = new Date(Date.now() + 720 * 60 * 60 * 1000).toISOString();
+            const tokenRef = await db.collection('access_tokens').add({
+                token,
                 experience_id: experienceId,
                 lang,
                 email,
                 max_uses: 2,
-                expires_hours: 720,
+                times_used: 0,
+                status: 'active',
+                expires_at: expiresAt,
                 stripe_session_id: session.id,
+                created_at: new Date().toISOString(),
             });
 
             // 2. Record sale
-            await createSale({
+            await db.collection('sales').add({
                 experience_id: experienceId,
                 experience_name: experienceName,
                 email,
                 amount: session.amount_total ?? 0,
                 currency: session.currency ?? 'usd',
-                coupon_code: couponCode,
+                coupon_code: couponCode || null,
                 discount_applied: session.total_details?.amount_discount ?? 0,
                 stripe_session_id: session.id,
-                access_token_id: accessToken.id,
+                access_token_id: tokenRef.id,
+                created_at: new Date().toISOString(),
             });
 
             // 3. Increment coupon redemption if used
             if (couponCode) {
-                const coupon = await getCouponByCode(couponCode);
-                if (coupon) {
-                    const newCount = coupon.times_redeemed + 1;
-                    await updateCoupon(coupon.id, {
+                const couponsSnap = await db.collection('discount_coupons').where('code', '==', couponCode.toUpperCase()).get();
+                if (!couponsSnap.empty) {
+                    const couponDoc = couponsSnap.docs[0];
+                    const couponData = couponDoc.data();
+                    const newCount = (couponData.times_redeemed || 0) + 1;
+                    await couponDoc.ref.update({
                         times_redeemed: newCount,
-                        status: newCount >= coupon.max_redemptions ? 'expired' : coupon.status,
+                        status: newCount >= (couponData.max_redemptions || 999) ? 'expired' : couponData.status,
                     });
                 }
             }
 
-            console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${email} → token ${accessToken.token}`);
+            console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${email} → token ${token}`);
 
         } catch (err) {
             console.error('[stripe/webhook] Error processing payment:', err);
