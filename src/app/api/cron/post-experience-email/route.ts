@@ -159,13 +159,19 @@ async function sendReviewEmail(email: string, experienceName: string, couponCode
     <div style="background:#111;border:1px solid #222;border-radius:4px;padding:20px;text-align:center;">
         <span style="font-size:11px;color:#666;letter-spacing:0.1em;">${isEn ? 'YOUR DISCOUNT CODE' : 'TU CÓDIGO DE DESCUENTO'}</span><br>
         <span style="font-size:32px;color:#ff0033;font-weight:700;letter-spacing:0.15em;">${couponCode}</span><br>
-        <span style="font-size:13px;color:#666;margin-top:8px;display:inline-block;">40% OFF — ${isEn ? 'single use' : 'un solo uso'}</span>
+        <span style="font-size:13px;color:#666;margin-top:8px;display:inline-block;">40% OFF — ${isEn ? 'one time use' : 'un solo uso'}</span>
     </div>
+    <p style="font-size:13px;color:#666;line-height:1.6;margin:16px 0 0;">
+        ${isEn
+                ? 'Enter the code at checkout when purchasing your next experience on <strong style="color:#888;">storyhunt.city</strong>.'
+                : 'Ingresá el código en el checkout cuando compres tu próxima experiencia en <strong style="color:#888;">storyhunt.city</strong>.'
+            }
+    </p>
 </td></tr>
 
 <!-- Browse CTA -->
 <tr><td style="padding:0 40px 32px;">
-    <a href="https://storyhunt.city" style="display:inline-block;background:transparent;color:#00d2ff;padding:12px 24px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.08em;border:1px solid #00d2ff;border-radius:4px;font-family:'Courier New',monospace;">
+    <a href="https://storyhunt.city" style="display:inline-block;background:#ff0033;color:#fff;padding:16px 32px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
         ${isEn ? 'BROWSE_EXPERIENCES' : 'VER_EXPERIENCIAS'}
     </a>
 </td></tr>
