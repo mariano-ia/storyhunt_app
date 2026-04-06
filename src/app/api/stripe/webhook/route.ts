@@ -57,20 +57,12 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
     </a>
 </td></tr>
 
-<!-- Token -->
-<tr><td style="padding:0 40px 24px;">
-    <div style="background:#111;border:1px solid #222;border-radius:4px;padding:16px;">
-        <span style="font-size:11px;color:#666;letter-spacing:0.1em;">${isEn ? 'YOUR ACCESS CODE' : 'TU CÓDIGO DE ACCESO'}</span><br>
-        <span style="font-size:24px;color:#00d2ff;font-weight:700;letter-spacing:0.15em;">${token}</span>
-    </div>
-</td></tr>
-
 <!-- Instructions -->
 <tr><td style="padding:0 40px 32px;">
     <p style="font-size:13px;color:#666;line-height:1.6;margin:0;">
         ${isEn
-            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You have 2 uses and 30 days to play'
-            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Tenés 2 usos y 30 días para jugar'
+            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You have 30 days to play'
+            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Tenés 30 días para jugar'
         }
     </p>
 </td></tr>

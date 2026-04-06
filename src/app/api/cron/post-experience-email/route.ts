@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const CRON_SECRET = process.env.CRON_SECRET || '';
+const COUPON_CODE = 'THANKYOU40';
 
 // ─── GET /api/cron/post-experience-email ────────────────────────────────────
 // Runs daily. Finds users who completed an experience 24+ hours ago
@@ -63,22 +64,26 @@ export async function GET(request: Request) {
                 }
             } catch { /* use default */ }
 
-            // Generate a unique coupon code
-            const couponCode = `REPLAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
-            // Create coupon in Firestore
-            await db.collection('discount_coupons').add({
-                code: couponCode,
-                discount_percent: 40,
-                max_redemptions: 1,
-                times_redeemed: 0,
-                status: 'active',
-                description: `40% off — post-experience review reward for ${email}`,
-                created_at: new Date().toISOString(),
-            });
+            // Ensure THANKYOU40 coupon exists in Firestore (create once, reuse forever)
+            const existingCoupon = await db.collection('discount_coupons').where('code', '==', COUPON_CODE).get();
+            if (existingCoupon.empty) {
+                await db.collection('discount_coupons').add({
+                    code: COUPON_CODE,
+                    discount_type: 'percent',
+                    discount_value: 40,
+                    max_redemptions: 9999,
+                    times_redeemed: 0,
+                    valid_until: '2027-12-31T23:59:59.000Z',
+                    status: 'active',
+                    stripe_coupon_id: 'ywaDygaA',
+                    stripe_promo_id: 'promo_1TJJjiL7BKrNVx2iDj53ms17',
+                    description: '40% off — post-experience review reward',
+                    created_at: new Date().toISOString(),
+                });
+            }
 
             const isEn = lang === 'en';
-            const success = await sendReviewEmail(email, experienceName, couponCode, isEn);
+            const success = await sendReviewEmail(email, experienceName, COUPON_CODE, isEn);
 
             // Mark as sent
             await doc.ref.update({ review_email_sent: true, review_email_date: new Date().toISOString() });
@@ -138,18 +143,6 @@ async function sendReviewEmail(email: string, experienceName: string, couponCode
                 : `Completaste <strong style="color:#fff;">${experienceName}</strong>. Nos encantaría saber qué te pareció — tu feedback nos ayuda a crear mejores misiones.`
             }
     </p>
-</td></tr>
-
-<!-- Review CTA -->
-<tr><td style="padding:0 40px 24px;">
-    <a href="https://g.page/r/storyhunt/review" style="display:inline-block;background:#ff0033;color:#fff;padding:16px 32px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
-        ${isEn ? 'LEAVE_A_REVIEW' : 'DEJAR_UNA_REVIEW'}
-    </a>
-</td></tr>
-
-<!-- Divider -->
-<tr><td style="padding:0 40px;">
-    <div style="border-top:1px solid #1a1a1a;margin:8px 0 24px;"></div>
 </td></tr>
 
 <!-- Coupon -->
