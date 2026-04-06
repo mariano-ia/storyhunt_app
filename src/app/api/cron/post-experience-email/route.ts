@@ -109,7 +109,7 @@ async function sendReviewEmail(email: string, experienceName: string, couponCode
 
     try {
         await resend.emails.send({
-            from: 'StoryHunt <onboarding@resend.dev>',
+            from: 'StoryHunt <hello@storyhunt.city>',
             to: email,
             subject: isEn
                 ? `How was "${experienceName}"? + 40% off your next hunt`

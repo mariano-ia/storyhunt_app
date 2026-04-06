@@ -14,7 +14,7 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
 
     try {
         await resend.emails.send({
-            from: 'StoryHunt <onboarding@resend.dev>',
+            from: 'StoryHunt <hello@storyhunt.city>',
             to: email,
             subject: isEn
                 ? `Your access to "${experienceName}" is ready`

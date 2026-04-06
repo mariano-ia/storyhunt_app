@@ -17,7 +17,7 @@ async function sendNotification(contactEmail: string) {
     if (!resend || !NOTIFICATION_EMAIL) return;
     try {
         await resend.emails.send({
-            from: 'StoryHunt <onboarding@resend.dev>',
+            from: 'StoryHunt <hello@storyhunt.city>',
             to: NOTIFICATION_EMAIL,
             subject: `New StoryHunt Signup: ${contactEmail}`,
             html: `
