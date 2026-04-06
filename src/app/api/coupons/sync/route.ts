@@ -15,9 +15,10 @@ export async function POST(req: NextRequest) {
         const existingPromos = await stripe.promotionCodes.list({ code: data.code, limit: 1 });
         if (existingPromos.data.length > 0) {
             const existing = existingPromos.data[0];
-            const couponId = typeof existing.coupon === 'string' ? existing.coupon : existing.coupon?.id;
+            const promotion = existing.promotion as any;
+            const couponId = promotion?.coupon || '';
             return NextResponse.json({
-                stripe_coupon_id: couponId || '',
+                stripe_coupon_id: couponId,
                 stripe_promo_id: existing.id,
             });
         }
