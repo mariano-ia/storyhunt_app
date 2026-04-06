@@ -9,20 +9,33 @@ export async function POST(req: NextRequest) {
 
     try {
         const data = await req.json() as DiscountCouponFormData;
+        const stripe = getStripe();
 
-        const stripeCoupon = await getStripe().coupons.create({
+        // Check if promo code already exists in Stripe
+        const existingPromos = await stripe.promotionCodes.list({ code: data.code, limit: 1 });
+        if (existingPromos.data.length > 0) {
+            const existing = existingPromos.data[0];
+            const couponId = typeof existing.coupon === 'string' ? existing.coupon : existing.coupon?.id;
+            return NextResponse.json({
+                stripe_coupon_id: couponId || '',
+                stripe_promo_id: existing.id,
+            });
+        }
+
+        // Create new coupon in Stripe
+        const stripeCoupon = await stripe.coupons.create({
             ...(data.discount_type === 'percent'
                 ? { percent_off: data.discount_value }
                 : { amount_off: Math.round(data.discount_value * 100), currency: 'usd' }),
-            max_redemptions: data.max_redemptions,
-            redeem_by: Math.floor(new Date(data.valid_until).getTime() / 1000),
+            duration: 'once',
+            name: data.code,
         });
 
-        const promoCode = await getStripe().promotionCodes.create({
+        // Create promo code linked to coupon
+        const promoCode = await stripe.promotionCodes.create({
             promotion: { type: 'coupon', coupon: stripeCoupon.id },
             code: data.code,
-            max_redemptions: data.max_redemptions,
-            expires_at: Math.floor(new Date(data.valid_until).getTime() / 1000),
+            restrictions: { first_time_transaction: true },
         });
 
         return NextResponse.json({

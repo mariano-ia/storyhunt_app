@@ -75,8 +75,8 @@ export async function GET(request: Request) {
                     times_redeemed: 0,
                     valid_until: '2027-12-31T23:59:59.000Z',
                     status: 'active',
-                    stripe_coupon_id: 'ywaDygaA',
-                    stripe_promo_id: 'promo_1TJJjiL7BKrNVx2iDj53ms17',
+                    stripe_coupon_id: 'nOh4AMZw',
+                    stripe_promo_id: 'promo_1TJJsBL7BKrNVx2i5sOrziQl',
                     description: '40% off — post-experience review reward',
                     created_at: new Date().toISOString(),
                 });
