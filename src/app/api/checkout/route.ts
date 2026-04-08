@@ -52,18 +52,29 @@ export async function POST(req: NextRequest) {
             cancel_url: `${req.nextUrl.origin}/${experience.slug || `play/${experience_id}`}?cancelled=1`,
         };
 
-        // Apply discount coupon if provided in body, OR allow manual entry in Stripe checkout
+        // Apply discount coupon
         if (coupon_code) {
+            // First check our DB
             const coupon = await getCouponByCode(coupon_code);
             if (coupon && coupon.status === 'active' && coupon.times_redeemed < coupon.max_redemptions && coupon.stripe_promo_id) {
                 sessionParams.discounts = [{ promotion_code: coupon.stripe_promo_id }];
                 sessionParams.metadata.coupon_code = coupon_code;
             } else {
-                // Coupon not found in our DB or missing Stripe link — let user enter it in Stripe
-                sessionParams.allow_promotion_codes = true;
+                // Fallback: check if promo code exists directly in Stripe
+                try {
+                    const stripe = getStripe();
+                    const promos = await stripe.promotionCodes.list({ code: coupon_code.toUpperCase(), active: true, limit: 1 });
+                    if (promos.data.length > 0) {
+                        sessionParams.discounts = [{ promotion_code: promos.data[0].id }];
+                        sessionParams.metadata.coupon_code = coupon_code;
+                    } else {
+                        sessionParams.allow_promotion_codes = true;
+                    }
+                } catch {
+                    sessionParams.allow_promotion_codes = true;
+                }
             }
         } else {
-            // No code provided — show promo code field in Stripe Checkout
             sessionParams.allow_promotion_codes = true;
         }
 
