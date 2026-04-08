@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
             cancel_url: `${req.nextUrl.origin}/${experience.slug || `play/${experience_id}`}?cancelled=1`,
         };
 
-        // Apply discount coupon if provided
+        // Apply discount coupon if provided in body, OR allow manual entry in Stripe checkout
         if (coupon_code) {
             const coupon = await getCouponByCode(coupon_code);
             if (coupon && coupon.status === 'active' && coupon.times_redeemed < coupon.max_redemptions) {
@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
                 }
                 sessionParams.metadata.coupon_code = coupon_code;
             }
+        } else {
+            // Show promo code field in Stripe Checkout
+            sessionParams.allow_promotion_codes = true;
         }
 
         const session = await getStripe().checkout.sessions.create(sessionParams);
