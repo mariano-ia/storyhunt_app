@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 
 const IG_ACCOUNT_ID = '17841444079999050';
 const ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || '';
-const CALENDAR_URL = 'https://raw.githubusercontent.com/mariano-ia/storyhuntweb/main/social-calendar.json';
-const GITHUB_RAW = 'https://raw.githubusercontent.com/mariano-ia/storyhuntweb/main';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_REPO = 'mariano-ia/storyhuntweb';
+const CALENDAR_PATH = 'social-calendar.json';
+const CALENDAR_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/${CALENDAR_PATH}`;
+const GITHUB_RAW = `https://raw.githubusercontent.com/${GITHUB_REPO}/main`;
 const CRON_SECRET = process.env.CRON_SECRET || '';
 
 // Caption templates by content_type
@@ -152,15 +155,54 @@ export async function GET(request: Request) {
     }
 
     const results: { date: string; success: boolean; post_id?: string; error?: string }[] = [];
+    let anyPublished = false;
 
     for (const post of pendingPosts) {
         console.log(`Publishing: ${post.date} — ${post.content_type}`);
         const result = await publishPost(post);
         results.push({ date: post.date, ...result });
 
+        if (result.success) {
+            // Mark as published in calendar object
+            const idx = calendar.posts.findIndex((p: CalendarPost) => p.date === post.date && p.image_file === post.image_file);
+            if (idx >= 0) {
+                calendar.posts[idx].status = 'published';
+                calendar.posts[idx].published_date = today;
+                calendar.posts[idx].post_id = result.post_id;
+            }
+            anyPublished = true;
+        }
+
         // Wait between posts to avoid rate limiting
         if (pendingPosts.indexOf(post) < pendingPosts.length - 1) {
             await new Promise(r => setTimeout(r, 5000));
+        }
+    }
+
+    // Update calendar in GitHub so published posts don't get re-published
+    if (anyPublished && GITHUB_TOKEN) {
+        try {
+            // Get current file SHA
+            const fileRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${CALENDAR_PATH}`, {
+                headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' },
+            });
+            const fileData = await fileRes.json();
+            const sha = fileData.sha;
+
+            // Update file
+            const content = Buffer.from(JSON.stringify(calendar, null, 2)).toString('base64');
+            await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${CALENDAR_PATH}`, {
+                method: 'PUT',
+                headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `social: published ${results.filter(r => r.success).length} post(s) on ${today}`,
+                    content,
+                    sha,
+                }),
+            });
+            console.log('Calendar updated in GitHub');
+        } catch (err) {
+            console.error('Failed to update calendar in GitHub:', err);
         }
     }
 
