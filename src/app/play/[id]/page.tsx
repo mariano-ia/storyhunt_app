@@ -291,8 +291,9 @@ export default function PlayPage() {
             // ─── Paywall check: paid experiences require a valid token ─────
             const isPaid = typeof exp.price === 'number' && exp.price > 0;
             const isTestMode = exp.mode === 'test';
+            const isPreview = searchParams.get('preview') === '1';
 
-            if (isPaid && !isTestMode) {
+            if (isPaid && !isTestMode && !isPreview) {
                 if (!tokenParam) {
                     setPaywallStatus('blocked');
                     setPaywallMessage('This experience requires a ticket to access.');
