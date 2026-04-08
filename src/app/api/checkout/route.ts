@@ -55,14 +55,15 @@ export async function POST(req: NextRequest) {
         // Apply discount coupon if provided in body, OR allow manual entry in Stripe checkout
         if (coupon_code) {
             const coupon = await getCouponByCode(coupon_code);
-            if (coupon && coupon.status === 'active' && coupon.times_redeemed < coupon.max_redemptions) {
-                if (coupon.stripe_promo_id) {
-                    sessionParams.discounts = [{ promotion_code: coupon.stripe_promo_id }];
-                }
+            if (coupon && coupon.status === 'active' && coupon.times_redeemed < coupon.max_redemptions && coupon.stripe_promo_id) {
+                sessionParams.discounts = [{ promotion_code: coupon.stripe_promo_id }];
                 sessionParams.metadata.coupon_code = coupon_code;
+            } else {
+                // Coupon not found in our DB or missing Stripe link — let user enter it in Stripe
+                sessionParams.allow_promotion_codes = true;
             }
         } else {
-            // Show promo code field in Stripe Checkout
+            // No code provided — show promo code field in Stripe Checkout
             sessionParams.allow_promotion_codes = true;
         }
 
