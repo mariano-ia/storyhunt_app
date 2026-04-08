@@ -12,53 +12,61 @@ const CAPTIONS: Record<string, (topic: string, location: string) => string> = {
 
 ${topic}
 
-This is StoryHunt. A chat-based mystery walk through NYC. No guide. No bus. Just you, your phone, and the city.
+StoryHunt. A chat-based mystery walk through NYC. No guide. No bus. Just you, your phone, and the city.
 
-Your phone sends clues. You follow them through real streets. You solve puzzles. You decode the city.
+DECODE_THE_CITY → storyhunt.city
 
-FREE EARLY ACCESS → storyhunt.city
-
-#NYC #StoryHunt #HiddenNYC #NYCSecrets #MysteryWalk #InteractiveAdventure #ScavengerHunt #UrbanExploration #DecodeTheCity #NYCAdventure #NYCHiddenGems #ExploreNYC #ThingsToDoNYC #NYCExperience #UrbanMystery`,
+#NYC #StoryHunt #HiddenNYC #NYCSecrets #MysteryWalk #InteractiveAdventure #ScavengerHunt #UrbanExploration #DecodeTheCity #NYCAdventure #NYCHiddenGems #ExploreNYC #ThingsToDoNYC`,
 
     DID_YOU_KNOW: (topic) => `DATA_DECLASSIFIED // NYC_ARCHIVES
 
 ${topic}
 
-StoryHunt takes you to the places most people walk past without knowing. A chat-based mystery walk. Your phone is the guide.
+StoryHunt takes you to the places most people walk past. A chat-based mystery walk. Your phone is the guide.
 
-FREE EARLY ACCESS → storyhunt.city
+DECODE_THE_CITY → storyhunt.city
 
-#NYC #StoryHunt #HiddenNYC #NYCSecrets #DidYouKnow #NYCHistory #UrbanExploration #MysteryWalk #DecodeTheCity #NYCFacts #InteractiveAdventure #ScavengerHunt #ExploreNYC #NYCAdventure`,
+#NYC #StoryHunt #HiddenNYC #NYCSecrets #DidYouKnow #NYCHistory #UrbanExploration #MysteryWalk #DecodeTheCity #NYCFacts #InteractiveAdventure`,
+
+    EXPERIENCE_PROMO: (topic, location) => `MISSION_BRIEFING // ${location}
+
+${topic}
+
+A chat-based mystery walk. Your phone sends the clues. The city hides the answers.
+
+PLAY_NOW → storyhunt.city
+
+#NYC #StoryHunt #HiddenNYC #NYCSecrets #MysteryWalk #InteractiveAdventure #ScavengerHunt #DecodeTheCity #NYCAdventure #NYCExperience #ThingsToDoNYC`,
 
     NEIGHBORHOOD_SPOTLIGHT: (topic, location) => `ZONE_SCAN_ACTIVE // ${location}
 
 ${topic}
 
-StoryHunt walks you through it — guided by chat clues sent to your phone. No guide. No bus. Just you and the streets.
+StoryHunt walks you through it. Chat clues sent to your phone. No guide. No bus.
 
-FREE EARLY ACCESS → storyhunt.city
+DECODE_THE_CITY → storyhunt.city
 
-#NYC #StoryHunt #HiddenNYC #NYCSecrets #UrbanExploration #MysteryWalk #DecodeTheCity #NYCAdventure #InteractiveAdventure #ScavengerHunt #ExploreNYC #NYCNeighborhoods #NYCHiddenGems #ThingsToDoNYC`,
+#NYC #StoryHunt #HiddenNYC #NYCSecrets #UrbanExploration #MysteryWalk #DecodeTheCity #NYCAdventure #ExploreNYC #NYCNeighborhoods`,
 
     BEHIND_THE_HUNT: (topic) => `TRANSMISSION_ACTIVE // FIELD_REPORT
 
 ${topic}
 
-This is what StoryHunt feels like. A chat-based mystery walk through NYC. Your phone sends clues. You follow them. The city becomes the game.
+This is what StoryHunt feels like. A chat-based mystery walk through NYC. Your phone sends clues. The city becomes the game.
 
-FREE EARLY ACCESS → storyhunt.city
+DECODE_THE_CITY → storyhunt.city
 
-#NYC #StoryHunt #HiddenNYC #MysteryWalk #InteractiveAdventure #ScavengerHunt #UrbanExploration #DecodeTheCity #NYCAdventure #NYCExperience #ImmersiveExperience #NYCSecrets #ExploreNYC`,
+#NYC #StoryHunt #HiddenNYC #MysteryWalk #InteractiveAdventure #DecodeTheCity #NYCAdventure #NYCExperience`,
 
     QUOTE: (topic) => `FIELD_NOTE // NYC_DISPATCH
 
 ${topic}
 
-StoryHunt. A chat-based mystery walk through NYC. Coming soon.
+StoryHunt. A chat-based mystery walk through NYC.
 
 → storyhunt.city
 
-#NYC #StoryHunt #DecodeTheCity #MysteryWalk #InteractiveAdventure #NYCSecrets #UrbanExploration #ScavengerHunt #NYCAdventure #HiddenNYC #NYCQuotes #CityLife #ExploreNYC`,
+#NYC #StoryHunt #DecodeTheCity #MysteryWalk #InteractiveAdventure #NYCSecrets #UrbanExploration #NYCAdventure #HiddenNYC`,
 };
 
 interface CalendarPost {
