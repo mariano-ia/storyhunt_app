@@ -89,6 +89,8 @@ function EmailModal({
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,11 +105,21 @@ function EmailModal({
         body: JSON.stringify({ email, source: 'secrets-lead-magnet' }),
       });
       if (!res.ok) throw new Error('Failed');
-      onSubmit(email);
+      setRevealed(true);
     } catch {
       setError('SIGNAL_LOST — try again');
       setSubmitting(false);
     }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText('DECODED25');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleContinue = () => {
+    onSubmit(email);
   };
 
   return (
@@ -121,7 +133,6 @@ function EmailModal({
       padding: 20,
       animation: 'secretsFadeIn 0.3s ease-out',
     }}>
-      {/* Backdrop */}
       <div
         style={{
           position: 'absolute',
@@ -129,182 +140,265 @@ function EmailModal({
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(8px)',
         }}
-        onClick={onSkip}
+        onClick={revealed ? handleContinue : onSkip}
       />
 
-      {/* Modal */}
       <div style={{
         position: 'relative',
         width: '100%',
         maxWidth: 380,
         background: '#0A0A0A',
-        border: '1px solid rgba(255,0,51,0.3)',
+        border: `1px solid ${revealed ? 'rgba(16,185,129,0.3)' : 'rgba(255,0,51,0.3)'}`,
         borderRadius: 16,
         padding: '32px 24px',
         textAlign: 'center',
       }}>
-        {/* Close */}
-        <button
-          onClick={onSkip}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            background: 'none',
-            border: 'none',
-            color: '#4B5563',
-            cursor: 'pointer',
-            padding: 4,
-          }}
-        >
-          <X size={20} />
-        </button>
-
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 11,
-          color: '#00d2ff',
-          letterSpacing: '0.1em',
-          marginBottom: 16,
-        }}>2/5 DECODED</p>
-
-        <h3 style={{
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#fff',
-          marginBottom: 8,
-          lineHeight: 1.3,
-        }}>
-          Want the last 3 secrets?
-        </h3>
-
-        <p style={{
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 15,
-          color: '#94A3B8',
-          lineHeight: 1.5,
-          marginBottom: 8,
-        }}>
-          Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
-        </p>
-
-        {/* Coupon preview */}
-        <div style={{
-          display: 'inline-block',
-          padding: '6px 16px',
-          background: 'rgba(255,0,51,0.1)',
-          border: '1px solid rgba(255,0,51,0.2)',
-          borderRadius: 6,
-          marginBottom: 20,
-        }}>
-          <span style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 14,
-            fontWeight: 700,
-            color: '#ff0033',
-            letterSpacing: '0.1em',
-            filter: 'blur(6px)',
-            userSelect: 'none',
-          }}>DECODED25</span>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <span style={{
+        {!revealed && (
+          <button
+            onClick={onSkip}
+            style={{
               position: 'absolute',
-              left: 14,
-              color: '#00d2ff',
+              top: 12,
+              right: 12,
+              background: 'none',
+              border: 'none',
+              color: '#4B5563',
+              cursor: 'pointer',
+              padding: 4,
+            }}
+          >
+            <X size={20} />
+          </button>
+        )}
+
+        {revealed ? (
+          <>
+            <p style={{
               fontFamily: "'Fira Code', monospace",
-              fontSize: 14,
-              pointerEvents: 'none',
-            }}>{'>'}</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your email"
-              required
-              autoComplete="email"
-              autoFocus
+              fontSize: 11,
+              color: '#10B981',
+              letterSpacing: '0.1em',
+              marginBottom: 16,
+            }}>DISCOUNT_REVEALED</p>
+
+            <h3 style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 20,
+              fontWeight: 700,
+              color: '#fff',
+              marginBottom: 12,
+              lineHeight: 1.3,
+            }}>
+              25% off your first hunt
+            </h3>
+
+            <button
+              onClick={handleCopy}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 24px',
+                background: 'rgba(255,0,51,0.15)',
+                border: '1px solid rgba(255,0,51,0.3)',
+                borderRadius: 8,
+                cursor: 'pointer',
+                marginBottom: 8,
+              }}
+            >
+              <span style={{
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 22,
+                fontWeight: 700,
+                color: '#ff0033',
+                letterSpacing: '0.15em',
+              }}>DECODED25</span>
+              {copied ? <Check size={18} color="#10B981" /> : <Copy size={18} color="#ff0033" />}
+            </button>
+            {copied && (
+              <p style={{
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 11,
+                color: '#10B981',
+                marginBottom: 8,
+              }}>copied!</p>
+            )}
+
+            <button
+              onClick={handleContinue}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
                 width: '100%',
-                padding: '14px 14px 14px 32px',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(0,210,255,0.2)',
+                padding: '14px 24px',
+                background: '#ff0033',
+                border: 'none',
                 borderRadius: 8,
                 color: '#fff',
                 fontFamily: "'Fira Code', monospace",
-                fontSize: 16,
-                outline: 'none',
-                transition: 'border-color 0.2s',
+                fontSize: 14,
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                minHeight: 48,
+                marginTop: 16,
               }}
-              onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
-              onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              padding: '14px 24px',
-              background: submitting ? '#661122' : '#ff0033',
-              border: 'none',
-              borderRadius: 8,
-              color: '#fff',
+            >
+              SEE_SECRET_3
+              <ChevronRight size={16} />
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{
               fontFamily: "'Fira Code', monospace",
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              cursor: submitting ? 'wait' : 'pointer',
-              minHeight: 48,
-            }}
-          >
-            {submitting ? 'DECODING...' : 'UNLOCK_DISCOUNT'}
-          </button>
+              fontSize: 11,
+              color: '#00d2ff',
+              letterSpacing: '0.1em',
+              marginBottom: 16,
+            }}>2/5 DECODED</p>
 
-          {error && (
-            <p style={{ color: '#ff0033', fontFamily: "'Fira Code', monospace", fontSize: 12, textAlign: 'center' }}>
-              {error}
+            <h3 style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 20,
+              fontWeight: 700,
+              color: '#fff',
+              marginBottom: 8,
+              lineHeight: 1.3,
+            }}>
+              Want the last 3 secrets?
+            </h3>
+
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 15,
+              color: '#94A3B8',
+              lineHeight: 1.5,
+              marginBottom: 8,
+            }}>
+              Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
             </p>
-          )}
-        </form>
 
-        <button
-          onClick={onSkip}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#4B5563',
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 12,
-            cursor: 'pointer',
-            marginTop: 16,
-            padding: '8px 16px',
-          }}
-        >
-          skip — just show me the secrets
-        </button>
+            <div style={{
+              display: 'inline-block',
+              padding: '6px 16px',
+              background: 'rgba(255,0,51,0.1)',
+              border: '1px solid rgba(255,0,51,0.2)',
+              borderRadius: 6,
+              marginBottom: 20,
+            }}>
+              <span style={{
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#ff0033',
+                letterSpacing: '0.1em',
+                filter: 'blur(6px)',
+                userSelect: 'none',
+              }}>DECODED25</span>
+            </div>
 
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 10,
-          color: '#374151',
-          marginTop: 12,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 4,
-        }}>
-          <Lock size={10} />
-          no spam, ever
-        </p>
+            <form onSubmit={handleSubmit} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: 14,
+                  color: '#00d2ff',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 14,
+                  pointerEvents: 'none',
+                }}>{'>'}</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your email"
+                  required
+                  autoComplete="email"
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '14px 14px 14px 32px',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(0,210,255,0.2)',
+                    borderRadius: 8,
+                    color: '#fff',
+                    fontFamily: "'Fira Code', monospace",
+                    fontSize: 16,
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
+                  onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  padding: '14px 24px',
+                  background: submitting ? '#661122' : '#ff0033',
+                  border: 'none',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  cursor: submitting ? 'wait' : 'pointer',
+                  minHeight: 48,
+                }}
+              >
+                {submitting ? 'DECODING...' : 'UNLOCK_DISCOUNT'}
+              </button>
+
+              {error && (
+                <p style={{ color: '#ff0033', fontFamily: "'Fira Code', monospace", fontSize: 12, textAlign: 'center' }}>
+                  {error}
+                </p>
+              )}
+            </form>
+
+            <button
+              onClick={onSkip}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#4B5563',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 12,
+                cursor: 'pointer',
+                marginTop: 16,
+                padding: '8px 16px',
+              }}
+            >
+              skip — just show me the secrets
+            </button>
+
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 10,
+              color: '#374151',
+              marginTop: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}>
+              <Lock size={10} />
+              no spam, ever
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -697,19 +791,12 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
           animation: 'secretsFadeIn 0.4s ease-out',
         }}>
           <p style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 11,
-            color: '#ff0033',
-            letterSpacing: '0.1em',
-            marginBottom: 8,
-          }}>REWARD_UNLOCKED</p>
-          <p style={{
             fontFamily: "'Fira Sans', sans-serif",
-            fontSize: 16,
-            color: '#fff',
-            marginBottom: 12,
+            fontSize: 13,
+            color: '#94A3B8',
+            marginBottom: 10,
           }}>
-            25% off your first hunt
+            In case you didn&apos;t copy it — here&apos;s your code:
           </p>
           <button
             onClick={handleCopy}
