@@ -10,7 +10,6 @@ const navItems = [
     { label: 'Cupones', icon: Ticket, href: '/dashboard/coupons' },
     { label: 'Ventas', icon: ShoppingCart, href: '/dashboard/sales' },
     { label: 'Sesiones', icon: Users, href: '/dashboard/sessions' },
-    { label: 'Interacciones', icon: MessageSquare, href: '/dashboard/interactions' },
     { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },
 ];
 
