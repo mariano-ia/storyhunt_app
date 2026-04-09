@@ -461,6 +461,9 @@ function SplashPhase({ onReady }: { onReady: () => void }) {
     }}>
       <div className="int-scanline" />
 
+      {/* Logo */}
+      <img src="/logo.png" alt="StoryHunt" style={{ height: 28, opacity: 0.7, marginBottom: 40 }} />
+
       {/* Signal icon */}
       <div style={{
         width: 64,
@@ -845,12 +848,7 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
         <ChevronRight size={20} />
       </a>
 
-      <p style={{
-        fontFamily: "'Fira Code', monospace",
-        fontSize: 12,
-        color: '#4B5563',
-        marginTop: 16,
-      }}>storyhunt.city</p>
+      <img src="/logo.png" alt="StoryHunt" style={{ height: 24, opacity: 0.5, marginTop: 20 }} />
 
       {/* Product info */}
       <div style={{

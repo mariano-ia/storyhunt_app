@@ -12,35 +12,37 @@ type Subtitle = {
 };
 
 const SUBTITLES: Subtitle[] = [
-  { start: 0, end: 4.5, text: "You're looking for a door. Not a front door." },
-  { start: 4.5, end: 7.5, text: "A side door. Red brick. No number on it." },
-  { start: 8, end: 11, text: "There's a fire escape above it but nobody uses it." },
-  { start: 11.5, end: 17, text: "If you walk past the bodega on the corner... count three buildings east." },
-  { start: 17, end: 19.5, text: "The one with the faded awning." },
-  { start: 20, end: 21.5, text: "Look down." },
-  { start: 22, end: 25, text: "There's a grate. But that's not a grate." },
-  { start: 25, end: 27, text: "That's the entrance." },
-  { start: 27.5, end: 31, text: "They sealed it in ninety four." },
-  { start: 31, end: 34, text: "But the lock... the lock was never replaced." },
-  { start: 34.5, end: 37.5, text: "Go at night. After the restaurant closes." },
-  { start: 37.5, end: 42, text: "You'll hear it before you see it. A low hum." },
-  { start: 42, end: 45, text: "Like the city breathing underneath itself." },
-  { start: 45.5, end: 48.5, text: "Don't bring a flashlight. Your phone is enough." },
-  { start: 48.5, end: 51, text: "And don't tell anyone where you're going." },
-  { start: 51.5, end: 56, text: "You'll know you're in the right place when you see the tiles." },
-  { start: 56, end: 58.5, text: "Green and white. Nineteen twelve." },
-  { start: 58.5, end: 62, text: "They built this before anyone was watching." },
-  { start: 62.5, end: 66.5, text: "The corridor goes north for about two hundred feet." },
-  { start: 66.5, end: 69, text: "Then it splits. Take the left." },
-  { start: 69, end: 70.5, text: "Always the left." },
-  { start: 71, end: 74, text: "There's a room at the end. Small. Concrete walls." },
-  { start: 74, end: 76.5, text: "Someone left a chair there." },
-  { start: 76.5, end: 80, text: "And on the wall... coordinates. Written in chalk." },
-  { start: 80, end: 83, text: "I checked them. They point to another door." },
-  { start: 83.5, end: 87, text: "I haven't opened that one yet." },
+  { start: 0.0, end: 3.8, text: "You're looking for a door, not a front door, a side door." },
+  { start: 3.8, end: 6.4, text: "Red brick, no number on it." },
+  { start: 6.4, end: 9.6, text: "There's a fire escape above it, but nobody uses it." },
+  { start: 9.6, end: 12.8, text: "If you walk past the bodega on the corner," },
+  { start: 12.8, end: 15.0, text: "count three buildings east." },
+  { start: 15.0, end: 16.8, text: "The one with the faded awning." },
+  { start: 16.8, end: 18.8, text: "Look down, there's a grate." },
+  { start: 18.8, end: 21.5, text: "But that's not a grate, that's the entrance." },
+  { start: 21.5, end: 24.3, text: "They sealed it in '94, but the lock," },
+  { start: 24.3, end: 26.4, text: "the lock was never replaced." },
+  { start: 26.4, end: 29.0, text: "Go at night, after the restaurant closes," },
+  { start: 29.1, end: 31.1, text: "you'll hear it before you see it." },
+  { start: 31.1, end: 35.2, text: "A low hum, like the city breathing underneath itself." },
+  { start: 35.2, end: 37.9, text: "Don't bring a flashlight, your phone is enough," },
+  { start: 37.9, end: 40.2, text: "and don't tell anyone where you're going." },
+  { start: 40.2, end: 41.7, text: "You'll know you're in the right place" },
+  { start: 41.7, end: 43.8, text: "when you see the tiles." },
+  { start: 43.8, end: 46.8, text: "Green and white, 1912." },
+  { start: 46.8, end: 49.7, text: "They built this before anyone was watching." },
+  { start: 49.7, end: 52.8, text: "The corridor goes north for about 200 feet," },
+  { start: 52.8, end: 54.4, text: "then it splits." },
+  { start: 54.4, end: 57.5, text: "Take the left, always the left." },
+  { start: 57.5, end: 60.8, text: "There's a room at the end, small concrete walls." },
+  { start: 60.8, end: 62.8, text: "Someone left a chair there." },
+  { start: 62.8, end: 66.0, text: "And on the wall, coordinates." },
+  { start: 66.0, end: 68.6, text: "Written in chalk, I checked them." },
+  { start: 68.6, end: 70.4, text: "They point to another door." },
+  { start: 70.4, end: 72.4, text: "I haven't opened that one yet." },
 ];
 
-const MODAL_TRIGGER_TIME = 34; // After "the lock was never replaced"
+const MODAL_TRIGGER_TIME = 10; // Early — after fire escape line
 
 // ─── Email Modal ─────────────────────────────────────────────────────────────
 
@@ -390,6 +392,9 @@ function SplashPhase({ onReady }: { onReady: () => void }) {
       position: 'relative',
     }}>
       <div className="vm-scanline" />
+
+      {/* Logo */}
+      <img src="/logo.png" alt="StoryHunt" style={{ height: 28, opacity: 0.7, marginBottom: 40 }} />
 
       {/* Phone icon */}
       <div style={{
@@ -897,12 +902,7 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
         <ChevronRight size={20} />
       </a>
 
-      <p style={{
-        fontFamily: "'Fira Code', monospace",
-        fontSize: 12,
-        color: '#4B5563',
-        marginTop: 16,
-      }}>storyhunt.city</p>
+      <img src="/logo.png" alt="StoryHunt" style={{ height: 24, opacity: 0.5, marginTop: 20 }} />
 
       <div style={{
         marginTop: 40,
