@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, ChevronRight, Signal, X } from 'lucide-react';
+import { Lock, ChevronRight, Signal, X, Copy, Check } from 'lucide-react';
 
 // ─── Intercepted Conversation Data ───────────────────────────────────────────
 
@@ -212,7 +212,7 @@ function EmailModal({
           marginBottom: 8,
           lineHeight: 1.3,
         }}>
-          Want to keep listening?
+          Want to keep reading?
         </h3>
 
         <p style={{
@@ -225,7 +225,7 @@ function EmailModal({
           Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
         </p>
 
-        {/* Coupon preview */}
+        {/* Coupon preview — blurred */}
         <div style={{
           display: 'inline-block',
           padding: '6px 16px',
@@ -240,6 +240,8 @@ function EmailModal({
             fontWeight: 700,
             color: '#ff0033',
             letterSpacing: '0.1em',
+            filter: 'blur(6px)',
+            userSelect: 'none',
           }}>DECODED25</span>
         </div>
 
@@ -596,6 +598,14 @@ function ConversationPhase({
 // ─── CTA Phase ───────────────────────────────────────────────────────────────
 
 function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText('DECODED25');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -685,17 +695,41 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
             fontFamily: "'Fira Sans', sans-serif",
             fontSize: 16,
             color: '#fff',
-            marginBottom: 8,
+            marginBottom: 12,
           }}>
             25% off your first hunt
           </p>
-          <p style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 20,
-            fontWeight: 700,
-            color: '#ff0033',
-            letterSpacing: '0.15em',
-          }}>DECODED25</p>
+          <button
+            onClick={handleCopy}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 20px',
+              background: 'rgba(255,0,51,0.15)',
+              border: '1px solid rgba(255,0,51,0.3)',
+              borderRadius: 6,
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+          >
+            <span style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 20,
+              fontWeight: 700,
+              color: '#ff0033',
+              letterSpacing: '0.15em',
+            }}>DECODED25</span>
+            {copied ? <Check size={16} color="#10B981" /> : <Copy size={16} color="#ff0033" />}
+          </button>
+          {copied && (
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#10B981',
+              marginTop: 8,
+            }}>copied!</p>
+          )}
         </div>
       )}
 

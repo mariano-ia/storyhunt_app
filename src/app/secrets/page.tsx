@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, ChevronRight, Radio, Eye, X } from 'lucide-react';
+import { Lock, ChevronRight, Radio, Eye, X, Copy, Check } from 'lucide-react';
 
 // ─── NYC Secrets Data ────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ const SECRETS = [
   },
 ];
 
-const MODAL_TRIGGER_INDEX = 2; // Show modal after secret 3 (0-indexed)
+const MODAL_TRIGGER_INDEX = 1; // Show modal after secret 2 (0-indexed)
 
 // ─── Typing Effect Hook ──────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ function EmailModal({
           color: '#00d2ff',
           letterSpacing: '0.1em',
           marginBottom: 16,
-        }}>3/5 DECODED</p>
+        }}>2/5 DECODED</p>
 
         <h3 style={{
           fontFamily: "'Fira Sans', sans-serif",
@@ -176,7 +176,7 @@ function EmailModal({
           marginBottom: 8,
           lineHeight: 1.3,
         }}>
-          Want the last 2 secrets?
+          Want the last 3 secrets?
         </h3>
 
         <p style={{
@@ -204,6 +204,8 @@ function EmailModal({
             fontWeight: 700,
             color: '#ff0033',
             letterSpacing: '0.1em',
+            filter: 'blur(6px)',
+            userSelect: 'none',
           }}>DECODED25</span>
         </div>
 
@@ -618,6 +620,14 @@ function ExperiencePhase({
 // ─── CTA Phase ───────────────────────────────────────────────────────────────
 
 function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText('DECODED25');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -697,17 +707,41 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
             fontFamily: "'Fira Sans', sans-serif",
             fontSize: 16,
             color: '#fff',
-            marginBottom: 8,
+            marginBottom: 12,
           }}>
             25% off your first hunt
           </p>
-          <p style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 20,
-            fontWeight: 700,
-            color: '#ff0033',
-            letterSpacing: '0.15em',
-          }}>DECODED25</p>
+          <button
+            onClick={handleCopy}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 20px',
+              background: 'rgba(255,0,51,0.15)',
+              border: '1px solid rgba(255,0,51,0.3)',
+              borderRadius: 6,
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+          >
+            <span style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 20,
+              fontWeight: 700,
+              color: '#ff0033',
+              letterSpacing: '0.15em',
+            }}>DECODED25</span>
+            {copied ? <Check size={16} color="#10B981" /> : <Copy size={16} color="#ff0033" />}
+          </button>
+          {copied && (
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#10B981',
+              marginTop: 8,
+            }}>copied!</p>
+          )}
         </div>
       )}
 
