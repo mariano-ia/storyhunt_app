@@ -172,8 +172,8 @@ export default function DashboardPage() {
                                     <MessageSquare size={15} />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sess.whatsapp_number}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Paso {sess.current_step} · {new Date(sess.started_at).toLocaleDateString('es-AR')}</div>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sess.email || 'Sin email'}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Paso {sess.current_step}/{sess.total_steps || '?'} · {new Date(sess.started_at).toLocaleDateString('es-AR')}</div>
                                 </div>
                                 <span className={`badge badge-${sess.status}`}>{
                                     sess.status === 'in_progress' ? 'En curso' :

@@ -8,7 +8,44 @@ import { getExperience, getSteps, getScenes, saveInteraction } from '@/lib/fires
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { userMessage, stepIndex: rawStepIndex, stepId, lang } = await req.json() as { userMessage: string; stepIndex: number; stepId?: string; lang?: 'es' | 'en' };
+        const body = await req.json();
+        const { userMessage, stepIndex: rawStepIndex = 0, stepId, lang, ratingEvaluation } = body as {
+            userMessage: string; stepIndex?: number; stepId?: string; lang?: 'es' | 'en'; ratingEvaluation?: boolean;
+        };
+
+        // ─── Rating evaluation mode ──────────────────────────────────────────────
+        if (ratingEvaluation) {
+            const experience = await getExperience(id);
+            const apiKey = (experience?.llm_api_key ?? '').trim() || process.env.OPENAI_API_KEY || '';
+            const isOpenAI = apiKey.startsWith('sk-');
+
+            const ratingPrompt = [
+                'You are a sentiment classifier. Classify the following user feedback about an experience into exactly one of: positive, neutral, negative.',
+                '',
+                'Rules:',
+                '- "positive" = the user enjoyed it, is grateful, enthusiastic, or satisfied',
+                '- "neutral" = the user is indifferent, gives mixed feedback, or is vague',
+                '- "negative" = the user is unhappy, disappointed, or critical',
+                '- Respond with ONLY one word: positive, neutral, or negative',
+            ].join('\n');
+
+            const result = await callLLM(apiKey, isOpenAI, ratingPrompt, userMessage);
+            const word = result.text.trim().toLowerCase();
+            const rating = word.includes('positive') ? 'positive' : word.includes('negative') ? 'negative' : 'neutral';
+
+            saveInteraction({
+                session_id: `rating-${id}`,
+                experience_id: id,
+                user_message: userMessage,
+                system_response: rating,
+                tokens_consumed: result.tokens,
+                estimated_cost: result.cost,
+            });
+
+            return NextResponse.json({ rating });
+        }
+
+        // ─── Normal game evaluation ──────────────────────────────────────────────
         const [experience, rawSteps, scenes] = await Promise.all([getExperience(id), getSteps(id), getScenes(id)]);
 
         if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });

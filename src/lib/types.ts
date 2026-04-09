@@ -92,10 +92,15 @@ export interface PreviewMessage {
 export interface UserSession {
     id: string;
     experience_id: string;
-    whatsapp_number: string;
+    email?: string;
+    lang?: 'es' | 'en';
     current_step: number;
+    total_steps: number;
     status: SessionStatus;
+    rating?: 'positive' | 'neutral' | 'negative';
+    rating_comment?: string;
     started_at: string;
+    completed_at?: string;
     finished_at?: string;
 }
 

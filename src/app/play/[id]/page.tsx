@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowUp, RotateCcw } from 'lucide-react';
-import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import { getExperience, getSteps, getScenes, createSession, updateSession } from '@/lib/firestore';
 import type { Experience, Step, PreviewMessage, Scene } from '@/lib/types';
 
 import { renderMessage } from '@/lib/renderMessage';
@@ -122,9 +122,90 @@ export default function PlayPage() {
     const [systemTyping, setSystemTyping] = useState(false);
     const [errorScreen, setErrorScreen] = useState<{ text: string; active: boolean }>({ text: '', active: false });
 
+    // Session & rating states
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const [ratingPhase, setRatingPhase] = useState<'none' | 'asking' | 'done'>('none');
+
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
+    const sessionIdRef = useRef<string | null>(null);
+
+    // Keep ref in sync with state (so async callbacks can access latest)
+    useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+    const trackStep = (step: number) => {
+        if (sessionIdRef.current) {
+            updateSession(sessionIdRef.current, { current_step: step }).catch(() => {});
+        }
+    };
+
+    const trackCompletion = (rating?: 'positive' | 'neutral' | 'negative', comment?: string) => {
+        if (sessionIdRef.current) {
+            updateSession(sessionIdRef.current, {
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                ...(rating && { rating }),
+                ...(comment && { rating_comment: comment }),
+            }).catch(() => {});
+        }
+    };
+
+    const handleExperienceComplete = async () => {
+        // Show closing message from narrator
+        const closingMsg = lang === 'en'
+            ? "That's it. You made it to the end. I hope the city showed you something you weren't expecting. Before you go... what did you think of this adventure?"
+            : "Eso es todo. Llegaste hasta el final. Espero que la ciudad te haya mostrado algo que no esperabas. Antes de irte... ¿qué te pareció esta aventura?";
+
+        await pushMessageWithEffects(
+            { role: 'system', content: closingMsg, timestamp: new Date().toISOString() },
+            { delay_seconds: 1.5 }
+        );
+        setRatingPhase('asking');
+    };
+
+    const handleRatingSend = async () => {
+        if (!input.trim() || sending) return;
+
+        const userComment = input.trim();
+        const userMsg: PreviewMessage = { role: 'user', content: userComment, timestamp: new Date().toISOString() };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setSending(true);
+
+        // Evaluate rating via LLM
+        let rating: 'positive' | 'neutral' | 'negative' = 'neutral';
+        try {
+            const res = await fetch(`/api/experiences/${id}/preview`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userMessage: userComment,
+                    ratingEvaluation: true,
+                    lang,
+                }),
+            });
+            const data = await res.json();
+            if (data.rating) rating = data.rating;
+        } catch {
+            // fallback to neutral
+        }
+
+        // Thank the user
+        const thankMsg = lang === 'en'
+            ? "Thanks for playing. See you on the next hunt."
+            : "Gracias por jugar. Nos vemos en la próxima aventura.";
+
+        await pushMessageWithEffects(
+            { role: 'system', content: thankMsg, timestamp: new Date().toISOString() },
+            { delay_seconds: 1.0 }
+        );
+
+        trackCompletion(rating, userComment);
+        setRatingPhase('done');
+        setCompleted(true);
+        setSending(false);
+    };
 
     // Resolve message text based on language
     const getMsg = (step: Step) => lang === 'en' && (step as any).message_to_send_en ? (step as any).message_to_send_en : step.message_to_send;
@@ -228,13 +309,14 @@ export default function PlayPage() {
             }
             // No next scene or no scenes at all — experience complete
             setStepIndex(allSteps.length);
-            setCompleted(true);
+            handleExperienceComplete();
             return;
         }
 
         const next = sceneSteps[fromIndex];
         // Keep stepIndex pointing to position in the full steps array
         const globalIndex = allSteps.findIndex(s => s.id === next.id);
+        trackStep(globalIndex >= 0 ? globalIndex : fromIndex);
 
         if (next.step_type === 'error_screen') {
             setErrorScreen({ text: getMsg(next), active: true });
@@ -358,6 +440,22 @@ export default function PlayPage() {
 
             setLoading(false);
 
+            // Create session (skip for previews)
+            if (!isPreview && stps.length > 0) {
+                try {
+                    const email = tokenParam ? '' : ''; // email comes from token verify if available
+                    const sid = await createSession({
+                        experience_id: id,
+                        email,
+                        lang,
+                        total_steps: stps.length,
+                    });
+                    setSessionId(sid);
+                } catch (e) {
+                    console.error('Failed to create session:', e);
+                }
+            }
+
             if (stps.length > 0) {
                 const fromIdx = fromStepParam ? parseInt(fromStepParam, 10) : null;
                 const init = async () => {
@@ -389,6 +487,11 @@ export default function PlayPage() {
     }, [sending, systemTyping, completed, stepIndex, steps]);
 
     const handleSend = async () => {
+        // If in rating phase, route to rating handler
+        if (ratingPhase === 'asking') {
+            await handleRatingSend();
+            return;
+        }
         if (!input.trim() || sending || completed || systemTyping) return;
 
         const userMsg: PreviewMessage = { role: 'user', content: input.trim(), timestamp: new Date().toISOString() };
@@ -425,8 +528,8 @@ export default function PlayPage() {
             });
 
             if (data.completed) {
-                setCompleted(true);
                 setStepIndex(steps.length);
+                handleExperienceComplete();
             } else if (isCorrect) {
                 const currentStep = steps[stepIndex];
                 // Check if current step has a next_step_id override
@@ -462,7 +565,7 @@ export default function PlayPage() {
                             await advanceNarrativeSteps(nextSceneSteps, 0, scenes, nextScene.id, steps);
                         }
                     } else {
-                        setCompleted(true);
+                        handleExperienceComplete();
                     }
                 }
             }
@@ -556,7 +659,8 @@ export default function PlayPage() {
     const currentStep = steps[stepIndex];
     const waitingForResponse = !completed && currentStep?.requires_response;
 
-    const isSystemDisable = sending || systemTyping || completed || !waitingForResponse;
+    const isRatingInput = ratingPhase === 'asking';
+    const isSystemDisable = isRatingInput ? sending : (sending || systemTyping || completed || !waitingForResponse);
 
     return (
         <div style={{
@@ -628,9 +732,9 @@ export default function PlayPage() {
 
                 {systemTyping && <TypingIndicator narratorInitial={narratorInitial} narratorAvatar={experience?.narrator_avatar} />}
 
-                {completed && (
+                {completed && ratingPhase === 'done' && (
                     <div style={{ textAlign: 'center', margin: '24px 0', fontSize: 13, color: '#8E8E93' }}>
-                        Has completado la experiencia.
+                        {lang === 'en' ? 'Experience completed.' : 'Experiencia completada.'}
                     </div>
                 )}
 
@@ -663,7 +767,7 @@ export default function PlayPage() {
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                            placeholder={isSystemDisable ? (completed ? 'Chat terminado' : 'Mensaje iMessage') : 'Mensaje iMessage'}
+                            placeholder={isRatingInput ? (lang === 'en' ? 'Share your thoughts...' : 'Contanos qué te pareció...') : isSystemDisable ? (completed ? (lang === 'en' ? 'Chat ended' : 'Chat terminado') : 'iMessage') : 'iMessage'}
                             disabled={isSystemDisable}
                             style={{
                                 flex: 1, border: 'none', background: 'transparent',

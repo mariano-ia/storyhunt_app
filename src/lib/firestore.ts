@@ -149,11 +149,34 @@ export async function reorderSteps(experienceId: string, steps: Step[]): Promise
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
 export async function getSessions(experienceId?: string): Promise<UserSession[]> {
-    let q = experienceId
+    const q = experienceId
         ? query(collection(db, 'user_sessions'), where('experience_id', '==', experienceId))
         : query(collection(db, 'user_sessions'));
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as UserSession));
+}
+
+export async function createSession(data: {
+    experience_id: string;
+    email?: string;
+    lang?: 'es' | 'en';
+    total_steps: number;
+}): Promise<string> {
+    const ref = await addDoc(collection(db, 'user_sessions'), {
+        experience_id: data.experience_id,
+        email: data.email || '',
+        lang: data.lang || 'es',
+        current_step: 0,
+        total_steps: data.total_steps,
+        status: 'in_progress',
+        started_at: now(),
+    });
+    return ref.id;
+}
+
+export async function updateSession(sessionId: string, data: Partial<UserSession>): Promise<void> {
+    const cleanData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+    await updateDoc(doc(db, 'user_sessions', sessionId), cleanData);
 }
 
 // ─── Metrics ──────────────────────────────────────────────────────────────────
