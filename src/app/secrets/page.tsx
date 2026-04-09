@@ -515,10 +515,45 @@ function CTAPhase() {
         color: '#94A3B8',
         lineHeight: 1.5,
         maxWidth: 360,
-        marginBottom: 40,
+        marginBottom: 32,
       }}>
         The real hunt sends you into the streets. Your phone guides you. No tour guide. No bus. Just you, the city, and the mystery.
       </p>
+
+      {/* Coupon */}
+      <div style={{
+        padding: '16px 24px',
+        background: 'rgba(255,0,51,0.08)',
+        border: '1px solid rgba(255,0,51,0.25)',
+        borderRadius: 10,
+        marginBottom: 28,
+        maxWidth: 360,
+        width: '100%',
+        textAlign: 'center',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 11,
+          color: '#ff0033',
+          letterSpacing: '0.1em',
+          marginBottom: 8,
+        }}>REWARD_UNLOCKED</p>
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 16,
+          color: '#fff',
+          marginBottom: 8,
+        }}>
+          25% off your first hunt
+        </p>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 20,
+          fontWeight: 700,
+          color: '#ff0033',
+          letterSpacing: '0.15em',
+        }}>DECODED25</p>
+      </div>
 
       {/* Main CTA */}
       <a
@@ -543,7 +578,7 @@ function CTAPhase() {
           transition: 'transform 0.1s',
         }}
       >
-        DECODE_THE_CITY
+        START_YOUR_HUNT
         <ChevronRight size={20} />
       </a>
 
@@ -556,7 +591,7 @@ function CTAPhase() {
 
       {/* Product details */}
       <div style={{
-        marginTop: 48,
+        marginTop: 40,
         padding: '20px 24px',
         background: 'rgba(255,255,255,0.03)',
         borderRadius: 12,
