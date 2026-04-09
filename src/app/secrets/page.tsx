@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, ChevronRight, Radio, Eye } from 'lucide-react';
+import { Lock, ChevronRight, Radio, Eye, X } from 'lucide-react';
 
 // ─── NYC Secrets Data ────────────────────────────────────────────────────────
 
@@ -43,6 +43,8 @@ const SECRETS = [
   },
 ];
 
+const MODAL_TRIGGER_INDEX = 2; // Show modal after secret 3 (0-indexed)
+
 // ─── Typing Effect Hook ──────────────────────────────────────────────────────
 
 function useTypingEffect(text: string, active: boolean, speed = 18) {
@@ -75,18 +77,22 @@ function useTypingEffect(text: string, active: boolean, speed = 18) {
   return { displayed, done };
 }
 
-// ─── Landing Phase ───────────────────────────────────────────────────────────
+// ─── Email Modal ─────────────────────────────────────────────────────────────
 
-function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
+function EmailModal({
+  onSubmit,
+  onSkip,
+}: {
+  onSubmit: (email: string) => void;
+  onSkip: () => void;
+}) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || submitting) return;
-
     setSubmitting(true);
     setError('');
 
@@ -96,7 +102,6 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, source: 'secrets-lead-magnet' }),
       });
-
       if (!res.ok) throw new Error('Failed');
       onSubmit(email);
     } catch {
@@ -104,6 +109,214 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
       setSubmitting(false);
     }
   };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      animation: 'secretsFadeIn 0.3s ease-out',
+    }}>
+      {/* Backdrop */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+        }}
+        onClick={onSkip}
+      />
+
+      {/* Modal */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 380,
+        background: '#0A0A0A',
+        border: '1px solid rgba(255,0,51,0.3)',
+        borderRadius: 16,
+        padding: '32px 24px',
+        textAlign: 'center',
+      }}>
+        {/* Close */}
+        <button
+          onClick={onSkip}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: 'none',
+            border: 'none',
+            color: '#4B5563',
+            cursor: 'pointer',
+            padding: 4,
+          }}
+        >
+          <X size={20} />
+        </button>
+
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 11,
+          color: '#00d2ff',
+          letterSpacing: '0.1em',
+          marginBottom: 16,
+        }}>3/5 DECODED</p>
+
+        <h3 style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 20,
+          fontWeight: 700,
+          color: '#fff',
+          marginBottom: 8,
+          lineHeight: 1.3,
+        }}>
+          Want the last 2 secrets?
+        </h3>
+
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 15,
+          color: '#94A3B8',
+          lineHeight: 1.5,
+          marginBottom: 8,
+        }}>
+          Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
+        </p>
+
+        {/* Coupon preview */}
+        <div style={{
+          display: 'inline-block',
+          padding: '6px 16px',
+          background: 'rgba(255,0,51,0.1)',
+          border: '1px solid rgba(255,0,51,0.2)',
+          borderRadius: 6,
+          marginBottom: 20,
+        }}>
+          <span style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 14,
+            fontWeight: 700,
+            color: '#ff0033',
+            letterSpacing: '0.1em',
+          }}>DECODED25</span>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{
+              position: 'absolute',
+              left: 14,
+              color: '#00d2ff',
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 14,
+              pointerEvents: 'none',
+            }}>{'>'}</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your email"
+              required
+              autoComplete="email"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '14px 14px 14px 32px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(0,210,255,0.2)',
+                borderRadius: 8,
+                color: '#fff',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 16,
+                outline: 'none',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: '14px 24px',
+              background: submitting ? '#661122' : '#ff0033',
+              border: 'none',
+              borderRadius: 8,
+              color: '#fff',
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 14,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: submitting ? 'wait' : 'pointer',
+              minHeight: 48,
+            }}
+          >
+            {submitting ? 'DECODING...' : 'UNLOCK_DISCOUNT'}
+          </button>
+
+          {error && (
+            <p style={{ color: '#ff0033', fontFamily: "'Fira Code', monospace", fontSize: 12, textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+        </form>
+
+        <button
+          onClick={onSkip}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#4B5563',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 12,
+            cursor: 'pointer',
+            marginTop: 16,
+            padding: '8px 16px',
+          }}
+        >
+          skip — just show me the secrets
+        </button>
+
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 10,
+          color: '#374151',
+          marginTop: 12,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+        }}>
+          <Lock size={10} />
+          no spam, ever
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Splash Phase ────────────────────────────────────────────────────────────
+
+function SplashPhase({ onReady }: { onReady: () => void }) {
+  const [showButton, setShowButton] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowButton(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div style={{
@@ -116,7 +329,6 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Scanline overlay */}
       <div className="secrets-scanline" />
 
       {/* Signal icon */}
@@ -134,7 +346,6 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         <Radio size={28} color="#ff0033" />
       </div>
 
-      {/* Title */}
       <h1 className="secrets-glitch" style={{
         fontFamily: "'Fira Code', monospace",
         fontSize: 'clamp(20px, 5vw, 28px)',
@@ -148,7 +359,6 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         Transmission_Intercepted
       </h1>
 
-      {/* Subtitle */}
       <p style={{
         fontFamily: "'Fira Sans', sans-serif",
         fontSize: 'clamp(15px, 4vw, 18px)',
@@ -172,58 +382,12 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         Most people walk right past them.
       </p>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} style={{
-        width: '100%',
-        maxWidth: 380,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}>
-        <div style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-        }}>
-          <span style={{
-            position: 'absolute',
-            left: 14,
-            color: '#00d2ff',
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 14,
-            pointerEvents: 'none',
-          }}>{'>'}</span>
-          <input
-            ref={inputRef}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="enter your callsign to decode"
-            required
-            autoComplete="email"
-            style={{
-              width: '100%',
-              padding: '16px 16px 16px 32px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(0,210,255,0.2)',
-              borderRadius: 8,
-              color: '#fff',
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 16,
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
-            onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
-          />
-        </div>
-
+      {showButton && (
         <button
-          type="submit"
-          disabled={submitting}
+          onClick={onReady}
           style={{
-            padding: '16px 24px',
-            background: submitting ? '#661122' : '#ff0033',
+            padding: '16px 36px',
+            background: '#ff0033',
             border: 'none',
             borderRadius: 8,
             color: '#fff',
@@ -232,38 +396,18 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
             fontWeight: 600,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            cursor: submitting ? 'wait' : 'pointer',
-            transition: 'background 0.2s, transform 0.1s',
+            cursor: 'pointer',
             minHeight: 52,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            animation: 'secretsFadeIn 0.5s ease-out',
           }}
         >
-          {submitting ? 'DECODING...' : 'DECODE_SIGNAL'}
+          DECODE_SIGNAL
+          <ChevronRight size={18} />
         </button>
-
-        {error && (
-          <p style={{
-            color: '#ff0033',
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 13,
-            textAlign: 'center',
-          }}>{error}</p>
-        )}
-      </form>
-
-      {/* Trust line */}
-      <p style={{
-        fontFamily: "'Fira Code', monospace",
-        fontSize: 11,
-        color: '#4B5563',
-        textAlign: 'center',
-        marginTop: 24,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-      }}>
-        <Lock size={12} />
-        encrypted channel — no spam, ever
-      </p>
+      )}
     </div>
   );
 }
@@ -295,7 +439,6 @@ function SecretCard({
       borderBottom: '1px solid rgba(255,255,255,0.06)',
       animation: !revealed ? 'secretsFadeIn 0.4s ease-out' : undefined,
     }}>
-      {/* Label + location */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -315,7 +458,6 @@ function SecretCard({
         }}>{secret.location}</span>
       </div>
 
-      {/* Title */}
       <h3 style={{
         fontFamily: "'Fira Sans', sans-serif",
         fontSize: 18,
@@ -325,7 +467,6 @@ function SecretCard({
         lineHeight: 1.3,
       }}>{secret.title}</h3>
 
-      {/* Body — typing or full */}
       <p style={{
         fontFamily: "'Fira Sans', sans-serif",
         fontSize: 15,
@@ -342,9 +483,16 @@ function SecretCard({
 
 // ─── Experience Phase ────────────────────────────────────────────────────────
 
-function ExperiencePhase({ onComplete }: { onComplete: () => void }) {
+function ExperiencePhase({
+  onComplete,
+  onModalTrigger,
+}: {
+  onComplete: () => void;
+  onModalTrigger: () => void;
+}) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealedCount, setRevealedCount] = useState(0);
+  const [modalTriggered, setModalTriggered] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleRevealed = useCallback(() => {
@@ -353,11 +501,17 @@ function ExperiencePhase({ onComplete }: { onComplete: () => void }) {
 
   const handleNext = () => {
     const next = currentIndex + 1;
+
+    // Trigger modal after the 3rd secret
+    if (next === MODAL_TRIGGER_INDEX + 1 && !modalTriggered) {
+      setModalTriggered(true);
+      onModalTrigger();
+    }
+
     if (next >= SECRETS.length) {
       onComplete();
     } else {
       setCurrentIndex(next);
-      // Scroll to bottom after short delay
       setTimeout(() => {
         scrollRef.current?.scrollTo({
           top: scrollRef.current.scrollHeight,
@@ -419,7 +573,7 @@ function ExperiencePhase({ onComplete }: { onComplete: () => void }) {
         ))}
       </div>
 
-      {/* Next button — fixed at bottom */}
+      {/* Next button */}
       {showNextButton && (
         <div style={{
           position: 'fixed',
@@ -463,7 +617,7 @@ function ExperiencePhase({ onComplete }: { onComplete: () => void }) {
 
 // ─── CTA Phase ───────────────────────────────────────────────────────────────
 
-function CTAPhase() {
+function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
   return (
     <div style={{
       minHeight: '100dvh',
@@ -475,7 +629,6 @@ function CTAPhase() {
       textAlign: 'center',
       animation: 'secretsFadeIn 0.6s ease-out',
     }}>
-      {/* Completed icon */}
       <div style={{
         width: 72,
         height: 72,
@@ -520,42 +673,44 @@ function CTAPhase() {
         The real hunt sends you into the streets. Your phone guides you. No tour guide. No bus. Just you, the city, and the mystery.
       </p>
 
-      {/* Coupon */}
-      <div style={{
-        padding: '16px 24px',
-        background: 'rgba(255,0,51,0.08)',
-        border: '1px solid rgba(255,0,51,0.25)',
-        borderRadius: 10,
-        marginBottom: 28,
-        maxWidth: 360,
-        width: '100%',
-        textAlign: 'center',
-      }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 11,
-          color: '#ff0033',
-          letterSpacing: '0.1em',
-          marginBottom: 8,
-        }}>REWARD_UNLOCKED</p>
-        <p style={{
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 16,
-          color: '#fff',
-          marginBottom: 8,
+      {/* Coupon — only if they gave email */}
+      {hasEmail && (
+        <div style={{
+          padding: '16px 24px',
+          background: 'rgba(255,0,51,0.08)',
+          border: '1px solid rgba(255,0,51,0.25)',
+          borderRadius: 10,
+          marginBottom: 28,
+          maxWidth: 360,
+          width: '100%',
+          textAlign: 'center',
+          animation: 'secretsFadeIn 0.4s ease-out',
         }}>
-          25% off your first hunt
-        </p>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#ff0033',
-          letterSpacing: '0.15em',
-        }}>DECODED25</p>
-      </div>
+          <p style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 11,
+            color: '#ff0033',
+            letterSpacing: '0.1em',
+            marginBottom: 8,
+          }}>REWARD_UNLOCKED</p>
+          <p style={{
+            fontFamily: "'Fira Sans', sans-serif",
+            fontSize: 16,
+            color: '#fff',
+            marginBottom: 8,
+          }}>
+            25% off your first hunt
+          </p>
+          <p style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 20,
+            fontWeight: 700,
+            color: '#ff0033',
+            letterSpacing: '0.15em',
+          }}>DECODED25</p>
+        </div>
+      )}
 
-      {/* Main CTA */}
       <a
         href="https://storyhunt.city"
         style={{
@@ -575,7 +730,6 @@ function CTAPhase() {
           textDecoration: 'none',
           cursor: 'pointer',
           minHeight: 56,
-          transition: 'transform 0.1s',
         }}
       >
         START_YOUR_HUNT
@@ -589,7 +743,6 @@ function CTAPhase() {
         marginTop: 16,
       }}>storyhunt.city</p>
 
-      {/* Product details */}
       <div style={{
         marginTop: 40,
         padding: '20px 24px',
@@ -621,10 +774,27 @@ function CTAPhase() {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'landing' | 'experience' | 'complete';
+type Phase = 'splash' | 'experience' | 'complete';
 
 export default function SecretsPage() {
-  const [phase, setPhase] = useState<Phase>('landing');
+  const [phase, setPhase] = useState<Phase>('splash');
+  const [showModal, setShowModal] = useState(false);
+  const [hasEmail, setHasEmail] = useState(false);
+
+  const handleModalTrigger = useCallback(() => {
+    if (!hasEmail) {
+      setShowModal(true);
+    }
+  }, [hasEmail]);
+
+  const handleEmailSubmit = useCallback(() => {
+    setHasEmail(true);
+    setShowModal(false);
+  }, []);
+
+  const handleModalSkip = useCallback(() => {
+    setShowModal(false);
+  }, []);
 
   return (
     <div style={{
@@ -633,32 +803,35 @@ export default function SecretsPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
-      {phase === 'landing' && (
-        <LandingPhase onSubmit={() => setPhase('experience')} />
+      {phase === 'splash' && (
+        <SplashPhase onReady={() => setPhase('experience')} />
       )}
       {phase === 'experience' && (
-        <ExperiencePhase onComplete={() => setPhase('complete')} />
+        <ExperiencePhase
+          onComplete={() => setPhase('complete')}
+          onModalTrigger={handleModalTrigger}
+        />
       )}
       {phase === 'complete' && (
-        <CTAPhase />
+        <CTAPhase hasEmail={hasEmail} />
       )}
 
-      {/* Global styles for this page */}
+      {showModal && (
+        <EmailModal
+          onSubmit={handleEmailSubmit}
+          onSkip={handleModalSkip}
+        />
+      )}
+
       <style>{`
         .secrets-scanline {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          top: 0; left: 0; right: 0; bottom: 0;
           pointer-events: none;
           z-index: 1;
           background: repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(0, 0, 0, 0.03) 2px,
-            rgba(0, 0, 0, 0.03) 4px
+            0deg, transparent, transparent 2px,
+            rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
           );
         }
 
@@ -679,8 +852,8 @@ export default function SecretsPage() {
         }
 
         @keyframes secretsPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 51, 0.3); }
-          50% { box-shadow: 0 0 0 12px rgba(255, 0, 51, 0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,51,0.3); }
+          50% { box-shadow: 0 0 0 12px rgba(255,0,51,0); }
         }
 
         @keyframes secretsBlink {
@@ -693,7 +866,6 @@ export default function SecretsPage() {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Hide scrollbar but keep scrolling */
         ::-webkit-scrollbar { display: none; }
         html { scrollbar-width: none; }
       `}</style>

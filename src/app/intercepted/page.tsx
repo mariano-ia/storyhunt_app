@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Lock, ChevronRight, Eye, Signal } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Lock, ChevronRight, Signal, X } from 'lucide-react';
 
 // ─── Intercepted Conversation Data ───────────────────────────────────────────
 
 type Message = {
   sender: 'A' | 'B' | 'system';
   text: string;
-  delay: number; // ms after previous message
-  image?: string;
+  delay: number;
 };
 
 const CONVERSATION: Message[] = [
@@ -23,6 +22,7 @@ const CONVERSATION: Message[] = [
   { sender: 'A', text: 'yes. press the button for the basement. it will say "restricted" but the door opens', delay: 2000 },
   { sender: 'B', text: '...it worked', delay: 2400 },
   { sender: 'B', text: 'there are tunnels down here. actual tunnels. under midtown', delay: 1800 },
+  // ─── MODAL TRIGGERS AFTER THIS MESSAGE (index 10) ───
   { sender: 'A', text: 'they connect 7 buildings. built during prohibition. nobody talks about them', delay: 2200 },
   { sender: 'B', text: 'wait. I can hear something. like a train but muffled', delay: 2000 },
   { sender: 'A', text: 'that is the old mail rail. it ran under the city until 1966. packages, letters, everything moved underground. 27 miles of track', delay: 2800 },
@@ -34,11 +34,11 @@ const CONVERSATION: Message[] = [
   { sender: 'system', text: 'SIGNAL_LOST // CONNECTION_TERMINATED', delay: 1500 },
 ];
 
+const MODAL_TRIGGER_INDEX = 10; // Show modal after "they connect 7 buildings..."
+
 // ─── Chat Bubble ─────────────────────────────────────────────────────────────
 
-function ChatBubble({ message, visible }: { message: Message; visible: boolean }) {
-  if (!visible) return null;
-
+function ChatBubble({ message }: { message: Message }) {
   if (message.sender === 'system') {
     return (
       <div style={{
@@ -112,9 +112,15 @@ function TypingIndicator({ sender }: { sender: 'A' | 'B' }) {
   );
 }
 
-// ─── Landing Phase ───────────────────────────────────────────────────────────
+// ─── Email Modal ─────────────────────────────────────────────────────────────
 
-function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
+function EmailModal({
+  onSubmit,
+  onSkip,
+}: {
+  onSubmit: (email: string) => void;
+  onSkip: () => void;
+}) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -138,6 +144,215 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
       setSubmitting(false);
     }
   };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      animation: 'intFadeIn 0.3s ease-out',
+    }}>
+      {/* Backdrop */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+        }}
+        onClick={onSkip}
+      />
+
+      {/* Modal */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 380,
+        background: '#0A0A0A',
+        border: '1px solid rgba(255,0,51,0.3)',
+        borderRadius: 16,
+        padding: '32px 24px',
+        textAlign: 'center',
+      }}>
+        {/* Close */}
+        <button
+          onClick={onSkip}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: 'none',
+            border: 'none',
+            color: '#4B5563',
+            cursor: 'pointer',
+            padding: 4,
+          }}
+        >
+          <X size={20} />
+        </button>
+
+        {/* Content */}
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 11,
+          color: '#ff0033',
+          letterSpacing: '0.1em',
+          marginBottom: 16,
+        }}>SIGNAL_PAUSED</p>
+
+        <h3 style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 20,
+          fontWeight: 700,
+          color: '#fff',
+          marginBottom: 8,
+          lineHeight: 1.3,
+        }}>
+          Want to keep listening?
+        </h3>
+
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 15,
+          color: '#94A3B8',
+          lineHeight: 1.5,
+          marginBottom: 8,
+        }}>
+          Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
+        </p>
+
+        {/* Coupon preview */}
+        <div style={{
+          display: 'inline-block',
+          padding: '6px 16px',
+          background: 'rgba(255,0,51,0.1)',
+          border: '1px solid rgba(255,0,51,0.2)',
+          borderRadius: 6,
+          marginBottom: 20,
+        }}>
+          <span style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 14,
+            fontWeight: 700,
+            color: '#ff0033',
+            letterSpacing: '0.1em',
+          }}>DECODED25</span>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{
+              position: 'absolute',
+              left: 14,
+              color: '#00d2ff',
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 14,
+              pointerEvents: 'none',
+            }}>{'>'}</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your email"
+              required
+              autoComplete="email"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '14px 14px 14px 32px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(0,210,255,0.2)',
+                borderRadius: 8,
+                color: '#fff',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 16,
+                outline: 'none',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: '14px 24px',
+              background: submitting ? '#661122' : '#ff0033',
+              border: 'none',
+              borderRadius: 8,
+              color: '#fff',
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 14,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: submitting ? 'wait' : 'pointer',
+              minHeight: 48,
+            }}
+          >
+            {submitting ? 'CONNECTING...' : 'UNLOCK_DISCOUNT'}
+          </button>
+
+          {error && (
+            <p style={{ color: '#ff0033', fontFamily: "'Fira Code', monospace", fontSize: 12, textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+        </form>
+
+        <button
+          onClick={onSkip}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#4B5563',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 12,
+            cursor: 'pointer',
+            marginTop: 16,
+            padding: '8px 16px',
+          }}
+        >
+          skip — just let me listen
+        </button>
+
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 10,
+          color: '#374151',
+          marginTop: 12,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+        }}>
+          <Lock size={10} />
+          no spam, ever
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Splash Phase ────────────────────────────────────────────────────────────
+
+function SplashPhase({ onReady }: { onReady: () => void }) {
+  const [showButton, setShowButton] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowButton(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div style={{
@@ -166,7 +381,7 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         <Signal size={28} color="#ff0033" />
       </div>
 
-      {/* Header */}
+      {/* Coordinates */}
       <p style={{
         fontFamily: "'Fira Code', monospace",
         fontSize: 11,
@@ -174,7 +389,7 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         letterSpacing: '0.1em',
         marginBottom: 16,
         opacity: 0.7,
-      }}>40.7128° N, 74.0060° W // 02:47 AM</p>
+      }}>40.7484° N, 73.9857° W // 02:47 AM</p>
 
       <h1 className="int-glitch" style={{
         fontFamily: "'Fira Code', monospace",
@@ -198,7 +413,8 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         lineHeight: 1.6,
         marginBottom: 8,
       }}>
-        Two people. A tunnel under Midtown. Something they weren&apos;t supposed to find.
+        Two people. A tunnel under Midtown.
+        <br />Something they weren&apos;t supposed to find.
       </p>
       <p style={{
         fontFamily: "'Fira Sans', sans-serif",
@@ -209,55 +425,16 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
         lineHeight: 1.6,
         marginBottom: 40,
       }}>
-        The conversation was cut short.
+        We intercepted the conversation.
       </p>
 
-      <form onSubmit={handleSubmit} style={{
-        width: '100%',
-        maxWidth: 380,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <span style={{
-            position: 'absolute',
-            left: 14,
-            color: '#00d2ff',
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 14,
-            pointerEvents: 'none',
-          }}>{'>'}</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="enter your callsign to listen in"
-            required
-            autoComplete="email"
-            style={{
-              width: '100%',
-              padding: '16px 16px 16px 32px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(0,210,255,0.2)',
-              borderRadius: 8,
-              color: '#fff',
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 16,
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.6)'}
-            onBlur={(e) => e.target.style.borderColor = 'rgba(0,210,255,0.2)'}
-          />
-        </div>
-
+      {/* CTA button */}
+      {showButton && (
         <button
-          type="submit"
-          disabled={submitting}
+          onClick={onReady}
           style={{
-            padding: '16px 24px',
-            background: submitting ? '#661122' : '#ff0033',
+            padding: '16px 36px',
+            background: '#ff0033',
             border: 'none',
             borderRadius: 8,
             color: '#fff',
@@ -266,75 +443,86 @@ function LandingPhase({ onSubmit }: { onSubmit: (email: string) => void }) {
             fontWeight: 600,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            cursor: submitting ? 'wait' : 'pointer',
+            cursor: 'pointer',
             minHeight: 52,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            animation: 'intFadeIn 0.5s ease-out',
           }}
         >
-          {submitting ? 'CONNECTING...' : 'INTERCEPT_SIGNAL'}
+          LISTEN_IN
+          <ChevronRight size={18} />
         </button>
-
-        {error && (
-          <p style={{ color: '#ff0033', fontFamily: "'Fira Code', monospace", fontSize: 13, textAlign: 'center' }}>
-            {error}
-          </p>
-        )}
-      </form>
-
-      <p style={{
-        fontFamily: "'Fira Code', monospace",
-        fontSize: 11,
-        color: '#4B5563',
-        textAlign: 'center',
-        marginTop: 24,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-      }}>
-        <Lock size={12} />
-        encrypted channel — no spam, ever
-      </p>
+      )}
     </div>
   );
 }
 
 // ─── Conversation Phase ──────────────────────────────────────────────────────
 
-function ConversationPhase({ onComplete }: { onComplete: () => void }) {
+function ConversationPhase({
+  onComplete,
+  onModalTrigger,
+  paused,
+}: {
+  onComplete: () => void;
+  onModalTrigger: () => void;
+  paused: boolean;
+}) {
   const [visibleCount, setVisibleCount] = useState(0);
   const [showTyping, setShowTyping] = useState(true);
+  const [modalTriggered, setModalTriggered] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const indexRef = useRef(0);
 
-  useEffect(() => {
-    function showNext(index: number) {
-      if (index >= CONVERSATION.length) {
-        setShowTyping(false);
-        // Small pause then show CTA
-        timeoutRef.current = setTimeout(onComplete, 2000);
-        return;
-      }
+  const showNext = useCallback((index: number) => {
+    indexRef.current = index;
 
-      const msg = CONVERSATION[index];
-      // Show typing indicator for a portion of the delay
-      setShowTyping(true);
-
-      timeoutRef.current = setTimeout(() => {
-        setVisibleCount(index + 1);
-        setShowTyping(false);
-
-        // Brief pause then start next
-        timeoutRef.current = setTimeout(() => {
-          showNext(index + 1);
-        }, 300);
-      }, msg.delay);
+    if (index >= CONVERSATION.length) {
+      setShowTyping(false);
+      timeoutRef.current = setTimeout(onComplete, 2000);
+      return;
     }
 
-    showNext(0);
+    // Trigger modal at the right moment
+    if (index === MODAL_TRIGGER_INDEX && !modalTriggered) {
+      setModalTriggered(true);
+      setShowTyping(false);
+      onModalTrigger();
+      return;
+    }
 
+    const msg = CONVERSATION[index];
+    setShowTyping(true);
+
+    timeoutRef.current = setTimeout(() => {
+      setVisibleCount(index + 1);
+      setShowTyping(false);
+
+      timeoutRef.current = setTimeout(() => {
+        showNext(index + 1);
+      }, 300);
+    }, msg.delay);
+  }, [onComplete, onModalTrigger, modalTriggered]);
+
+  // Start the conversation
+  useEffect(() => {
+    showNext(0);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Resume after modal is dismissed
+  useEffect(() => {
+    if (!paused && modalTriggered && indexRef.current === MODAL_TRIGGER_INDEX) {
+      showNext(MODAL_TRIGGER_INDEX);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused]);
 
   // Auto-scroll
   useEffect(() => {
@@ -366,15 +554,15 @@ function ConversationPhase({ onComplete }: { onComplete: () => void }) {
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: '#ff0033',
-            animation: 'intBlink 1.5s ease-in-out infinite',
+            background: paused ? '#F59E0B' : '#ff0033',
+            animation: paused ? undefined : 'intBlink 1.5s ease-in-out infinite',
           }} />
           <span style={{
             fontFamily: "'Fira Code', monospace",
             fontSize: 12,
-            color: '#ff0033',
+            color: paused ? '#F59E0B' : '#ff0033',
             letterSpacing: '0.08em',
-          }}>LIVE_INTERCEPT</span>
+          }}>{paused ? 'SIGNAL_PAUSED' : 'LIVE_INTERCEPT'}</span>
         </div>
         <span style={{
           fontFamily: "'Fira Code', monospace",
@@ -394,10 +582,10 @@ function ConversationPhase({ onComplete }: { onComplete: () => void }) {
         }}
       >
         {CONVERSATION.slice(0, visibleCount).map((msg, i) => (
-          <ChatBubble key={i} message={msg} visible={true} />
+          <ChatBubble key={i} message={msg} />
         ))}
 
-        {showTyping && nextSender && nextSender !== 'system' && (
+        {showTyping && !paused && nextSender && nextSender !== 'system' && (
           <TypingIndicator sender={nextSender} />
         )}
       </div>
@@ -407,7 +595,7 @@ function ConversationPhase({ onComplete }: { onComplete: () => void }) {
 
 // ─── CTA Phase ───────────────────────────────────────────────────────────────
 
-function CTAPhase() {
+function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
   return (
     <div style={{
       minHeight: '100dvh',
@@ -474,39 +662,42 @@ function CTAPhase() {
       </p>
 
       {/* Coupon */}
-      <div style={{
-        padding: '16px 24px',
-        background: 'rgba(255,0,51,0.08)',
-        border: '1px solid rgba(255,0,51,0.25)',
-        borderRadius: 10,
-        marginBottom: 28,
-        maxWidth: 360,
-        width: '100%',
-        textAlign: 'center',
-      }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 11,
-          color: '#ff0033',
-          letterSpacing: '0.1em',
-          marginBottom: 8,
-        }}>REWARD_UNLOCKED</p>
-        <p style={{
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 16,
-          color: '#fff',
-          marginBottom: 8,
+      {hasEmail && (
+        <div style={{
+          padding: '16px 24px',
+          background: 'rgba(255,0,51,0.08)',
+          border: '1px solid rgba(255,0,51,0.25)',
+          borderRadius: 10,
+          marginBottom: 28,
+          maxWidth: 360,
+          width: '100%',
+          textAlign: 'center',
+          animation: 'intFadeIn 0.4s ease-out',
         }}>
-          25% off your first hunt
-        </p>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#ff0033',
-          letterSpacing: '0.15em',
-        }}>DECODED25</p>
-      </div>
+          <p style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 11,
+            color: '#ff0033',
+            letterSpacing: '0.1em',
+            marginBottom: 8,
+          }}>REWARD_UNLOCKED</p>
+          <p style={{
+            fontFamily: "'Fira Sans', sans-serif",
+            fontSize: 16,
+            color: '#fff',
+            marginBottom: 8,
+          }}>
+            25% off your first hunt
+          </p>
+          <p style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 20,
+            fontWeight: 700,
+            color: '#ff0033',
+            letterSpacing: '0.15em',
+          }}>DECODED25</p>
+        </div>
+      )}
 
       {/* CTA */}
       <a
@@ -573,10 +764,27 @@ function CTAPhase() {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'landing' | 'conversation' | 'complete';
+type Phase = 'splash' | 'conversation' | 'complete';
 
 export default function InterceptedPage() {
-  const [phase, setPhase] = useState<Phase>('landing');
+  const [phase, setPhase] = useState<Phase>('splash');
+  const [showModal, setShowModal] = useState(false);
+  const [hasEmail, setHasEmail] = useState(false);
+
+  const handleModalTrigger = useCallback(() => {
+    if (!hasEmail) {
+      setShowModal(true);
+    }
+  }, [hasEmail]);
+
+  const handleEmailSubmit = useCallback(() => {
+    setHasEmail(true);
+    setShowModal(false);
+  }, []);
+
+  const handleModalSkip = useCallback(() => {
+    setShowModal(false);
+  }, []);
 
   return (
     <div style={{
@@ -585,14 +793,26 @@ export default function InterceptedPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
-      {phase === 'landing' && (
-        <LandingPhase onSubmit={() => setPhase('conversation')} />
+      {phase === 'splash' && (
+        <SplashPhase onReady={() => setPhase('conversation')} />
       )}
       {phase === 'conversation' && (
-        <ConversationPhase onComplete={() => setPhase('complete')} />
+        <ConversationPhase
+          onComplete={() => setPhase('complete')}
+          onModalTrigger={handleModalTrigger}
+          paused={showModal}
+        />
       )}
       {phase === 'complete' && (
-        <CTAPhase />
+        <CTAPhase hasEmail={hasEmail} />
+      )}
+
+      {/* Email Modal — overlays conversation */}
+      {showModal && (
+        <EmailModal
+          onSubmit={handleEmailSubmit}
+          onSkip={handleModalSkip}
+        />
       )}
 
       <style>{`
