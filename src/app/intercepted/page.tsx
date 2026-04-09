@@ -34,7 +34,7 @@ const CONVERSATION: Message[] = [
   { sender: 'system', text: 'SIGNAL_LOST // CONNECTION_TERMINATED', delay: 1500 },
 ];
 
-const MODAL_TRIGGER_INDEX = 10; // Show modal after "they connect 7 buildings..."
+const MODAL_TRIGGER_INDEX = 6; // Show modal after "good. go to the elevators on the east side..."
 
 // ─── Chat Bubble ─────────────────────────────────────────────────────────────
 
