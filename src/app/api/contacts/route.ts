@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { Resend } from 'resend';
+import { welcomeEmail } from '@/lib/email-templates';
 
 const ALLOWED_ORIGINS = ['https://storyhunt.city', 'https://www.storyhunt.city', 'http://localhost:3000'];
 const CORS_HEADERS = {
@@ -12,6 +13,22 @@ const CORS_HEADERS = {
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL || '';
+
+async function sendWelcomeEmail(contactEmail: string, lang: 'es' | 'en') {
+    if (!resend) return;
+    try {
+        const { subject, html } = welcomeEmail(lang === 'en');
+        await resend.emails.send({
+            from: 'StoryHunt <hello@storyhunt.city>',
+            to: contactEmail,
+            subject,
+            html,
+        });
+        console.log(`[contacts] Welcome email sent to ${contactEmail} (${lang})`);
+    } catch (err) {
+        console.error(`[contacts] Failed to send welcome email to ${contactEmail}:`, err);
+    }
+}
 
 async function sendNotification(contactEmail: string) {
     if (!resend || !NOTIFICATION_EMAIL) return;
@@ -46,9 +63,12 @@ export async function POST(request: Request) {
         const contentType = request.headers.get('content-type') ?? '';
         let email: string | undefined;
 
+        let source = 'website';
+
         if (contentType.includes('application/json')) {
             const body = await request.json();
             email = body.email;
+            if (body.source) source = body.source;
         } else {
             // HTML form submission (application/x-www-form-urlencoded)
             const formData = await request.formData();
@@ -59,13 +79,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Email is required' }, { status: 400, headers: CORS_HEADERS });
         }
 
+        // Detect language from Accept-Language header (default: en for NYC market)
+        const acceptLang = request.headers.get('accept-language') || '';
+        const lang: 'es' | 'en' = acceptLang.toLowerCase().startsWith('es') ? 'es' : 'en';
+
         await addDoc(collection(db, 'contacts'), {
             email,
+            lang,
+            source,
             created_at: new Date().toISOString(),
             status: 'new',
+            welcome_sent: true,
+            welcome_sent_at: new Date().toISOString(),
         });
 
-        // Send notification email (non-blocking, don't fail if it errors)
+        // Send E1 welcome email + admin notification (non-blocking)
+        sendWelcomeEmail(email, lang);
         sendNotification(email);
 
         // If it came from an HTML form, redirect to success page
