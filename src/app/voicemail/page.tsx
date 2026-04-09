@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, ChevronRight, Phone, X, Copy, Check, Play, Pause } from 'lucide-react';
+import { trackLead } from '@/components/MetaPixel';
 
 // ─── Subtitle Data (timed to audio) ─────────────────────────────────────────
 
@@ -72,6 +73,7 @@ function EmailModal({
         body: JSON.stringify({ email, source: 'voicemail-lead-magnet' }),
       });
       if (!res.ok) throw new Error('Failed');
+      trackLead();
       setRevealed(true);
     } catch {
       setError('SIGNAL_LOST — try again');

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, ChevronRight, Signal, X, Copy, Check } from 'lucide-react';
+import { trackLead } from '@/components/MetaPixel';
 
 // ─── Intercepted Conversation Data ───────────────────────────────────────────
 
@@ -140,6 +141,7 @@ function EmailModal({
         body: JSON.stringify({ email, source: 'intercepted-lead-magnet' }),
       });
       if (!res.ok) throw new Error('Failed');
+      trackLead();
       setRevealed(true);
     } catch {
       setError('SIGNAL_LOST — try again');

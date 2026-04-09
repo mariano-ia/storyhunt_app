@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, ChevronRight, Radio, Eye, X, Copy, Check } from 'lucide-react';
+import { trackLead } from '@/components/MetaPixel';
 
 // ─── NYC Secrets Data ────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ function EmailModal({
         body: JSON.stringify({ email, source: 'secrets-lead-magnet' }),
       });
       if (!res.ok) throw new Error('Failed');
+      trackLead();
       setRevealed(true);
     } catch {
       setError('SIGNAL_LOST — try again');
