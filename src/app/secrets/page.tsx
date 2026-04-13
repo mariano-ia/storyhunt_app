@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, ChevronRight, Radio, Eye, X, Copy, Check } from 'lucide-react';
+import { Lock, ChevronRight, Radio, Eye, Copy, Check } from 'lucide-react';
 import { trackLead } from '@/components/MetaPixel';
 
 // ─── NYC Secrets Data ────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ const SECRETS = [
   },
 ];
 
-const MODAL_TRIGGER_INDEX = 1; // Show modal after secret 2 (0-indexed)
+const MODAL_TRIGGER_INDEX = 0; // Show modal after secret 1 (0-indexed)
 
 // ─── Typing Effect Hook ──────────────────────────────────────────────────────
 
@@ -82,10 +82,8 @@ function useTypingEffect(text: string, active: boolean, speed = 18) {
 
 function EmailModal({
   onSubmit,
-  onSkip,
 }: {
   onSubmit: (email: string) => void;
-  onSkip: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -142,7 +140,7 @@ function EmailModal({
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(8px)',
         }}
-        onClick={revealed ? handleContinue : onSkip}
+        onClick={revealed ? handleContinue : undefined}
       />
 
       <div style={{
@@ -155,24 +153,6 @@ function EmailModal({
         padding: '32px 24px',
         textAlign: 'center',
       }}>
-        {!revealed && (
-          <button
-            onClick={onSkip}
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'none',
-              border: 'none',
-              color: '#4B5563',
-              cursor: 'pointer',
-              padding: 4,
-            }}
-          >
-            <X size={20} />
-          </button>
-        )}
-
         {revealed ? (
           <>
             <p style={{
@@ -181,7 +161,7 @@ function EmailModal({
               color: '#10B981',
               letterSpacing: '0.1em',
               marginBottom: 16,
-            }}>DISCOUNT_REVEALED</p>
+            }}>ACCESS_GRANTED</p>
 
             <h3 style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -191,8 +171,18 @@ function EmailModal({
               marginBottom: 12,
               lineHeight: 1.3,
             }}>
-              25% off your first hunt
+              4 more secrets unlocked.
             </h3>
+
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 14,
+              color: '#94A3B8',
+              lineHeight: 1.5,
+              marginBottom: 16,
+            }}>
+              And here&apos;s something extra — 25% off if you want to hunt these locations in person.
+            </p>
 
             <button
               onClick={handleCopy}
@@ -261,7 +251,7 @@ function EmailModal({
               color: '#00d2ff',
               letterSpacing: '0.1em',
               marginBottom: 16,
-            }}>2/5 DECODED</p>
+            }}>1/5 DECODED</p>
 
             <h3 style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -271,7 +261,7 @@ function EmailModal({
               marginBottom: 8,
               lineHeight: 1.3,
             }}>
-              Want the last 3 secrets?
+              4 secrets remaining.
             </h3>
 
             <p style={{
@@ -279,29 +269,10 @@ function EmailModal({
               fontSize: 15,
               color: '#94A3B8',
               lineHeight: 1.5,
-              marginBottom: 8,
-            }}>
-              Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
-            </p>
-
-            <div style={{
-              display: 'inline-block',
-              padding: '6px 16px',
-              background: 'rgba(255,0,51,0.1)',
-              border: '1px solid rgba(255,0,51,0.2)',
-              borderRadius: 6,
               marginBottom: 20,
             }}>
-              <span style={{
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 14,
-                fontWeight: 700,
-                color: '#ff0033',
-                letterSpacing: '0.1em',
-                filter: 'blur(6px)',
-                userSelect: 'none',
-              }}>DECODED25</span>
-            </div>
+              A subway station too beautiful for daily use. A door that leads to 1830. A fortress no one was meant to find. Drop your email to decode them all.
+            </p>
 
             <form onSubmit={handleSubmit} style={{
               display: 'flex',
@@ -360,7 +331,7 @@ function EmailModal({
                   minHeight: 48,
                 }}
               >
-                {submitting ? 'DECODING...' : 'UNLOCK_DISCOUNT'}
+                {submitting ? 'DECODING...' : 'DECODE_ALL_5'}
               </button>
 
               {error && (
@@ -369,22 +340,6 @@ function EmailModal({
                 </p>
               )}
             </form>
-
-            <button
-              onClick={onSkip}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#4B5563',
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 12,
-                cursor: 'pointer',
-                marginTop: 16,
-                padding: '8px 16px',
-              }}
-            >
-              skip — just show me the secrets
-            </button>
 
             <p style={{
               fontFamily: "'Fira Code', monospace",
@@ -893,12 +848,136 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
   );
 }
 
+// ─── Intro Phase ────────────────────────────────────────────────────────────
+
+function IntroPhase({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setStep(1), 800),
+      setTimeout(() => setStep(2), 3200),
+      setTimeout(() => setStep(3), 5400),
+      setTimeout(() => setStep(4), 7400),
+      setTimeout(() => onDone(), 8000),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [onDone]);
+
+  return (
+    <div style={{
+      minHeight: '100dvh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: '24px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <div className="secrets-scanline" />
+
+      <img
+        src="/logo.png"
+        alt="StoryHunt"
+        style={{
+          height: 28,
+          marginBottom: 40,
+          opacity: step >= 0 ? 0.7 : 0,
+          transition: 'opacity 0.6s',
+        }}
+      />
+
+      <h1 className="secrets-glitch" style={{
+        fontFamily: "'Fira Code', monospace",
+        fontSize: 'clamp(16px, 4.5vw, 22px)',
+        fontWeight: 700,
+        color: '#fff',
+        textAlign: 'center',
+        marginBottom: 28,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        opacity: step >= 0 ? 1 : 0,
+        transition: 'opacity 0.8s',
+      }}>
+        A mystery walk<br />through New York City
+      </h1>
+
+      <div style={{
+        textAlign: 'center',
+        marginBottom: 32,
+        opacity: step >= 1 ? 1 : 0,
+        transform: step >= 1 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 'clamp(13px, 3.5vw, 15px)',
+          color: '#fff',
+          letterSpacing: '0.04em',
+          lineHeight: 1.8,
+          marginBottom: 8,
+        }}>
+          Your phone sends clues.
+          <br />You decode the city.
+        </p>
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 'clamp(13px, 3.2vw, 15px)',
+          color: '#4B5563',
+          lineHeight: 1.5,
+        }}>
+          No guide. No group. Just you and the streets.
+        </p>
+      </div>
+
+      <p style={{
+        fontFamily: "'Fira Sans', sans-serif",
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
+        color: '#64748B',
+        textAlign: 'center',
+        maxWidth: 320,
+        lineHeight: 1.6,
+        marginBottom: 28,
+        opacity: step >= 2 ? 1 : 0,
+        transform: step >= 2 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        Every hunt is built on <span style={{ color: '#94A3B8' }}>real locations</span> most people never find.
+      </p>
+
+      <p style={{
+        fontFamily: "'Fira Code', monospace",
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
+        color: '#ff0033',
+        textAlign: 'center',
+        letterSpacing: '0.05em',
+        opacity: step >= 3 ? 1 : 0,
+        transform: step >= 3 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        We found 5 of them.
+      </p>
+
+      {step >= 4 && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: '#050505',
+          zIndex: 50,
+          animation: 'secretsGlitchOut 0.6s ease-in forwards',
+        }} />
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'splash' | 'experience' | 'complete';
+type Phase = 'intro' | 'splash' | 'experience' | 'complete';
 
 export default function SecretsPage() {
-  const [phase, setPhase] = useState<Phase>('splash');
+  const [phase, setPhase] = useState<Phase>('intro');
   const [showModal, setShowModal] = useState(false);
   const [hasEmail, setHasEmail] = useState(false);
 
@@ -913,10 +992,6 @@ export default function SecretsPage() {
     setShowModal(false);
   }, []);
 
-  const handleModalSkip = useCallback(() => {
-    setShowModal(false);
-  }, []);
-
   return (
     <div style={{
       background: '#050505',
@@ -924,6 +999,9 @@ export default function SecretsPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
+      {phase === 'intro' && (
+        <IntroPhase onDone={() => setPhase('splash')} />
+      )}
       {phase === 'splash' && (
         <SplashPhase onReady={() => setPhase('experience')} />
       )}
@@ -940,7 +1018,6 @@ export default function SecretsPage() {
       {showModal && (
         <EmailModal
           onSubmit={handleEmailSubmit}
-          onSkip={handleModalSkip}
         />
       )}
 
@@ -985,6 +1062,14 @@ export default function SecretsPage() {
         @keyframes secretsFadeIn {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes secretsGlitchOut {
+          0% { opacity: 0; transform: scaleY(1); }
+          20% { opacity: 1; transform: scaleY(0.02); background: #ff0033; }
+          40% { opacity: 1; transform: scaleY(0.02); background: #00d2ff; }
+          60% { opacity: 1; transform: scaleY(0.01); background: #ff0033; }
+          100% { opacity: 1; transform: scaleY(1); background: #050505; }
         }
 
         ::-webkit-scrollbar { display: none; }

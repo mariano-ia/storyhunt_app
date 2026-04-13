@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, ChevronRight, Phone, X, Copy, Check, Play, Pause } from 'lucide-react';
+import { Lock, ChevronRight, Phone, Copy, Check, Play, Pause } from 'lucide-react';
 import { trackLead } from '@/components/MetaPixel';
 
 // ─── Subtitle Data (timed to audio) ─────────────────────────────────────────
@@ -43,16 +43,14 @@ const SUBTITLES: Subtitle[] = [
   { start: 70.4, end: 72.4, text: "I haven't opened that one yet." },
 ];
 
-const MODAL_TRIGGER_TIME = 10; // Early — after fire escape line
+const MODAL_TRIGGER_TIME = 21; // "that's not a grate, that's the entrance" — peak tension
 
 // ─── Email Modal ─────────────────────────────────────────────────────────────
 
 function EmailModal({
   onSubmit,
-  onSkip,
 }: {
   onSubmit: (email: string) => void;
-  onSkip: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -109,7 +107,7 @@ function EmailModal({
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(8px)',
         }}
-        onClick={revealed ? handleContinue : onSkip}
+        onClick={revealed ? handleContinue : undefined}
       />
 
       <div style={{
@@ -122,24 +120,6 @@ function EmailModal({
         padding: '32px 24px',
         textAlign: 'center',
       }}>
-        {!revealed && (
-          <button
-            onClick={onSkip}
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'none',
-              border: 'none',
-              color: '#4B5563',
-              cursor: 'pointer',
-              padding: 4,
-            }}
-          >
-            <X size={20} />
-          </button>
-        )}
-
         {revealed ? (
           <>
             <p style={{
@@ -148,7 +128,7 @@ function EmailModal({
               color: '#10B981',
               letterSpacing: '0.1em',
               marginBottom: 16,
-            }}>DISCOUNT_REVEALED</p>
+            }}>ACCESS_GRANTED</p>
 
             <h3 style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -158,8 +138,18 @@ function EmailModal({
               marginBottom: 12,
               lineHeight: 1.3,
             }}>
-              25% off your first hunt
+              The voicemail is yours.
             </h3>
+
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 14,
+              color: '#94A3B8',
+              lineHeight: 1.5,
+              marginBottom: 16,
+            }}>
+              And here&apos;s something extra — 25% off if you want to hunt the real location.
+            </p>
 
             <button
               onClick={handleCopy}
@@ -238,7 +228,7 @@ function EmailModal({
               marginBottom: 8,
               lineHeight: 1.3,
             }}>
-              Want to hear the rest?
+              The entrance is real.
             </h3>
 
             <p style={{
@@ -246,29 +236,10 @@ function EmailModal({
               fontSize: 15,
               color: '#94A3B8',
               lineHeight: 1.5,
-              marginBottom: 8,
-            }}>
-              Drop your email and unlock <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first mystery walk.
-            </p>
-
-            <div style={{
-              display: 'inline-block',
-              padding: '6px 16px',
-              background: 'rgba(255,0,51,0.1)',
-              border: '1px solid rgba(255,0,51,0.2)',
-              borderRadius: 6,
               marginBottom: 20,
             }}>
-              <span style={{
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 14,
-                fontWeight: 700,
-                color: '#ff0033',
-                letterSpacing: '0.1em',
-                filter: 'blur(6px)',
-                userSelect: 'none',
-              }}>DECODED25</span>
-            </div>
+              Drop your email to hear the rest — where the corridor leads, and what&apos;s written on the wall.
+            </p>
 
             <form onSubmit={handleSubmit} style={{
               display: 'flex',
@@ -327,7 +298,7 @@ function EmailModal({
                   minHeight: 48,
                 }}
               >
-                {submitting ? 'CONNECTING...' : 'UNLOCK_DISCOUNT'}
+                {submitting ? 'CONNECTING...' : 'HEAR_THE_REST'}
               </button>
 
               {error && (
@@ -337,27 +308,11 @@ function EmailModal({
               )}
             </form>
 
-            <button
-              onClick={onSkip}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#4B5563',
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 12,
-                cursor: 'pointer',
-                marginTop: 16,
-                padding: '8px 16px',
-              }}
-            >
-              skip — just let me listen
-            </button>
-
             <p style={{
               fontFamily: "'Fira Code', monospace",
               fontSize: 10,
               color: '#374151',
-              marginTop: 12,
+              marginTop: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -935,12 +890,144 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
   );
 }
 
+// ─── Intro Phase ────────────────────────────────────────────────────────────
+
+function IntroPhase({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setStep(1), 800),
+      setTimeout(() => setStep(2), 3200),
+      setTimeout(() => setStep(3), 5400),
+      setTimeout(() => setStep(4), 7400),
+      setTimeout(() => onDone(), 8000),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [onDone]);
+
+  return (
+    <div style={{
+      minHeight: '100dvh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: '24px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <div className="vm-scanline" />
+
+      {/* Logo */}
+      <img
+        src="/logo.png"
+        alt="StoryHunt"
+        style={{
+          height: 28,
+          marginBottom: 40,
+          opacity: step >= 0 ? 0.7 : 0,
+          transition: 'opacity 0.6s',
+        }}
+      />
+
+      {/* Main title — big, styled like Voicemail Recovered */}
+      <h1 className="vm-glitch" style={{
+        fontFamily: "'Fira Code', monospace",
+        fontSize: 'clamp(16px, 4.5vw, 22px)',
+        fontWeight: 700,
+        color: '#fff',
+        textAlign: 'center',
+        marginBottom: 28,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        opacity: step >= 0 ? 1 : 0,
+        transition: 'opacity 0.8s',
+      }}>
+        A mystery walk<br />through New York City
+      </h1>
+
+      {/* How it works — second visual level */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: 32,
+        opacity: step >= 1 ? 1 : 0,
+        transform: step >= 1 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 'clamp(13px, 3.5vw, 15px)',
+          color: '#fff',
+          letterSpacing: '0.04em',
+          lineHeight: 1.8,
+          marginBottom: 8,
+        }}>
+          Your phone sends clues.
+          <br />You decode the city.
+        </p>
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 'clamp(13px, 3.2vw, 15px)',
+          color: '#4B5563',
+          lineHeight: 1.5,
+        }}>
+          No guide. No group. Just you and the streets.
+        </p>
+      </div>
+
+      {/* Built on real */}
+      <p style={{
+        fontFamily: "'Fira Sans', sans-serif",
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
+        color: '#64748B',
+        textAlign: 'center',
+        maxWidth: 320,
+        lineHeight: 1.6,
+        marginBottom: 28,
+        opacity: step >= 2 ? 1 : 0,
+        transform: step >= 2 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        Every hunt is built on <span style={{ color: '#94A3B8' }}>real documents</span>,{' '}
+        <span style={{ color: '#94A3B8' }}>real locations</span>,{' '}
+        <span style={{ color: '#94A3B8' }}>real history</span>.
+      </p>
+
+      {/* The hook */}
+      <p style={{
+        fontFamily: "'Fira Code', monospace",
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
+        color: '#ff0033',
+        textAlign: 'center',
+        letterSpacing: '0.05em',
+        opacity: step >= 3 ? 1 : 0,
+        transform: step >= 3 ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.6s, transform 0.6s',
+      }}>
+        Here&apos;s one of them.
+      </p>
+
+      {/* Glitch overlay */}
+      {step >= 4 && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: '#050505',
+          zIndex: 50,
+          animation: 'vmGlitchOut 0.6s ease-in forwards',
+        }} />
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'splash' | 'player' | 'complete';
+type Phase = 'intro' | 'splash' | 'player' | 'complete';
 
 export default function VoicemailPage() {
-  const [phase, setPhase] = useState<Phase>('splash');
+  const [phase, setPhase] = useState<Phase>('intro');
   const [showModal, setShowModal] = useState(false);
   const [hasEmail, setHasEmail] = useState(false);
 
@@ -955,10 +1042,6 @@ export default function VoicemailPage() {
     setShowModal(false);
   }, []);
 
-  const handleModalSkip = useCallback(() => {
-    setShowModal(false);
-  }, []);
-
   return (
     <div style={{
       background: '#050505',
@@ -966,6 +1049,9 @@ export default function VoicemailPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
+      {phase === 'intro' && (
+        <IntroPhase onDone={() => setPhase('splash')} />
+      )}
       {phase === 'splash' && (
         <SplashPhase onReady={() => setPhase('player')} />
       )}
@@ -983,7 +1069,6 @@ export default function VoicemailPage() {
       {showModal && (
         <EmailModal
           onSubmit={handleEmailSubmit}
-          onSkip={handleModalSkip}
         />
       )}
 
@@ -1028,6 +1113,14 @@ export default function VoicemailPage() {
         @keyframes vmBar {
           0% { height: 8px; }
           100% { height: 40px; }
+        }
+
+        @keyframes vmGlitchOut {
+          0% { opacity: 0; transform: scaleY(1); }
+          20% { opacity: 1; transform: scaleY(0.02); background: #ff0033; }
+          40% { opacity: 1; transform: scaleY(0.02); background: #00d2ff; }
+          60% { opacity: 1; transform: scaleY(0.01); background: #ff0033; }
+          100% { opacity: 1; transform: scaleY(1); background: #050505; }
         }
 
         ::-webkit-scrollbar { display: none; }
