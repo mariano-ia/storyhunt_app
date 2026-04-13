@@ -1,6 +1,6 @@
 'use client';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog, Sparkles, Ticket, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, Zap, Users, MessageSquare, Settings, ChevronRight, LogOut, UserCog, Sparkles, Ticket, ShoppingCart, Megaphone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const navItems = [
@@ -9,6 +9,7 @@ const navItems = [
     { label: 'AI Stories', icon: Sparkles, href: '/dashboard/ai-stories' },
     { label: 'Cupones', icon: Ticket, href: '/dashboard/coupons' },
     { label: 'Ventas', icon: ShoppingCart, href: '/dashboard/sales' },
+    { label: 'Campaigns', icon: Megaphone, href: '/dashboard/campaigns' },
     { label: 'Sesiones', icon: Users, href: '/dashboard/sessions' },
     { label: 'Configuración', icon: Settings, href: '/dashboard/settings' },
 ];
