@@ -18,5 +18,13 @@ export const metadata: Metadata = {
 };
 
 export default function StartLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+      />
+      {children}
+    </>
+  );
 }
