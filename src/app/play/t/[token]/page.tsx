@@ -1,19 +1,60 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AccessToken } from '@/lib/types';
 
 // ─── Token-based Player Entry ────────────────────────────────────────────────
 // Validates access via server-side verification, then redirects to the player.
 
+const COPY = {
+    es: {
+        verifying: 'Verificando acceso...',
+        verifyingSub: 'Esto puede tomar unos segundos',
+        verified: 'Acceso verificado',
+        loading: 'Cargando experiencia...',
+        invalid: 'Link invalido',
+        expired: 'Link expirado',
+        used: 'Link ya utilizado',
+        paymentIncomplete: 'El pago no se completo. Intenta nuevamente.',
+        defaultInvalid: 'Este link no es valido o ya no existe.',
+        expiredMsg: 'Este link ha expirado. Los links de acceso son validos por 48 horas.',
+        usedMsg: 'Este link ya fue utilizado el maximo de veces permitidas.',
+        missingExperience: 'La experiencia asociada a este link ya no existe.',
+        genericError: 'Ocurrio un error al validar tu acceso. Intenta recargar la pagina.',
+        back: 'Volver a StoryHunt',
+    },
+    en: {
+        verifying: 'Verifying access...',
+        verifyingSub: 'This may take a few seconds',
+        verified: 'Access verified',
+        loading: 'Loading experience...',
+        invalid: 'Invalid link',
+        expired: 'Link expired',
+        used: 'Link already used',
+        paymentIncomplete: 'Payment did not complete. Please try again.',
+        defaultInvalid: 'This link is not valid or no longer exists.',
+        expiredMsg: 'This link has expired. Access links are valid for 48 hours.',
+        usedMsg: 'This link has already been used the maximum number of times.',
+        missingExperience: 'The experience linked to this access is no longer available.',
+        genericError: 'Something went wrong while validating your access. Try reloading the page.',
+        back: 'Back to StoryHunt',
+    },
+} as const;
+
 export default function TokenPlayPage() {
     const { token } = useParams() as { token: string };
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialLang: 'es' | 'en' = searchParams.get('lang') === 'en' ? 'en' : 'es';
+    const [lang, setLang] = useState<'es' | 'en'>(initialLang);
     const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'expired' | 'used'>('loading');
     const [message, setMessage] = useState('');
 
+    const t = COPY[lang];
+
     useEffect(() => {
         validateToken();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const validateToken = async () => {
@@ -27,29 +68,29 @@ export default function TokenPlayPage() {
 
             if (!res.ok) {
                 const data = await res.json();
-                if (res.status === 402) {
-                    setStatus('invalid');
-                    setMessage('El pago no se completo. Intenta nuevamente.');
-                } else {
-                    setStatus('invalid');
-                    setMessage(data.error || 'Este link no es valido o ya no existe.');
-                }
+                setStatus('invalid');
+                setMessage(res.status === 402 ? COPY[initialLang].paymentIncomplete : (data.error || COPY[initialLang].defaultInvalid));
                 return;
             }
 
             const { access_token: accessToken } = await res.json() as { access_token: AccessToken };
 
+            // Sync UI language to the token's language (source of truth)
+            const tokenLang: 'es' | 'en' = accessToken.lang === 'en' ? 'en' : 'es';
+            if (tokenLang !== lang) setLang(tokenLang);
+            const tt = COPY[tokenLang];
+
             // Check expiration
             if (new Date(accessToken.expires_at) < new Date()) {
                 setStatus('expired');
-                setMessage('Este link ha expirado. Los links de acceso son validos por 48 horas.');
+                setMessage(tt.expiredMsg);
                 return;
             }
 
             // Check usage
             if (accessToken.times_used >= accessToken.max_uses) {
                 setStatus('used');
-                setMessage('Este link ya fue utilizado el maximo de veces permitidas.');
+                setMessage(tt.usedMsg);
                 return;
             }
 
@@ -66,7 +107,7 @@ export default function TokenPlayPage() {
         } catch (err) {
             console.error('[token-play] Error:', err);
             setStatus('invalid');
-            setMessage('Ocurrio un error al validar tu acceso. Intenta recargar la pagina.');
+            setMessage(COPY[initialLang].genericError);
         }
     };
 
@@ -77,15 +118,15 @@ export default function TokenPlayPage() {
         }}>
             {status === 'loading' && (
                 <div style={{ textAlign: 'center', color: '#00ff41' }}>
-                    <div style={{ fontSize: 18, marginBottom: 12 }}>Verificando acceso...</div>
-                    <div style={{ fontSize: 13, opacity: 0.6 }}>Esto puede tomar unos segundos</div>
+                    <div style={{ fontSize: 18, marginBottom: 12 }}>{t.verifying}</div>
+                    <div style={{ fontSize: 13, opacity: 0.6 }}>{t.verifyingSub}</div>
                 </div>
             )}
 
             {status === 'valid' && (
                 <div style={{ textAlign: 'center', color: '#00ff41' }}>
-                    <div style={{ fontSize: 18, marginBottom: 12 }}>Acceso verificado</div>
-                    <div style={{ fontSize: 13, opacity: 0.6 }}>Cargando experiencia...</div>
+                    <div style={{ fontSize: 18, marginBottom: 12 }}>{t.verified}</div>
+                    <div style={{ fontSize: 13, opacity: 0.6 }}>{t.loading}</div>
                 </div>
             )}
 
@@ -98,9 +139,9 @@ export default function TokenPlayPage() {
                         {status === 'expired' ? '!' : 'X'}
                     </div>
                     <div style={{ fontSize: 16, color: '#fff', marginBottom: 12, fontWeight: 600 }}>
-                        {status === 'invalid' && 'Link invalido'}
-                        {status === 'expired' && 'Link expirado'}
-                        {status === 'used' && 'Link ya utilizado'}
+                        {status === 'invalid' && t.invalid}
+                        {status === 'expired' && t.expired}
+                        {status === 'used' && t.used}
                     </div>
                     <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>
                         {message}
@@ -110,7 +151,7 @@ export default function TokenPlayPage() {
                         background: '#7C3AED', color: '#fff', borderRadius: 8,
                         textDecoration: 'none', fontSize: 14, fontWeight: 600,
                     }}>
-                        Volver a StoryHunt
+                        {t.back}
                     </a>
                 </div>
             )}

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
                 lang,
                 experience_name: experience.name,
             },
-            success_url: `${req.nextUrl.origin}/play/t/{CHECKOUT_SESSION_ID}?success=1`,
+            success_url: `${req.nextUrl.origin}/play/t/{CHECKOUT_SESSION_ID}?success=1&lang=${lang}`,
             cancel_url: `${req.nextUrl.origin}/${experience.slug || `play/${experience_id}`}?cancelled=1`,
         };
 
