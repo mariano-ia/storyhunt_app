@@ -12,35 +12,21 @@ const SECRETS = [
     label: 'SECRET_001',
     location: '// BROOKLYN BRIDGE',
     title: 'A wine cellar hidden inside a bridge',
-    body: 'Deep inside the stone arches of the Brooklyn Bridge, workers in 1876 discovered the perfect conditions for storing wine — cool, dark, and constant temperature. For decades, a secret cellar operated beneath the roadway, filled with bottles of champagne and Bordeaux. The city sold access to fund bridge maintenance. It was sealed after 9/11. The entrance is still there. Most people walk right over it.',
+    body: 'There is a wine cellar sealed inside the Brooklyn Bridge since 1876. The entrance is still there. Most people walk right over it.',
   },
   {
     id: 2,
     label: 'SECRET_002',
-    location: '// GRAND CENTRAL TERMINAL',
-    title: 'A whisper that travels 30 feet',
-    body: 'Stand in the archway near the Oyster Bar in Grand Central Terminal. Face the corner. Whisper something. Someone standing in the opposite corner — 30 feet away — will hear you perfectly, as if you were right next to them. The parabolic arches carry the sound waves across the ceiling. Spies used it. Lovers used it. Most commuters rush past it every day without knowing.',
+    location: '// CITY HALL',
+    title: 'A subway station no train will ever stop at',
+    body: 'Beneath City Hall, there is a subway station so beautiful it was closed to the public. Brass chandeliers. Stained glass skylights. You can still see it — stay on the 6 train past the last stop and look out the window as it loops around.',
   },
   {
     id: 3,
     label: 'SECRET_003',
-    location: '// CITY HALL',
-    title: 'A subway station no train will ever stop at',
-    body: 'Beneath City Hall, there is a subway station so beautiful it was never meant for daily use. Brass chandeliers. Herringbone tile. Stained glass skylights. It opened in 1904 as the crown jewel of the NYC subway system. Closed in 1945 because the curved platform couldn\'t fit modern trains. You can still see it — stay on the 6 train past the last stop and look out the window as it loops around.',
-  },
-  {
-    id: 4,
-    label: 'SECRET_004',
-    location: '// GREENWICH VILLAGE',
-    title: 'A door that leads to 1830',
-    body: 'At 75½ Bedford Street sits the narrowest house in New York City — 9.5 feet wide. It was built in 1873 in what was once a carriage alley. Edna St. Vincent Millay lived there. Cary Grant lived there. The house has been continuously occupied for 150 years. There is no buzzer. No mailbox visible from the street. Just a red door, barely wider than your shoulders, hiding an entire life inside.',
-  },
-  {
-    id: 5,
-    label: 'SECRET_005',
     location: '// CENTRAL PARK',
     title: 'A fortress no one was meant to find',
-    body: 'Deep inside Central Park, hidden behind a cascade of rocks and overgrown trees, there is a stone structure called The Blockhouse. Built in 1814 to defend Manhattan from the British, it is the oldest surviving military fortification in the park. No signs point to it. No paths lead directly there. It sits at the northern edge, forgotten by tourists, visited only by those who know where to look. You can touch walls that soldiers once defended.',
+    body: 'Hidden behind rocks and overgrown trees inside Central Park, there is a stone fortress built in 1814 to defend Manhattan from the British. No signs point to it. No paths lead directly there. Only those who know where to look ever find it.',
   },
 ];
 
@@ -48,7 +34,7 @@ const MODAL_TRIGGER_INDEX = 0; // Show modal after secret 1 (0-indexed)
 
 // ─── Typing Effect Hook ──────────────────────────────────────────────────────
 
-function useTypingEffect(text: string, active: boolean, speed = 18) {
+function useTypingEffect(text: string, active: boolean, speed = 12) {
   const [displayed, setDisplayed] = useState('');
   const [done, setDone] = useState(false);
 
@@ -171,7 +157,7 @@ function EmailModal({
               marginBottom: 12,
               lineHeight: 1.3,
             }}>
-              4 more secrets unlocked.
+              2 more secrets unlocked.
             </h3>
 
             <p style={{
@@ -245,13 +231,41 @@ function EmailModal({
           </>
         ) : (
           <>
+            {/* Product explanation header */}
+            <img src="/logo.png" alt="StoryHunt" style={{ height: 22, opacity: 0.85, marginBottom: 12 }} />
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#fff',
+              letterSpacing: '0.04em',
+              lineHeight: 1.6,
+              marginBottom: 4,
+              fontWeight: 600,
+            }}>
+              A mystery walk through New York City.
+            </p>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 12,
+              color: '#64748B',
+              marginBottom: 20,
+            }}>
+              Your phone sends clues. You decode the city.
+            </p>
+
+            <div style={{
+              height: 1,
+              background: 'rgba(255,255,255,0.1)',
+              margin: '0 -8px 16px',
+            }} />
+
             <p style={{
               fontFamily: "'Fira Code', monospace",
               fontSize: 11,
               color: '#00d2ff',
               letterSpacing: '0.1em',
-              marginBottom: 16,
-            }}>1/5 DECODED</p>
+              marginBottom: 12,
+            }}>1/3 DECODED</p>
 
             <h3 style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -261,17 +275,17 @@ function EmailModal({
               marginBottom: 8,
               lineHeight: 1.3,
             }}>
-              4 secrets remaining.
+              2 more secrets unlocked.
             </h3>
 
             <p style={{
               fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 15,
+              fontSize: 14,
               color: '#94A3B8',
               lineHeight: 1.5,
               marginBottom: 20,
             }}>
-              A subway station too beautiful for daily use. A door that leads to 1830. A fortress no one was meant to find. Drop your email to decode them all.
+              Drop your email to see them + get <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first hunt.
             </p>
 
             <form onSubmit={handleSubmit} style={{
@@ -331,7 +345,7 @@ function EmailModal({
                   minHeight: 48,
                 }}
               >
-                {submitting ? 'DECODING...' : 'DECODE_ALL_5'}
+                {submitting ? 'DECODING...' : 'UNLOCK_SECRETS'}
               </button>
 
               {error && (
@@ -481,7 +495,7 @@ function SecretCard({
   revealed: boolean;
   onRevealed: () => void;
 }) {
-  const { displayed: bodyText, done } = useTypingEffect(secret.body, active, 14);
+  const { displayed: bodyText, done } = useTypingEffect(secret.body, active, 12);
 
   useEffect(() => {
     if (done && !revealed) onRevealed();
@@ -542,9 +556,11 @@ function SecretCard({
 function ExperiencePhase({
   onComplete,
   onModalTrigger,
+  hasEmail,
 }: {
   onComplete: () => void;
   onModalTrigger: () => void;
+  hasEmail: boolean;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealedCount, setRevealedCount] = useState(0);
@@ -555,14 +571,16 @@ function ExperiencePhase({
     setRevealedCount((c) => c + 1);
   }, []);
 
-  const handleNext = () => {
-    const next = currentIndex + 1;
-
-    // Trigger modal after the 3rd secret
-    if (next === MODAL_TRIGGER_INDEX + 1 && !modalTriggered) {
+  // Auto-trigger modal as soon as the first secret finishes typing (~4s)
+  useEffect(() => {
+    if (revealedCount > MODAL_TRIGGER_INDEX && !modalTriggered && !hasEmail) {
       setModalTriggered(true);
       onModalTrigger();
     }
+  }, [revealedCount, modalTriggered, hasEmail, onModalTrigger]);
+
+  const handleNext = () => {
+    const next = currentIndex + 1;
 
     if (next >= SECRETS.length) {
       onComplete();
@@ -577,7 +595,7 @@ function ExperiencePhase({
     }
   };
 
-  const showNextButton = revealedCount > currentIndex;
+  const showNextButton = revealedCount > currentIndex && (hasEmail || currentIndex < MODAL_TRIGGER_INDEX);
   const isLast = currentIndex === SECRETS.length - 1;
 
   return (
@@ -605,7 +623,7 @@ function ExperiencePhase({
           fontFamily: "'Fira Code', monospace",
           fontSize: 12,
           color: '#4B5563',
-        }}>{currentIndex + 1}/{SECRETS.length}</span>
+        }}>{Math.min(currentIndex + 1, SECRETS.length)}/{SECRETS.length}</span>
       </div>
 
       {/* Secrets container */}
@@ -712,7 +730,7 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
         color: '#00d2ff',
         letterSpacing: '0.1em',
         marginBottom: 24,
-      }}>5/5 SECRETS_DECODED</p>
+      }}>3/3 SECRETS_DECODED</p>
 
       <h2 style={{
         fontFamily: "'Fira Sans', sans-serif",
@@ -974,10 +992,10 @@ function IntroPhase({ onDone }: { onDone: () => void }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'intro' | 'splash' | 'experience' | 'complete';
+type Phase = 'experience' | 'complete';
 
 export default function SecretsPage() {
-  const [phase, setPhase] = useState<Phase>('intro');
+  const [phase, setPhase] = useState<Phase>('experience');
   const [showModal, setShowModal] = useState(false);
   const [hasEmail, setHasEmail] = useState(false);
 
@@ -999,16 +1017,11 @@ export default function SecretsPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
-      {phase === 'intro' && (
-        <IntroPhase onDone={() => setPhase('splash')} />
-      )}
-      {phase === 'splash' && (
-        <SplashPhase onReady={() => setPhase('experience')} />
-      )}
       {phase === 'experience' && (
         <ExperiencePhase
           onComplete={() => setPhase('complete')}
           onModalTrigger={handleModalTrigger}
+          hasEmail={hasEmail}
         />
       )}
       {phase === 'complete' && (

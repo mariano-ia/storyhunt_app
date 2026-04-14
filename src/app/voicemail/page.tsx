@@ -43,7 +43,8 @@ const SUBTITLES: Subtitle[] = [
   { start: 70.4, end: 72.4, text: "I haven't opened that one yet." },
 ];
 
-const MODAL_TRIGGER_TIME = 21; // "that's not a grate, that's the entrance" — peak tension
+const AUDIO_START_TIME = 16.8; // Skip directly to "Look down, there's a grate..." (peak tension)
+const MODAL_TRIGGER_TIME = 22; // ~5s of playback from start point — gate at "...the lock was never replaced"
 
 // ─── Email Modal ─────────────────────────────────────────────────────────────
 
@@ -212,12 +213,40 @@ function EmailModal({
           </>
         ) : (
           <>
+            {/* Product explanation header */}
+            <img src="/logo.png" alt="StoryHunt" style={{ height: 22, opacity: 0.85, marginBottom: 12 }} />
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#fff',
+              letterSpacing: '0.04em',
+              lineHeight: 1.6,
+              marginBottom: 4,
+              fontWeight: 600,
+            }}>
+              A mystery walk through New York City.
+            </p>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 12,
+              color: '#64748B',
+              marginBottom: 20,
+            }}>
+              Your phone sends clues. You decode the city.
+            </p>
+
+            <div style={{
+              height: 1,
+              background: 'rgba(255,255,255,0.1)',
+              margin: '0 -8px 16px',
+            }} />
+
             <p style={{
               fontFamily: "'Fira Code', monospace",
               fontSize: 11,
               color: '#ff0033',
               letterSpacing: '0.1em',
-              marginBottom: 16,
+              marginBottom: 12,
             }}>PLAYBACK_PAUSED</p>
 
             <h3 style={{
@@ -233,12 +262,12 @@ function EmailModal({
 
             <p style={{
               fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 15,
+              fontSize: 14,
               color: '#94A3B8',
               lineHeight: 1.5,
               marginBottom: 20,
             }}>
-              Drop your email to hear the rest — where the corridor leads, and what&apos;s written on the wall.
+              Drop your email to hear the coordinates + get <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first hunt.
             </p>
 
             <form onSubmit={handleSubmit} style={{
@@ -298,7 +327,7 @@ function EmailModal({
                   minHeight: 48,
                 }}
               >
-                {submitting ? 'CONNECTING...' : 'HEAR_THE_REST'}
+                {submitting ? 'CONNECTING...' : 'GET_COORDINATES'}
               </button>
 
               {error && (
@@ -462,18 +491,32 @@ function PlayerPhase({
   const [modalTriggered, setModalTriggered] = useState(false);
   const [started, setStarted] = useState(false);
 
-  // Start playing on mount
+  // Start playing on mount — skip directly to peak tension point
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const tryPlay = () => {
-      audio.play().then(() => {
-        setPlaying(true);
-        setStarted(true);
-      }).catch(() => {
-        // Autoplay blocked — user needs to tap
-      });
+      // Seek to AUDIO_START_TIME first, then play
+      const startPlayback = () => {
+        try {
+          audio.currentTime = AUDIO_START_TIME;
+        } catch {
+          // Some browsers fail to seek before metadata loads
+        }
+        audio.play().then(() => {
+          setPlaying(true);
+          setStarted(true);
+        }).catch(() => {
+          // Autoplay blocked — user needs to tap
+        });
+      };
+
+      if (audio.readyState >= 1) {
+        startPlayback();
+      } else {
+        audio.addEventListener('loadedmetadata', startPlayback, { once: true });
+      }
     };
 
     tryPlay();
@@ -1024,10 +1067,10 @@ function IntroPhase({ onDone }: { onDone: () => void }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'intro' | 'splash' | 'player' | 'complete';
+type Phase = 'player' | 'complete';
 
 export default function VoicemailPage() {
-  const [phase, setPhase] = useState<Phase>('intro');
+  const [phase, setPhase] = useState<Phase>('player');
   const [showModal, setShowModal] = useState(false);
   const [hasEmail, setHasEmail] = useState(false);
 
@@ -1049,12 +1092,6 @@ export default function VoicemailPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
-      {phase === 'intro' && (
-        <IntroPhase onDone={() => setPhase('splash')} />
-      )}
-      {phase === 'splash' && (
-        <SplashPhase onReady={() => setPhase('player')} />
-      )}
       {phase === 'player' && (
         <PlayerPhase
           onComplete={() => setPhase('complete')}

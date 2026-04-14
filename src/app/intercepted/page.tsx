@@ -13,29 +13,27 @@ type Message = {
 };
 
 const CONVERSATION: Message[] = [
-  { sender: 'system', text: 'SIGNAL_INTERCEPTED // 40.7484° N, 73.9857° W // 02:47 AM', delay: 800 },
-  { sender: 'A', text: 'are you there?', delay: 1200 },
-  { sender: 'B', text: 'yeah. just got to the spot', delay: 1800 },
-  { sender: 'A', text: 'what do you see', delay: 1000 },
-  { sender: 'B', text: 'the building is massive. art deco lobby. marble everywhere. but there is no one here', delay: 2200 },
-  { sender: 'A', text: 'good. go to the elevators on the east side. not the main ones', delay: 1800 },
-  { sender: 'B', text: 'ok I see them. the ones behind the news stand?', delay: 1600 },
-  { sender: 'A', text: 'yes. press the button for the basement. it will say "restricted" but the door opens', delay: 2000 },
-  { sender: 'B', text: '...it worked', delay: 2400 },
-  { sender: 'B', text: 'there are tunnels down here. actual tunnels. under midtown', delay: 1800 },
-  // ─── MODAL TRIGGERS AFTER THIS MESSAGE (index 10) ───
-  { sender: 'A', text: 'they connect 7 buildings. built during prohibition. nobody talks about them', delay: 2200 },
-  { sender: 'B', text: 'wait. I can hear something. like a train but muffled', delay: 2000 },
-  { sender: 'A', text: 'that is the old mail rail. it ran under the city until 1966. packages, letters, everything moved underground. 27 miles of track', delay: 2800 },
+  // ─── PRE-GATE: 3 punchy messages + signal lost (~5s) ───
+  { sender: 'B', text: 'there are tunnels down here. actual tunnels. under midtown', delay: 600 },
+  { sender: 'A', text: 'they connect 7 buildings. built during prohibition. nobody talks about them', delay: 1400 },
+  { sender: 'B', text: 'hold on. there is a door at the end of this tunnel. it has a symbol on it. like a', delay: 1600 },
+  { sender: 'system', text: 'SIGNAL_LOST // CONNECTION_TERMINATED', delay: 1000 },
+  // ─── MODAL TRIGGERS HERE (index 4) ───
+  // ─── POST-GATE: rest of the conversation ───
+  { sender: 'A', text: 'are you still there?', delay: 1200 },
+  { sender: 'B', text: 'yeah. signal dropped. I am back', delay: 1400 },
+  { sender: 'A', text: 'what was on the door', delay: 1000 },
+  { sender: 'B', text: 'a triangle with an eye inside. carved into the metal', delay: 1800 },
+  { sender: 'A', text: 'that is older than prohibition. it predates the tunnels', delay: 2000 },
+  { sender: 'B', text: 'wait. I can hear something behind the door. like a train but muffled', delay: 2200 },
+  { sender: 'A', text: 'that is the old mail rail. ran under the city until 1966. 27 miles of track', delay: 2400 },
   { sender: 'B', text: 'there are markings on the walls. numbers and arrows. like someone was mapping routes', delay: 2200 },
-  { sender: 'A', text: 'those are original. prohibition era. they had a system — each speakeasy had a number. the arrows pointed runners to the right exit', delay: 2800 },
-  { sender: 'B', text: 'this is insane. how does nobody know about this', delay: 1600 },
-  { sender: 'A', text: 'people know. they just don\'t look. the entrance is right there in the lobby. thousands walk past it every day', delay: 2400 },
-  { sender: 'B', text: 'hold on. there is a door at the end of this tunnel. it has a symbol on it. like a', delay: 2200 },
-  { sender: 'system', text: 'SIGNAL_LOST // CONNECTION_TERMINATED', delay: 1500 },
+  { sender: 'A', text: 'those are prohibition era. each speakeasy had a number. arrows pointed runners to the right exit', delay: 2600 },
+  { sender: 'B', text: 'how does nobody know about this', delay: 1600 },
+  { sender: 'A', text: 'people know. they just don\'t look. the entrance is right there in the lobby. thousands walk past it every day', delay: 2200 },
 ];
 
-const MODAL_TRIGGER_INDEX = 5; // Show modal after "good. go to the elevators" — before tunnels reveal
+const MODAL_TRIGGER_INDEX = 4; // Show modal after "SIGNAL_LOST" — index 3 displayed, modal at 4
 
 // ─── Chat Bubble ─────────────────────────────────────────────────────────────
 
@@ -280,13 +278,41 @@ function EmailModal({
           </>
         ) : (
           <>
+            {/* Product explanation header */}
+            <img src="/logo.png" alt="StoryHunt" style={{ height: 22, opacity: 0.85, marginBottom: 12 }} />
+            <p style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#fff',
+              letterSpacing: '0.04em',
+              lineHeight: 1.6,
+              marginBottom: 4,
+              fontWeight: 600,
+            }}>
+              A mystery walk through New York City.
+            </p>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 12,
+              color: '#64748B',
+              marginBottom: 20,
+            }}>
+              Your phone sends clues. You decode the city.
+            </p>
+
+            <div style={{
+              height: 1,
+              background: 'rgba(255,255,255,0.1)',
+              margin: '0 -8px 16px',
+            }} />
+
             <p style={{
               fontFamily: "'Fira Code', monospace",
               fontSize: 11,
               color: '#ff0033',
               letterSpacing: '0.1em',
-              marginBottom: 16,
-            }}>SIGNAL_PAUSED</p>
+              marginBottom: 12,
+            }}>SIGNAL_LOST</p>
 
             <h3 style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -296,17 +322,17 @@ function EmailModal({
               marginBottom: 8,
               lineHeight: 1.3,
             }}>
-              They found tunnels under Midtown.
+              What was on that door?
             </h3>
 
             <p style={{
               fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 15,
+              fontSize: 14,
               color: '#94A3B8',
               lineHeight: 1.5,
               marginBottom: 20,
             }}>
-              Drop your email to read what they found down there — and why the signal was cut short.
+              Drop your email to read the rest + get <span style={{ color: '#fff', fontWeight: 600 }}>25% off</span> your first hunt.
             </p>
 
             <form onSubmit={handleSubmit} style={{
@@ -366,7 +392,7 @@ function EmailModal({
                   minHeight: 48,
                 }}
               >
-                {submitting ? 'CONNECTING...' : 'READ_THE_REST'}
+                {submitting ? 'CONNECTING...' : 'RESTORE_SIGNAL'}
               </button>
 
               {error && (
@@ -965,10 +991,10 @@ function IntroPhase({ onDone }: { onDone: () => void }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-type Phase = 'intro' | 'splash' | 'conversation' | 'complete';
+type Phase = 'conversation' | 'complete';
 
 export default function InterceptedPage() {
-  const [phase, setPhase] = useState<Phase>('intro');
+  const [phase, setPhase] = useState<Phase>('conversation');
   const [showModal, setShowModal] = useState(false);
   const [hasEmail, setHasEmail] = useState(false);
 
@@ -990,12 +1016,6 @@ export default function InterceptedPage() {
       minHeight: '100dvh',
       position: 'relative',
     }}>
-      {phase === 'intro' && (
-        <IntroPhase onDone={() => setPhase('splash')} />
-      )}
-      {phase === 'splash' && (
-        <SplashPhase onReady={() => setPhase('conversation')} />
-      )}
       {phase === 'conversation' && (
         <ConversationPhase
           onComplete={() => setPhase('complete')}
