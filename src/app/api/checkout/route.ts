@@ -2,7 +2,66 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getExperience } from '@/lib/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { callLLM } from '@/lib/llm';
 import type { DiscountCoupon } from '@/lib/types';
+
+// Ensure the experience has name + description in the requested lang.
+// Translates from whatever source text exists and caches the result in Firestore
+// under `<field>_<lang>` so subsequent checkouts are instant.
+async function getLocalizedProduct(
+    exp: Record<string, any>,
+    experienceId: string,
+    lang: 'es' | 'en',
+): Promise<{ name: string; description: string }> {
+    const nameField = `name_${lang}`;
+    const descField = `web_description_${lang}`;
+
+    const cachedName = exp[nameField];
+    const cachedDesc = exp[descField];
+    if (cachedName && cachedDesc) {
+        return { name: cachedName, description: cachedDesc };
+    }
+
+    const sourceName = exp.name || '';
+    const sourceDesc = exp.web_description || exp.description || '';
+
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    const targetLabel = lang === 'en' ? 'English' : 'neutral Latin American Spanish';
+    const fallbackName = lang === 'en' ? 'StoryHunt Experience' : 'Experiencia StoryHunt';
+    const fallbackDesc = lang === 'en'
+        ? 'Immersive interactive StoryHunt experience'
+        : 'Experiencia interactiva StoryHunt';
+
+    const translate = async (text: string, fallback: string): Promise<string> => {
+        if (!text?.trim()) return fallback;
+        if (!apiKey) return fallback;
+        const prompt = `You are a professional translator. Translate the text the user sends you into ${targetLabel}. Keep proper nouns, place names, and the tone intact. If the text is already in ${targetLabel}, return it unchanged. Respond ONLY with the translated text, no explanations or quotes.`;
+        try {
+            const result = await callLLM(apiKey, prompt, text, { temperature: 0.2, maxTokens: 400 });
+            return result.text?.trim() || fallback;
+        } catch (err) {
+            console.error('[checkout] translate error', err);
+            return fallback;
+        }
+    };
+
+    const [name, description] = await Promise.all([
+        cachedName ? Promise.resolve(cachedName) : translate(sourceName, fallbackName),
+        cachedDesc ? Promise.resolve(cachedDesc) : translate(sourceDesc, fallbackDesc),
+    ]);
+
+    // Cache to Firestore so next checkout is instant (fire-and-forget, non-blocking)
+    const updates: Record<string, string> = {};
+    if (!cachedName && name) updates[nameField] = name;
+    if (!cachedDesc && description) updates[descField] = description;
+    if (Object.keys(updates).length > 0) {
+        getAdminDb().collection('experiences').doc(experienceId).update(updates).catch(err => {
+            console.error('[checkout] failed to cache translations', err);
+        });
+    }
+
+    return { name, description };
+}
 
 // ─── POST /api/checkout ──────────────────────────────────────────────────────
 // Creates a Stripe Checkout Session for an experience purchase.
@@ -30,14 +89,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'La experiencia no tiene precio configurado' }, { status: 400 });
         }
 
-        // Pick localized product name + description so Stripe Checkout matches the chosen language
-        const exp = experience as any;
-        const productName = lang === 'en'
-            ? (exp.name_en || exp.name)
-            : exp.name;
-        const productDescription = lang === 'en'
-            ? (exp.web_description_en || exp.description_en || exp.web_description || exp.description || 'Immersive interactive StoryHunt experience')
-            : (exp.web_description || exp.description || 'Experiencia interactiva StoryHunt');
+        // Guarantee product strings in the chosen lang (translates + caches on first miss)
+        const { name: productName, description: productDescription } = await getLocalizedProduct(
+            experience as any,
+            experience_id,
+            lang,
+        );
 
         // Build checkout session params
         const sessionParams: Record<string, any> = {
