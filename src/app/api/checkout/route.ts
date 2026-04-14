@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'La experiencia no tiene precio configurado' }, { status: 400 });
         }
 
+        // Pick localized product name + description so Stripe Checkout matches the chosen language
+        const exp = experience as any;
+        const productName = lang === 'en'
+            ? (exp.name_en || exp.name)
+            : exp.name;
+        const productDescription = lang === 'en'
+            ? (exp.web_description_en || exp.description_en || exp.web_description || exp.description || 'Immersive interactive StoryHunt experience')
+            : (exp.web_description || exp.description || 'Experiencia interactiva StoryHunt');
+
         // Build checkout session params
         const sessionParams: Record<string, any> = {
             mode: 'payment',
@@ -40,8 +49,8 @@ export async function POST(req: NextRequest) {
                     currency: 'usd',
                     unit_amount: Math.round(price * 100), // price is in dollars, Stripe wants cents
                     product_data: {
-                        name: experience.name,
-                        description: experience.description?.slice(0, 200) || 'Experiencia interactiva StoryHunt',
+                        name: productName,
+                        description: productDescription.slice(0, 200),
                     },
                 },
                 quantity: 1,
