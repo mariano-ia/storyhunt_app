@@ -1,21 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
-import { createAccessToken, createSale, getAccessToken, getCouponByCode, updateCoupon } from '@/lib/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import type { AccessToken, DiscountCoupon } from '@/lib/types';
 
 // ─── POST /api/access/verify ─────────────────────────────────────────────────
 // Verifies a Stripe checkout session and creates an access token if it doesn't exist yet.
 // This is a fallback for when the webhook hasn't fired or failed.
+// All Firestore writes use Admin SDK so they bypass client security rules.
+
+function generateToken(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let token = 'SH-';
+    for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
+    return token;
+}
 
 export async function POST(req: NextRequest) {
     try {
         const { session_id, token } = await req.json() as { session_id?: string; token?: string };
+        const db = getAdminDb();
 
         // If it's an SH- token, just look it up
         if (token && !token.startsWith('cs_')) {
-            const accessToken = await getAccessToken(token);
-            if (!accessToken) {
+            const snap = await db.collection('access_tokens').where('token', '==', token).limit(1).get();
+            if (snap.empty) {
                 return NextResponse.json({ error: 'Token not found' }, { status: 404 });
             }
+            const accessToken = { id: snap.docs[0].id, ...snap.docs[0].data() } as AccessToken;
             return NextResponse.json({ access_token: accessToken });
         }
 
@@ -25,13 +36,14 @@ export async function POST(req: NextRequest) {
         }
 
         // First check if we already have an access token for this session
-        const { getDocs, collection, query, where } = await import('firebase/firestore');
-        const { db } = await import('@/lib/firebase');
-        const q = query(collection(db, 'access_tokens'), where('stripe_session_id', '==', checkoutId));
-        const snap = await getDocs(q);
+        const existingSnap = await db
+            .collection('access_tokens')
+            .where('stripe_session_id', '==', checkoutId)
+            .limit(1)
+            .get();
 
-        if (!snap.empty) {
-            const existing = { id: snap.docs[0].id, ...snap.docs[0].data() };
+        if (!existingSnap.empty) {
+            const existing = { id: existingSnap.docs[0].id, ...existingSnap.docs[0].data() } as AccessToken;
             return NextResponse.json({ access_token: existing });
         }
 
@@ -54,18 +66,26 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No experience_id in session metadata' }, { status: 400 });
         }
 
-        // Create access token
-        const accessToken = await createAccessToken({
+        // Create access token (Admin SDK)
+        const nowIso = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + 720 * 60 * 60 * 1000).toISOString();
+        const tokenData = {
+            token: generateToken(),
             experience_id: experienceId,
             lang,
             email,
             max_uses: 2,
-            expires_hours: 720,
+            times_used: 0,
+            status: 'active' as const,
+            expires_at: expiresAt,
             stripe_session_id: checkoutId,
-        });
+            created_at: nowIso,
+        };
+        const tokenRef = await db.collection('access_tokens').add(tokenData);
+        const accessToken: AccessToken = { id: tokenRef.id, ...tokenData };
 
         // Record sale
-        await createSale({
+        await db.collection('sales').add({
             experience_id: experienceId,
             experience_name: experienceName,
             email,
@@ -75,14 +95,20 @@ export async function POST(req: NextRequest) {
             discount_applied: session.total_details?.amount_discount ?? 0,
             stripe_session_id: checkoutId,
             access_token_id: accessToken.id,
+            created_at: nowIso,
         });
 
         // Increment coupon if used
         if (couponCode) {
-            const coupon = await getCouponByCode(couponCode);
-            if (coupon) {
+            const couponSnap = await db
+                .collection('discount_coupons')
+                .where('code', '==', couponCode.toUpperCase())
+                .limit(1)
+                .get();
+            if (!couponSnap.empty) {
+                const coupon = { id: couponSnap.docs[0].id, ...couponSnap.docs[0].data() } as DiscountCoupon;
                 const newCount = coupon.times_redeemed + 1;
-                await updateCoupon(coupon.id, {
+                await db.collection('discount_coupons').doc(coupon.id).update({
                     times_redeemed: newCount,
                     status: newCount >= coupon.max_redemptions ? 'expired' : coupon.status,
                 });

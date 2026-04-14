@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
-import { getExperience, getCouponByCode } from '@/lib/firestore';
+import { getExperience } from '@/lib/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import type { DiscountCoupon } from '@/lib/types';
 
 // ─── POST /api/checkout ──────────────────────────────────────────────────────
 // Creates a Stripe Checkout Session for an experience purchase.
@@ -32,6 +34,7 @@ export async function POST(req: NextRequest) {
         const sessionParams: Record<string, any> = {
             mode: 'payment',
             payment_method_types: ['card'],
+            locale: lang === 'en' ? 'en' : 'es-419',
             line_items: [{
                 price_data: {
                     currency: 'usd',
@@ -54,8 +57,15 @@ export async function POST(req: NextRequest) {
 
         // Apply discount coupon
         if (coupon_code) {
-            // First check our DB
-            const coupon = await getCouponByCode(coupon_code);
+            // First check our DB (Admin SDK — bypasses Firestore rules)
+            const couponSnap = await getAdminDb()
+                .collection('discount_coupons')
+                .where('code', '==', coupon_code.toUpperCase())
+                .limit(1)
+                .get();
+            const coupon = couponSnap.empty
+                ? null
+                : ({ id: couponSnap.docs[0].id, ...couponSnap.docs[0].data() } as DiscountCoupon);
             if (coupon && coupon.status === 'active' && coupon.times_redeemed < coupon.max_redemptions && coupon.stripe_promo_id) {
                 sessionParams.discounts = [{ promotion_code: coupon.stripe_promo_id }];
                 sessionParams.metadata.coupon_code = coupon_code;

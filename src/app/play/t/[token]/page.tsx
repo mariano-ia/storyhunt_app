@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccessToken, getExperience } from '@/lib/firestore';
 import type { AccessToken } from '@/lib/types';
 
 // ─── Token-based Player Entry ────────────────────────────────────────────────
@@ -54,16 +53,12 @@ export default function TokenPlayPage() {
                 return;
             }
 
-            // Valid! Increment usage and redirect to player
-            await useAccessToken(accessToken.id);
-
-            // Verify experience exists
-            const experience = await getExperience(accessToken.experience_id);
-            if (!experience) {
-                setStatus('invalid');
-                setMessage('La experiencia asociada a este link ya no existe.');
-                return;
-            }
+            // Valid! Increment usage on the server (Admin SDK) and redirect to player
+            await fetch('/api/access/use', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: accessToken.id }),
+            });
 
             setStatus('valid');
             router.replace(`/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`);
