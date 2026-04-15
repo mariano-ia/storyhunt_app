@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callLLM } from '@/lib/llm';
-import { saveInteraction } from '@/lib/firestore';
-import { verifyAuth } from '@/lib/firebase-admin';
+import { verifyAuth, adminSaveInteraction as saveInteraction } from '@/lib/firebase-admin';
 import type { AIGeneratedExperience } from '@/lib/types';
 
 // ─── POST /api/ai-stories/generate ──────────────────────────────────────────

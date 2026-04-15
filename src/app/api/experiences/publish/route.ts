@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callLLM } from '@/lib/llm';
 import { getExperience, getSteps, getScenes } from '@/lib/firestore';
-import { verifyAuth, adminUpdateExperience, adminUpdateStep } from '@/lib/firebase-admin';
-import { saveInteraction } from '@/lib/firestore';
+import { verifyAuth, adminUpdateExperience, adminUpdateStep, adminSaveInteraction as saveInteraction } from '@/lib/firebase-admin';
 
 // ─── POST /api/experiences/publish ───────────────────────────────────────────
 // Pipeline: normalize Spanish → translate to English → save _en fields → mark published

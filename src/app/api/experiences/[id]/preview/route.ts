@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getExperience, getSteps, getScenes, saveInteraction } from '@/lib/firestore';
+import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import { adminSaveInteraction as saveInteraction } from '@/lib/firebase-admin';
 
 // ─── Preview Evaluation Endpoint ──────────────────────────────────────────────
 // POST /api/experiences/[id]/preview

@@ -2,7 +2,41 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowUp, RotateCcw } from 'lucide-react';
-import { getExperience, getSteps, getScenes, createSession, updateSession } from '@/lib/firestore';
+import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+
+// Session writes go through Admin-SDK-backed API endpoints so they work
+// without client Firestore auth.
+async function apiCreateSession(data: {
+    experience_id: string;
+    email?: string;
+    lang?: 'es' | 'en';
+    total_steps: number;
+}): Promise<string | null> {
+    try {
+        const res = await fetch('/api/sessions/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!res.ok) return null;
+        const json = await res.json() as { id?: string };
+        return json.id || null;
+    } catch {
+        return null;
+    }
+}
+
+async function apiUpdateSession(id: string, updates: Record<string, unknown>): Promise<void> {
+    try {
+        await fetch('/api/sessions/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, ...updates }),
+        });
+    } catch {
+        /* non-blocking */
+    }
+}
 import type { Experience, Step, PreviewMessage, Scene } from '@/lib/types';
 
 import { renderMessage } from '@/lib/renderMessage';
@@ -136,18 +170,18 @@ export default function PlayPage() {
 
     const trackStep = (step: number) => {
         if (sessionIdRef.current) {
-            updateSession(sessionIdRef.current, { current_step: step }).catch(() => {});
+            apiUpdateSession(sessionIdRef.current, { current_step: step });
         }
     };
 
     const trackCompletion = (rating?: 'positive' | 'neutral' | 'negative', comment?: string) => {
         if (sessionIdRef.current) {
-            updateSession(sessionIdRef.current, {
+            apiUpdateSession(sessionIdRef.current, {
                 status: 'completed',
                 completed_at: new Date().toISOString(),
                 ...(rating && { rating }),
                 ...(comment && { rating_comment: comment }),
-            }).catch(() => {});
+            });
         }
     };
 
@@ -442,18 +476,13 @@ export default function PlayPage() {
 
             // Create session (skip for previews)
             if (!isPreview && stps.length > 0) {
-                try {
-                    const email = tokenParam ? '' : ''; // email comes from token verify if available
-                    const sid = await createSession({
-                        experience_id: id,
-                        email,
-                        lang,
-                        total_steps: stps.length,
-                    });
-                    setSessionId(sid);
-                } catch (e) {
-                    console.error('Failed to create session:', e);
-                }
+                const sid = await apiCreateSession({
+                    experience_id: id,
+                    email: '',
+                    lang,
+                    total_steps: stps.length,
+                });
+                if (sid) setSessionId(sid);
             }
 
             if (stps.length > 0) {

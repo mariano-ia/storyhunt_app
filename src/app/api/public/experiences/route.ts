@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getExperiences, getSales } from '@/lib/firestore';
+import { getExperiences } from '@/lib/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { Sale } from '@/lib/types';
 
 // ─── GET /api/public/experiences ─────────────────────────────────────────────
@@ -7,11 +8,21 @@ import type { Sale } from '@/lib/types';
 // No auth required — consumed by StoryHuntWeb to render cards.
 // Order: published first (sorted by sales count desc), then coming_soon.
 
+async function fetchSales(): Promise<Sale[]> {
+    try {
+        const snap = await getAdminDb().collection('sales').get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Sale));
+    } catch (err) {
+        console.error('[public/experiences] sales read failed', err);
+        return [];
+    }
+}
+
 export async function GET() {
     try {
         const [all, sales] = await Promise.all([
             getExperiences(),
-            getSales().catch(() => [] as Sale[]),
+            fetchSales(),
         ]);
 
         // Count sales per experience
