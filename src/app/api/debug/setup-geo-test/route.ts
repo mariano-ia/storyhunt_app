@@ -53,7 +53,7 @@ async function metaGet(path: string, params?: Record<string, string>): Promise<a
     return json;
 }
 
-async function metaPost(path: string, body: Record<string, unknown>): Promise<any> {
+async function metaPost(path: string, body: Record<string, unknown>, attempt = 1): Promise<any> {
     const url = new URL(`${GRAPH}${path}`);
     url.searchParams.set('access_token', META_TOKEN);
     const form = new URLSearchParams();
@@ -64,7 +64,13 @@ async function metaPost(path: string, body: Record<string, unknown>): Promise<an
     const res = await fetch(url.toString(), { method: 'POST', body: form });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.error) {
-        throw new Error(`POST ${path}: ${JSON.stringify(json.error || json || res.statusText)}`);
+        const err = json.error || {};
+        // Retry transient errors up to 4 times with backoff
+        if (attempt < 5 && (err.is_transient || err.code === 2 || err.code === 1 || err.code === 17)) {
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+            return metaPost(path, body, attempt + 1);
+        }
+        throw new Error(`POST ${path}: ${JSON.stringify(err || json || res.statusText)}`);
     }
     return json;
 }
@@ -194,36 +200,53 @@ export async function POST(req: NextRequest) {
 
         // ─── PHASE 3: Swap creative in LM_B and LM_C to Voicemail ──────────────
 
-        // LM_A already has Voicemail as its only ad — nothing to do here.
-        // LM_B had "Secrets × Trip Planners" — pause it, create new Voicemail ad.
-        for (const ad of lmBAds) {
-            await write(`pause old LM_B ad ${ad.id} (${ad.name})`, () =>
-                metaPost(`/${ad.id}`, { status: 'PAUSED' }),
+        // Idempotent: pause every ad in the ad set that doesn't already use the
+        // target creative, then create a new ad only if none exists for that creative.
+        const reconcileAds = async (
+            adSetName: string,
+            adSetId: string,
+            existingAds: any[],
+            targetCreativeId: string,
+            newAdName: string,
+        ) => {
+            const existingWithTarget = existingAds.find(
+                (a: any) => a.creative?.id === targetCreativeId,
             );
-        }
-        await write(`create new LM_B Voicemail ad`, () =>
-            metaPost(`/${AD_ACCOUNT}/ads`, {
-                name: 'LM_B — Voicemail × US+INTL Travel Intent',
-                adset_id: LM_B_ID,
-                creative: { creative_id: VOICEMAIL_CREATIVE_ID },
-                status: 'ACTIVE',
-            }),
-        );
+            for (const ad of existingAds) {
+                if (ad.creative?.id === targetCreativeId) {
+                    if (ad.status !== 'ACTIVE') {
+                        await write(`re-activate ${adSetName} target ad ${ad.id}`, () =>
+                            metaPost(`/${ad.id}`, { status: 'ACTIVE' }),
+                        );
+                    }
+                    continue;
+                }
+                if (ad.status !== 'PAUSED') {
+                    await write(`pause old ${adSetName} ad ${ad.id} (${ad.name})`, () =>
+                        metaPost(`/${ad.id}`, { status: 'PAUSED' }),
+                    );
+                }
+            }
+            if (!existingWithTarget) {
+                await write(`create new ${adSetName} ad → ${newAdName}`, () =>
+                    metaPost(`/${AD_ACCOUNT}/ads`, {
+                        name: newAdName,
+                        adset_id: adSetId,
+                        creative: { creative_id: targetCreativeId },
+                        status: 'ACTIVE',
+                    }),
+                );
+            } else {
+                log.push({ step: ++step, op: `${adSetName} already has target ad ${existingWithTarget.id} — skip create`, ok: true });
+            }
+        };
 
-        // LM_C had "Intercepted × NYC Locals" — pause it, create new Voicemail ad.
-        for (const ad of lmCAds) {
-            await write(`pause old LM_C ad ${ad.id} (${ad.name})`, () =>
-                metaPost(`/${ad.id}`, { status: 'PAUSED' }),
-            );
-        }
-        await write(`create new LM_C Voicemail ad`, () =>
-            metaPost(`/${AD_ACCOUNT}/ads`, {
-                name: 'LM_C — Voicemail × NYC Locals Pure',
-                adset_id: LM_C_ID,
-                creative: { creative_id: VOICEMAIL_CREATIVE_ID },
-                status: 'ACTIVE',
-            }),
-        );
+        // LM_A: already has Voicemail ad. Ensure nothing else is active there.
+        await reconcileAds('LM_A', LM_A_ID, lmAAds, VOICEMAIL_CREATIVE_ID, 'LM_A — Voicemail × US Northeast Intensive');
+        // LM_B: had Secrets ad. Pause it, create Voicemail ad.
+        await reconcileAds('LM_B', LM_B_ID, lmBAds, VOICEMAIL_CREATIVE_ID, 'LM_B — Voicemail × US+INTL Travel Intent');
+        // LM_C: had Intercepted ad. Pause it, create Voicemail ad.
+        await reconcileAds('LM_C', LM_C_ID, lmCAds, VOICEMAIL_CREATIVE_ID, 'LM_C — Voicemail × NYC Locals Pure');
 
         // ─── PHASE 4: EDIT Conversion V2 ad sets ───────────────────────────────
 
@@ -255,34 +278,12 @@ export async function POST(req: NextRequest) {
 
         // ─── PHASE 5: Swap creative in CV_A and CV_B to Underground ────────────
 
-        // CV_C already has Underground. CV_A had POV Walking, CV_B had Phone Cafe.
-        for (const ad of cvAAds) {
-            await write(`pause old CV_A ad ${ad.id} (${ad.name})`, () =>
-                metaPost(`/${ad.id}`, { status: 'PAUSED' }),
-            );
-        }
-        await write(`create new CV_A Underground ad`, () =>
-            metaPost(`/${AD_ACCOUNT}/ads`, {
-                name: 'CV_A — Underground × US Northeast Intensive',
-                adset_id: CV_A_ID,
-                creative: { creative_id: UNDERGROUND_CREATIVE_ID },
-                status: 'ACTIVE',
-            }),
-        );
-
-        for (const ad of cvBAds) {
-            await write(`pause old CV_B ad ${ad.id} (${ad.name})`, () =>
-                metaPost(`/${ad.id}`, { status: 'PAUSED' }),
-            );
-        }
-        await write(`create new CV_B Underground ad`, () =>
-            metaPost(`/${AD_ACCOUNT}/ads`, {
-                name: 'CV_B — Underground × US+INTL Travel Intent',
-                adset_id: CV_B_ID,
-                creative: { creative_id: UNDERGROUND_CREATIVE_ID },
-                status: 'ACTIVE',
-            }),
-        );
+        // CV_A: had POV Walking. Pause, create Underground ad.
+        await reconcileAds('CV_A', CV_A_ID, cvAAds, UNDERGROUND_CREATIVE_ID, 'CV_A — Underground × US Northeast Intensive');
+        // CV_B: had Phone Cafe. Pause, create Underground ad.
+        await reconcileAds('CV_B', CV_B_ID, cvBAds, UNDERGROUND_CREATIVE_ID, 'CV_B — Underground × US+INTL Travel Intent');
+        // CV_C: already has Underground ad. Keep as-is.
+        await reconcileAds('CV_C', CV_C_ID, cvCAds, UNDERGROUND_CREATIVE_ID, 'CV_C — Underground × NYC Locals Pure');
 
         // ─── PHASE 6: Pause the 2 ad sets we're not using ──────────────────────
 
