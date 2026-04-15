@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { Resend } from 'resend';
 import { welcomeEmail } from '@/lib/email-templates';
 
@@ -120,7 +119,7 @@ export async function POST(request: Request) {
         const acceptLang = request.headers.get('accept-language') || '';
         const lang: 'es' | 'en' = acceptLang.toLowerCase().startsWith('es') ? 'es' : 'en';
 
-        await addDoc(collection(db, 'contacts'), {
+        await getAdminDb().collection('contacts').add({
             email,
             lang,
             source,
