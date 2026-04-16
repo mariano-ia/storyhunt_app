@@ -208,8 +208,19 @@ export async function POST(req: NextRequest) {
         }
 
         // Create ad creatives first (same pattern as all other campaigns)
-        const THUMB1 = 'https://storyhunt.city/assets/ads/videos/organic/thumb-alley.jpg';
-        const THUMB2 = 'https://storyhunt.city/assets/ads/videos/organic/thumb-subway.jpg';
+        // Upload thumbnails as ad images and get their hashes
+        const THUMB1_URL = 'https://storyhunt.city/assets/ads/videos/organic/thumb-alley.jpg';
+        const THUMB2_URL = 'https://storyhunt.city/assets/ads/videos/organic/thumb-subway.jpg';
+
+        const img1 = await write('upload thumbnail 1', () =>
+            metaPost(`/${AD_ACCOUNT}/adimages`, { url: THUMB1_URL }),
+        );
+        const hash1 = img1?.images ? Object.values(img1.images as Record<string, any>)[0]?.hash : null;
+
+        const img2 = await write('upload thumbnail 2', () =>
+            metaPost(`/${AD_ACCOUNT}/adimages`, { url: THUMB2_URL }),
+        );
+        const hash2 = img2?.images ? Object.values(img2.images as Record<string, any>)[0]?.hash : null;
 
         const creative1Result = await write('create creative 1 (NYC alley)', () =>
             metaPost(`/${AD_ACCOUNT}/adcreatives`, {
@@ -218,7 +229,7 @@ export async function POST(req: NextRequest) {
                     page_id: PAGE_ID,
                     video_data: {
                         video_id: video1Id,
-                        image_url: THUMB1,
+                        image_hash: hash1,
                         message: 'found this in a side street off Bleecker. anyone know what this symbol means?',
                         call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
                     },
@@ -234,7 +245,7 @@ export async function POST(req: NextRequest) {
                     page_id: PAGE_ID,
                     video_data: {
                         video_id: video2Id,
-                        image_url: THUMB2,
+                        image_hash: hash2,
                         message: 'has anyone seen this before? it was on the wall at an old subway station. the tiles look original, like from 1904.',
                         call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
                     },
