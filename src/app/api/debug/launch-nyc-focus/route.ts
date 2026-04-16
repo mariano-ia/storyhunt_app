@@ -208,6 +208,9 @@ export async function POST(req: NextRequest) {
         }
 
         // Create ad creatives first (same pattern as all other campaigns)
+        const THUMB1 = 'https://storyhunt.city/assets/ads/videos/organic/thumb-alley.jpg';
+        const THUMB2 = 'https://storyhunt.city/assets/ads/videos/organic/thumb-subway.jpg';
+
         const creative1Result = await write('create creative 1 (NYC alley)', () =>
             metaPost(`/${AD_ACCOUNT}/adcreatives`, {
                 name: 'IG Followers — NYC Alley Symbol',
@@ -215,6 +218,7 @@ export async function POST(req: NextRequest) {
                     page_id: PAGE_ID,
                     video_data: {
                         video_id: video1Id,
+                        image_url: THUMB1,
                         message: 'found this in a side street off Bleecker. anyone know what this symbol means?',
                         call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
                     },
@@ -230,6 +234,7 @@ export async function POST(req: NextRequest) {
                     page_id: PAGE_ID,
                     video_data: {
                         video_id: video2Id,
+                        image_url: THUMB2,
                         message: 'has anyone seen this before? it was on the wall at an old subway station. the tiles look original, like from 1904.',
                         call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
                     },
