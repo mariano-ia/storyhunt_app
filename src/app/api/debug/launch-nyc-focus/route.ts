@@ -147,18 +147,32 @@ export async function POST(req: NextRequest) {
         }
 
         // ─── PHASE 4: Resolve Instagram Account ID ─────────────────────
+        // Read from the ad account's connected IG accounts (more reliable than page lookup)
         let igAccountId = '';
         try {
-            const pageInfo = await run('resolve IG account from FB page', () =>
-                metaGet(`/${PAGE_ID}`, { fields: 'instagram_business_account' }),
+            const igAccounts = await run('resolve IG accounts from ad account', () =>
+                metaGet(`/${AD_ACCOUNT}/instagram_accounts`, { fields: 'id,username' }),
             );
-            igAccountId = pageInfo?.instagram_business_account?.id || '';
+            const accounts = igAccounts?.data || [];
+            const storyhunt = accounts.find((a: any) => a.username === 'storyhunt.city') || accounts[0];
+            igAccountId = storyhunt?.id || '';
+            if (accounts.length > 0) {
+                log.push({ step: ++step, op: `IG accounts found: ${accounts.map((a: any) => `${a.username}=${a.id}`).join(', ')}`, ok: true });
+            }
         } catch {
-            // fallback to hardcoded
+            // fallback
         }
         if (!igAccountId) {
-            igAccountId = '17841473040831498';
-            log.push({ step: ++step, op: `using fallback IG account ID: ${igAccountId}`, ok: true });
+            // Try page lookup as fallback
+            try {
+                const pageInfo = await run('resolve IG account from FB page', () =>
+                    metaGet(`/${PAGE_ID}`, { fields: 'instagram_business_account' }),
+                );
+                igAccountId = pageInfo?.instagram_business_account?.id || '';
+            } catch { /* */ }
+        }
+        if (!igAccountId) {
+            throw new Error('Could not resolve Instagram account ID from ad account or FB page');
         }
 
         // ─── PHASE 5: Create IG Followers campaign ──────────────────────
