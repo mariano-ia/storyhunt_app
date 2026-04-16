@@ -162,17 +162,23 @@ export async function POST(req: NextRequest) {
         }
 
         // ─── PHASE 5: Create IG Followers campaign ──────────────────────
-        // Campaign
-        const campaignResult = await write('create campaign "StoryHunt IG Followers — NYC"', () =>
-            metaPost(`/${AD_ACCOUNT}/campaigns`, {
-                name: 'StoryHunt IG Followers — NYC',
-                objective: 'OUTCOME_AWARENESS',
-                status: 'ACTIVE',
-                special_ad_categories: [],
-                is_adset_budget_sharing_enabled: false,
-            }),
-        );
-        const campaignId = campaignResult?.id || 'dry-run';
+        // Campaign — already created in previous run, reuse ID
+        const existingCampaignId = req.nextUrl.searchParams.get('campaign_id') || '';
+        let campaignId = existingCampaignId;
+        if (!campaignId) {
+            const campaignResult = await write('create campaign "StoryHunt IG Followers — NYC"', () =>
+                metaPost(`/${AD_ACCOUNT}/campaigns`, {
+                    name: 'StoryHunt IG Followers — NYC',
+                    objective: 'OUTCOME_AWARENESS',
+                    status: 'ACTIVE',
+                    special_ad_categories: [],
+                    is_adset_budget_sharing_enabled: false,
+                }),
+            );
+            campaignId = campaignResult?.id || 'dry-run';
+        } else {
+            log.push({ step: ++step, op: `reusing existing campaign ${campaignId}`, ok: true });
+        }
 
         // Ad Set — NYC 25mi, $15/day
         const targeting = {
@@ -201,6 +207,7 @@ export async function POST(req: NextRequest) {
                 status: 'ACTIVE',
                 bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                 start_time: new Date().toISOString(),
+                targeting_optimization_types: ['none'],
             }),
         );
         const adSetId = adSetResult?.id || 'dry-run';
