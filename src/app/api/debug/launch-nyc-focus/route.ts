@@ -146,47 +146,7 @@ export async function POST(req: NextRequest) {
             log.push({ step, op: '[dry-run] upload video 2', ok: true });
         }
 
-        // ─── PHASE 4: Resolve Instagram Account ID ─────────────────────
-        // Read from the ad account's connected IG accounts (more reliable than page lookup)
-        let igAccountId = '';
-        try {
-            const igAccounts = await run('resolve IG accounts from ad account', () =>
-                metaGet(`/${AD_ACCOUNT}/instagram_accounts`, { fields: 'id,username' }),
-            );
-            const accounts = igAccounts?.data || [];
-            const storyhunt = accounts.find((a: any) => a.username === 'storyhunt.city') || accounts[0];
-            igAccountId = storyhunt?.id || '';
-            if (accounts.length > 0) {
-                log.push({ step: ++step, op: `IG accounts found: ${accounts.map((a: any) => `${a.username}=${a.id}`).join(', ')}`, ok: true });
-            }
-        } catch {
-            // fallback
-        }
-        if (!igAccountId) {
-            // Try page lookup as fallback
-            try {
-                const pageInfo = await run('resolve IG account from FB page', () =>
-                    metaGet(`/${PAGE_ID}`, { fields: 'instagram_business_account' }),
-                );
-                igAccountId = pageInfo?.instagram_business_account?.id || '';
-            } catch { /* */ }
-        }
-        if (!igAccountId) {
-            throw new Error('Could not resolve Instagram account ID from ad account or FB page');
-        }
-
-        // Ensure the IG account is linked to the ad account (required for creating ads)
-        await write(`link IG account ${igAccountId} to ad account`, async () => {
-            try {
-                return await metaPost(`/${AD_ACCOUNT}/instagram_accounts`, { instagram_account: igAccountId });
-            } catch (err: any) {
-                // Might already be linked — check error
-                if (err.message?.includes('already')) return { already_linked: true };
-                throw err;
-            }
-        });
-
-        // ─── PHASE 5: Create IG Followers campaign ──────────────────────
+        // ─── PHASE 4: Create IG Followers campaign ────────────────────
         // Campaign — already created in previous run, reuse ID
         const existingCampaignId = req.nextUrl.searchParams.get('campaign_id') || '';
         let campaignId = existingCampaignId;
@@ -247,42 +207,52 @@ export async function POST(req: NextRequest) {
             adSetId = adSetResult?.id || 'dry-run';
         }
 
-        // Ad 1 — NYC alley symbol
+        // Create ad creatives first (same pattern as all other campaigns)
+        const creative1Result = await write('create creative 1 (NYC alley)', () =>
+            metaPost(`/${AD_ACCOUNT}/adcreatives`, {
+                name: 'IG Followers — NYC Alley Symbol',
+                object_story_spec: {
+                    page_id: PAGE_ID,
+                    video_data: {
+                        video_id: video1Id,
+                        message: 'found this in a side street off Bleecker. anyone know what this symbol means?',
+                        call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
+                    },
+                },
+            }),
+        );
+        const creative1Id = creative1Result?.id;
+
+        const creative2Result = await write('create creative 2 (subway)', () =>
+            metaPost(`/${AD_ACCOUNT}/adcreatives`, {
+                name: 'IG Followers — Subway Symbol',
+                object_story_spec: {
+                    page_id: PAGE_ID,
+                    video_data: {
+                        video_id: video2Id,
+                        message: 'has anyone seen this before? it was on the wall at an old subway station. the tiles look original, like from 1904.',
+                        call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
+                    },
+                },
+            }),
+        );
+        const creative2Id = creative2Result?.id;
+
+        // Now create ads referencing creatives by ID (same as Voicemail/Underground ads)
         await write('create ad 1 (NYC alley symbol)', () =>
             metaPost(`/${AD_ACCOUNT}/ads`, {
                 name: 'IG — NYC Alley Symbol',
                 adset_id: adSetId,
-                creative: {
-                    object_story_spec: {
-                        page_id: PAGE_ID,
-                        instagram_actor_id: igAccountId || undefined,
-                        video_data: {
-                            video_id: video1Id,
-                            message: 'found this in a side street off Bleecker. anyone know what this symbol means?',
-                            call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
-                        },
-                    },
-                },
+                creative: { creative_id: creative1Id },
                 status: 'ACTIVE',
             }),
         );
 
-        // Ad 2 — Subway symbol
         await write('create ad 2 (subway symbol)', () =>
             metaPost(`/${AD_ACCOUNT}/ads`, {
                 name: 'IG — Subway Symbol',
                 adset_id: adSetId,
-                creative: {
-                    object_story_spec: {
-                        page_id: PAGE_ID,
-                        instagram_actor_id: igAccountId || undefined,
-                        video_data: {
-                            video_id: video2Id,
-                            message: 'has anyone seen this before? it was on the wall at an old subway station. the tiles look original, like from 1904.',
-                            call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
-                        },
-                    },
-                },
+                creative: { creative_id: creative2Id },
                 status: 'ACTIVE',
             }),
         );
@@ -294,7 +264,7 @@ export async function POST(req: NextRequest) {
             campaign_id: campaignId,
             ad_set_id: adSetId,
             video_ids: { video1: video1Id, video2: video2Id },
-            ig_account_id: igAccountId,
+            creative_ids: { creative1: creative1Id, creative2: creative2Id },
             log,
         });
     } catch (err: unknown) {
