@@ -74,13 +74,15 @@ export async function POST(req: NextRequest) {
     }
 
     const dryRun = req.nextUrl.searchParams.get('dry_run') === '1';
-    // video_urls must be passed as query params (publicly accessible URLs)
+    // video_urls OR pre-uploaded video_ids
     const videoUrl1 = req.nextUrl.searchParams.get('video1') || '';
     const videoUrl2 = req.nextUrl.searchParams.get('video2') || '';
+    const existingVideoId1 = req.nextUrl.searchParams.get('vid1') || '';
+    const existingVideoId2 = req.nextUrl.searchParams.get('vid2') || '';
 
-    if (!dryRun && (!videoUrl1 || !videoUrl2)) {
+    if (!dryRun && !existingVideoId1 && (!videoUrl1 || !videoUrl2)) {
         return NextResponse.json({
-            error: 'Pass video1=<url>&video2=<url> with publicly accessible video URLs for upload. Use dry_run=1 to skip video upload.',
+            error: 'Pass video1=<url>&video2=<url> OR vid1=<id>&vid2=<id> for pre-uploaded videos.',
         }, { status: 400 });
     }
 
@@ -121,17 +123,22 @@ export async function POST(req: NextRequest) {
         let video2Id = '';
 
         if (!dryRun) {
-            const v1 = await run('upload video 1 (NYC alley symbol)', () =>
-                uploadVideoFromUrl(videoUrl1, 'IG Followers — NYC Alley Symbol'),
-            );
-            video1Id = v1;
+            if (existingVideoId1 && existingVideoId2) {
+                video1Id = existingVideoId1;
+                video2Id = existingVideoId2;
+                log.push({ step: ++step, op: `reusing pre-uploaded video1=${video1Id}`, ok: true });
+                log.push({ step: ++step, op: `reusing pre-uploaded video2=${video2Id}`, ok: true });
+            } else {
+                const v1 = await run('upload video 1 (NYC alley symbol)', () =>
+                    uploadVideoFromUrl(videoUrl1, 'IG Followers — NYC Alley Symbol'),
+                );
+                video1Id = v1;
 
-            const v2 = await run('upload video 2 (subway symbol)', () =>
-                uploadVideoFromUrl(videoUrl2, 'IG Followers — Subway Symbol'),
-            );
-            video2Id = v2;
-
-            // Meta processes videos asynchronously — no need to wait
+                const v2 = await run('upload video 2 (subway symbol)', () =>
+                    uploadVideoFromUrl(videoUrl2, 'IG Followers — Subway Symbol'),
+                );
+                video2Id = v2;
+            }
         } else {
             step++;
             log.push({ step, op: '[dry-run] upload video 1', ok: true });
@@ -162,6 +169,7 @@ export async function POST(req: NextRequest) {
                 objective: 'OUTCOME_AWARENESS',
                 status: 'ACTIVE',
                 special_ad_categories: [],
+                is_adset_budget_sharing_enabled: false,
             }),
         );
         const campaignId = campaignResult?.id || 'dry-run';
