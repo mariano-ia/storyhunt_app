@@ -184,14 +184,20 @@ export async function POST(req: NextRequest) {
         const targeting = {
             geo_locations: {
                 custom_locations: [{
-                    latitude: 40.7831,
-                    longitude: -73.9712,
+                    latitude: 40.7128,
+                    longitude: -74.006,
                     radius: 25,
                     distance_unit: 'mile',
                 }],
+                location_types: ['home', 'recent'],
             },
             age_min: 22,
             age_max: 45,
+            targeting_automation: {
+                advantage_audience: 0,
+            },
+            publisher_platforms: ['instagram'],
+            instagram_positions: ['stream', 'story', 'reels', 'explore'],
         };
 
         const adSetResult = await write('create ad set "IG Followers — NYC Locals" ($15/day)', () =>
