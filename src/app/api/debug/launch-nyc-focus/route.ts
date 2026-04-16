@@ -180,7 +180,8 @@ export async function POST(req: NextRequest) {
             log.push({ step: ++step, op: `reusing existing campaign ${campaignId}`, ok: true });
         }
 
-        // Ad Set — NYC 25mi, $15/day
+        // Ad Set — NYC 25mi, $15/day. Reuse if already created.
+        const existingAdSetId = req.nextUrl.searchParams.get('adset_id') || '';
         const targeting = {
             geo_locations: {
                 custom_locations: [{
@@ -200,21 +201,26 @@ export async function POST(req: NextRequest) {
             instagram_positions: ['stream', 'story', 'reels', 'explore'],
         };
 
-        const adSetResult = await write('create ad set "IG Followers — NYC Locals" ($15/day)', () =>
-            metaPost(`/${AD_ACCOUNT}/adsets`, {
-                name: 'IG Followers — NYC Locals',
-                campaign_id: campaignId,
-                daily_budget: '1500',
-                billing_event: 'IMPRESSIONS',
-                optimization_goal: 'REACH',
-                targeting,
-                status: 'ACTIVE',
-                bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-                start_time: new Date().toISOString(),
-                promoted_object: { page_id: PAGE_ID },
-            }),
-        );
-        const adSetId = adSetResult?.id || 'dry-run';
+        let adSetId = existingAdSetId;
+        if (adSetId) {
+            log.push({ step: ++step, op: `reusing existing ad set ${adSetId}`, ok: true });
+        } else {
+            const adSetResult = await write('create ad set "IG Followers — NYC Locals" ($15/day)', () =>
+                metaPost(`/${AD_ACCOUNT}/adsets`, {
+                    name: 'IG Followers — NYC Locals',
+                    campaign_id: campaignId,
+                    daily_budget: '1500',
+                    billing_event: 'IMPRESSIONS',
+                    optimization_goal: 'REACH',
+                    targeting,
+                    status: 'ACTIVE',
+                    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+                    start_time: new Date().toISOString(),
+                    promoted_object: { page_id: PAGE_ID },
+                }),
+            );
+            adSetId = adSetResult?.id || 'dry-run';
+        }
 
         // Ad 1 — NYC alley symbol
         await write('create ad 1 (NYC alley symbol)', () =>
@@ -223,6 +229,7 @@ export async function POST(req: NextRequest) {
                 adset_id: adSetId,
                 creative: {
                     object_story_spec: {
+                        page_id: PAGE_ID,
                         instagram_actor_id: igAccountId,
                         video_data: {
                             video_id: video1Id,
@@ -242,6 +249,7 @@ export async function POST(req: NextRequest) {
                 adset_id: adSetId,
                 creative: {
                     object_story_spec: {
+                        page_id: PAGE_ID,
                         instagram_actor_id: igAccountId,
                         video_data: {
                             video_id: video2Id,
