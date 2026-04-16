@@ -175,6 +175,17 @@ export async function POST(req: NextRequest) {
             throw new Error('Could not resolve Instagram account ID from ad account or FB page');
         }
 
+        // Ensure the IG account is linked to the ad account (required for creating ads)
+        await write(`link IG account ${igAccountId} to ad account`, async () => {
+            try {
+                return await metaPost(`/${AD_ACCOUNT}/instagram_accounts`, { instagram_account: igAccountId });
+            } catch (err: any) {
+                // Might already be linked — check error
+                if (err.message?.includes('already')) return { already_linked: true };
+                throw err;
+            }
+        });
+
         // ─── PHASE 5: Create IG Followers campaign ──────────────────────
         // Campaign — already created in previous run, reuse ID
         const existingCampaignId = req.nextUrl.searchParams.get('campaign_id') || '';
