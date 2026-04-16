@@ -12,7 +12,7 @@ const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
 const AD_ACCOUNT = 'act_1614086746553655';
 const PAGE_ID = '1027712467099764'; // Story Hunt Facebook page
 // IG account ID resolved dynamically from FB page, fallback below
-const GRAPH = 'https://graph.facebook.com/v19.0';
+const GRAPH = 'https://graph.facebook.com/v21.0';
 
 // Ad set IDs
 const LM_A_ID = '120243822503360770';
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
             const campaignResult = await write('create campaign "StoryHunt IG Followers — NYC"', () =>
                 metaPost(`/${AD_ACCOUNT}/campaigns`, {
                     name: 'StoryHunt IG Followers — NYC',
-                    objective: 'OUTCOME_AWARENESS',
+                    objective: 'OUTCOME_ENGAGEMENT',
                     status: 'ACTIVE',
                     special_ad_categories: [],
                     is_adset_budget_sharing_enabled: false,
@@ -181,23 +181,18 @@ export async function POST(req: NextRequest) {
         }
 
         // Ad Set — NYC 25mi, $15/day
-        // Read LM_C's current targeting to replicate a known-working structure
-        const lmCData = await run('read LM_C targeting as template', () =>
-            metaGet(`/${LM_C_ID}`, { fields: 'targeting' }),
-        );
-        // Use LM_C's targeting as base (NYC 25mi, already works) but override platforms for IG-only
-        const baseTargeting = lmCData.targeting || {};
         const targeting = {
-            ...baseTargeting,
-            publisher_platforms: ['instagram'],
-            instagram_positions: ['stream', 'story', 'reels', 'explore'],
-            advantage_audience: 0,
+            geo_locations: {
+                custom_locations: [{
+                    latitude: 40.7831,
+                    longitude: -73.9712,
+                    radius: 25,
+                    distance_unit: 'mile',
+                }],
+            },
+            age_min: 22,
+            age_max: 45,
         };
-        // Remove any fields that might conflict
-        delete targeting.device_platforms;
-        delete targeting.facebook_positions;
-        delete targeting.messenger_positions;
-        delete targeting.audience_network_positions;
 
         const adSetResult = await write('create ad set "IG Followers — NYC Locals" ($15/day)', () =>
             metaPost(`/${AD_ACCOUNT}/adsets`, {
@@ -210,6 +205,7 @@ export async function POST(req: NextRequest) {
                 status: 'ACTIVE',
                 bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                 start_time: new Date().toISOString(),
+                promoted_object: { page_id: PAGE_ID },
             }),
         );
         const adSetId = adSetResult?.id || 'dry-run';
