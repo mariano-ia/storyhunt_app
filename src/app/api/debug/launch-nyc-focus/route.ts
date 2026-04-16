@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
-
 // ─── POST /api/debug/launch-nyc-focus ────────────────────────────────────────
 // One-shot migration:
 // 1. Pause 4 international ad sets (LM_A, LM_B, CV_A, CV_B)
@@ -13,7 +11,7 @@ import { readFile } from 'fs/promises';
 const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
 const AD_ACCOUNT = 'act_1614086746553655';
 const PAGE_ID = '1027712467099764'; // Story Hunt Facebook page
-const IG_ACCOUNT_ID = '17841473040831498'; // @storyhunt.city (fetch if different)
+// IG account ID resolved dynamically from FB page, fallback below
 const GRAPH = 'https://graph.facebook.com/v19.0';
 
 // Ad set IDs
@@ -133,9 +131,7 @@ export async function POST(req: NextRequest) {
             );
             video2Id = v2;
 
-            // Wait for Meta to process the videos
-            log.push({ step: ++step, op: 'waiting 30s for Meta video processing...', ok: true });
-            await new Promise(r => setTimeout(r, 30000));
+            // Meta processes videos asynchronously — no need to wait
         } else {
             step++;
             log.push({ step, op: '[dry-run] upload video 1', ok: true });
