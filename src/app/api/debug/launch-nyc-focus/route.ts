@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
                 creative: {
                     object_story_spec: {
                         page_id: PAGE_ID,
-                        instagram_actor_id: igAccountId,
+                        instagram_actor_id: igAccountId || undefined,
                         video_data: {
                             video_id: video1Id,
                             message: 'found this in a side street off Bleecker. anyone know what this symbol means?',
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
                 creative: {
                     object_story_spec: {
                         page_id: PAGE_ID,
-                        instagram_actor_id: igAccountId,
+                        instagram_actor_id: igAccountId || undefined,
                         video_data: {
                             video_id: video2Id,
                             message: 'has anyone seen this before? it was on the wall at an old subway station. the tiles look original, like from 1904.',
