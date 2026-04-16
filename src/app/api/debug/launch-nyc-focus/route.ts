@@ -194,6 +194,7 @@ export async function POST(req: NextRequest) {
             age_max: 45,
             publisher_platforms: ['instagram'],
             instagram_positions: ['stream', 'story', 'reels', 'explore'],
+            advantage_audience: 0,
         };
 
         const adSetResult = await write('create ad set "IG Followers — NYC Locals" ($15/day)', () =>
@@ -207,7 +208,6 @@ export async function POST(req: NextRequest) {
                 status: 'ACTIVE',
                 bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                 start_time: new Date().toISOString(),
-                targeting_optimization_types: ['none'],
             }),
         );
         const adSetId = adSetResult?.id || 'dry-run';
