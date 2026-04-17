@@ -187,13 +187,15 @@ export async function POST(req: NextRequest) {
             log.push({ step: ++step, op: 'skip leads campaign (already created)', ok: true });
         }
 
-        // ─── Followers campaign ─────────────────────────────────────────────
+        // ─── Followers campaign (OUTCOME_TRAFFIC → IG profile URL) ──────────
+        // OUTCOME_ENGAGEMENT + custom_audiences rejected all optimization_goals;
+        // OUTCOME_TRAFFIC drives clicks to the Instagram profile URL instead.
         let followersCampaignId = existingFollowersCampaignId;
         if (!followersCampaignId) {
             const followersCampaign = await write('create campaign "StoryHunt Retargeting — Followers"', () =>
                 metaPost(`/${AD_ACCOUNT}/campaigns`, {
                     name: 'StoryHunt Retargeting — Followers',
-                    objective: 'OUTCOME_ENGAGEMENT',
+                    objective: 'OUTCOME_TRAFFIC',
                     status: 'ACTIVE',
                     special_ad_categories: [],
                     is_adset_budget_sharing_enabled: false,
@@ -215,12 +217,8 @@ export async function POST(req: NextRequest) {
 
         let followersAdSetId: string;
         if (existingFollowersAdSetId) {
-            await write(`update existing ad set ${existingFollowersAdSetId} (add promoted_object)`, () =>
-                metaPost(`/${existingFollowersAdSetId}`, {
-                    promoted_object: { page_id: PAGE_ID },
-                }),
-            );
             followersAdSetId = existingFollowersAdSetId;
+            log.push({ step: ++step, op: `reusing followers ad set ${existingFollowersAdSetId}`, ok: true });
         } else {
             const followersAdSet = await write('create ad set "RT Followers — Warm Visitors" ($4/day)', () =>
                 metaPost(`/${AD_ACCOUNT}/adsets`, {
@@ -228,12 +226,11 @@ export async function POST(req: NextRequest) {
                     campaign_id: followersCampaignId,
                     daily_budget: '400',
                     billing_event: 'IMPRESSIONS',
-                    optimization_goal: 'POST_ENGAGEMENT',
+                    optimization_goal: 'LANDING_PAGE_VIEWS',
                     targeting: followersTargeting,
                     status: 'ACTIVE',
                     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                     start_time: new Date().toISOString(),
-                    promoted_object: { page_id: PAGE_ID },
                 }),
             );
             followersAdSetId = followersAdSet?.id || 'dry-run';
