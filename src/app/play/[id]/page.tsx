@@ -468,6 +468,14 @@ export default function PlayPage() {
                     // Valid — clear paywall and save buyer email for session tracking
                     setPaywallStatus('none');
                     if (accessToken.email) setBuyerEmail(accessToken.email);
+
+                    // Increment usage now (skips if resuming an in_progress session).
+                    // Done here — not on /play/t — so email scanner pre-fetches don't consume uses.
+                    fetch('/api/access/use', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: accessToken.id, experience_id: accessToken.experience_id }),
+                    }).catch(() => { /* non-blocking */ });
                 } catch {
                     setPaywallStatus('invalid');
                     setPaywallMessage('An error occurred while verifying your access. Please reload the page.');

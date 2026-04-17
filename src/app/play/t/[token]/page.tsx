@@ -112,12 +112,7 @@ export default function TokenPlayPage() {
                 // Non-critical — proceed without resume
             }
 
-            // Increment usage on the server (Admin SDK) — skips increment if resuming
-            await fetch('/api/access/use', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: accessToken.id, experience_id: accessToken.experience_id }),
-            });
+            // NOTE: increment moved to /play/[id] so email scanner pre-fetches don't consume uses.
 
             setStatus('valid');
             const playUrl = `/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`;

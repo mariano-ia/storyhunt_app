@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
             experience_id: experienceId,
             lang,
             email,
-            max_uses: 2,
+            max_uses: 20,
             times_used: 0,
             status: 'active' as const,
             expires_at: expiresAt,
