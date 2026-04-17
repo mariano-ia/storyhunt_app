@@ -30,8 +30,10 @@ Experience
 
 Access Tokens (post-payment):
   - token: "SH-XXXXXX", experience_id, lang (es/en), email
-  - max_uses: 2, expires in 30 days
+  - max_uses: 20, expires in 30 days
   - Created by Stripe webhook or /api/access/verify fallback
+  - Increment happens on /play/[id] (after paywall passes), NOT on /play/t/[token] —
+    this avoids email scanners (Gmail, Outlook Safe Links, etc.) consuming uses on pre-fetch
 
 Sales:
   - Tracks purchases per experience (used for card sorting on web)
@@ -86,10 +88,28 @@ Step features:
 /api/public/experiences             → API pública (published first, sorted by sales)
 /api/checkout                       → Crea Stripe Checkout Session
 /api/stripe/webhook                 → Webhook Stripe (crea access token + sale)
+                                      Stripe Dashboard MUST point to https://storyhunt.city/api/stripe/webhook
+                                      (NO www. — the www subdomain does not have Vercel rewrites)
 /api/access/verify                  → Verifica access token (fallback si webhook falla)
 /api/contacts                       → Recibe formulario web (JSON y form-urlencoded)
 /api/cron/publish-instagram         → Vercel Cron: publica posts pendientes en Instagram
+/api/cron/post-experience-email     → Vercel Cron: envía review email + cupón 24h post-experiencia
+/api/cron/nurturing                 → Vercel Cron: nurturing cycle (E2 teaser, E3 social proof, E5 reminder, E7 last call)
+/api/contacts                       → Recibe formulario web (JSON y form-urlencoded) + envía welcome email
 ```
+
+### Transactional Emails (Resend) — Nurturing Cycle
+- From: `hello@storyhunt.city` (domain verified: DKIM + SPF + DMARC)
+- **E1 Welcome** (signup): welcome email sent immediately from /api/contacts
+- **E2 Mystery Teaser** (+3 days): curiosity hook with NYC secrets, only if not converted
+- **E3 Social Proof** (+7 days): hunter count + satisfaction %, only if not converted
+- **E4 Access Link** (post-purchase): access email sent from Stripe webhook (already existed)
+- **E5 Mission Pending** (+7 days post-purchase): reminder for unused tokens
+- **E6 Review + Coupon** (+24h post-play): review request + THANKYOU40 40% off (already existed)
+- **E7 Last Call** (+14 days post-review): final coupon reminder, then silence
+- Max 7 emails per person. Purchase at any point skips pre-purchase nurturing.
+- Templates in `src/lib/email-templates.ts`
+- Env vars: RESEND_API_KEY, NOTIFICATION_EMAIL
 
 ### Publish Pipeline (/api/experiences/publish)
 ```
@@ -110,12 +130,15 @@ Step features:
 ### Deploy
 - Vercel: storyhunt-app.vercel.app
 - Auto-deploy desde GitHub main branch
-- Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+- Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
 
 ### Vercel Crons (vercel.json)
 - `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy
+- `/api/cron/post-experience-email` — Daily 10 AM NYC — review email + THANKYOU40 coupon
+- `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7)
 - Lee social-calendar.json del repo StoryHuntWeb en GitHub
 - Env vars requeridas: INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
+- Repo: github.com/mariano-ia/storyhunt_app
 - Repo: github.com/mariano-ia/storyhunt_app
 
 ## Estructura de archivos
@@ -138,6 +161,7 @@ src/
       contacts/              → API contactos (web form + JSON)
       experiences/           → API experiencias
       experiences/[id]/preview/ → Evaluación LLM
+      cron/nurturing/         → Nurturing cycle cron (E2, E3, E5, E7)
       sessions/              → API sesiones
       users/invite/          → Invitación de usuarios
     play/[id]/               → Player público
@@ -152,6 +176,7 @@ src/
     firebase-admin.ts        → Admin SDK (auth + Firestore admin writes)
     auth.tsx                 → Context de autenticación
     firestore.ts             → Queries a Firestore (CRUD + createExperienceFromAI batch)
+    email-templates.ts       → Templates HTML del ciclo de nurturing (E1-E7)
     llm.ts                   → Módulo LLM compartido (OpenAI + Gemini, JSON mode)
     types.ts                 → Tipos TypeScript (incluye AIGeneratedExperience)
 ```
