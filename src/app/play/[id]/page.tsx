@@ -148,6 +148,7 @@ export default function PlayPage() {
 
     // Paywall states
     const [paywallStatus, setPaywallStatus] = useState<'none' | 'checking' | 'blocked' | 'invalid' | 'expired' | 'used'>('none');
+    const [buyerEmail, setBuyerEmail] = useState('');
     const [paywallMessage, setPaywallMessage] = useState('');
 
     // Status states
@@ -462,8 +463,9 @@ export default function PlayPage() {
                         return;
                     }
 
-                    // Valid — clear paywall and continue
+                    // Valid — clear paywall and save buyer email for session tracking
                     setPaywallStatus('none');
+                    if (accessToken.email) setBuyerEmail(accessToken.email);
                 } catch {
                     setPaywallStatus('invalid');
                     setPaywallMessage('An error occurred while verifying your access. Please reload the page.');
@@ -478,7 +480,7 @@ export default function PlayPage() {
             if (!isPreview && stps.length > 0) {
                 const sid = await apiCreateSession({
                     experience_id: id,
-                    email: '',
+                    email: buyerEmail,
                     lang,
                     total_steps: stps.length,
                 });
