@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // the Lead Magnet Visitors custom audience (14d), $4/day each = $8/day total.
 // Both campaigns + ad sets + ads created ACTIVE.
 //
-// Protected by CRON_SECRET. Supports dry_run=1. Remove after launch.
+// Reuses existing image_hashes (adimages upload lost app capability).
+// Protected by CRON_SECRET. Supports dry_run=1.
 
 const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
 const AD_ACCOUNT = 'act_1614086746553655';
@@ -12,17 +13,26 @@ const PAGE_ID = '1027712467099764';
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 // Custom audiences
-const AUD_LEAD_MAGNET_VISITORS = '120243989905400770'; // 14d
-const AUD_LEADS = '120243989905550770'; // exclude from lead-capture retargeting
+const AUD_LEAD_MAGNET_VISITORS = '120243989905400770';
+const AUD_LEADS = '120243989905550770';
 
 // Existing subway video (uploaded for cold IG Followers campaign)
 const VIDEO_SUBWAY_ID = '972550711977782';
 
-// URLs for creative assets
-const THUMB_SUBWAY_URL = 'https://storyhunt.city/assets/ads/videos/organic/thumb-subway.jpg';
-const IMG_VOICEMAIL_URL = 'https://storyhunt-app.vercel.app/ad-voicemail.png';
+// Known image hash from prior uploads (persists in ad account)
+const VOICEMAIL_HASH = '679eddb707276bf642aeb34bda419f51';
 
 type OpResult = { step: number; op: string; ok: boolean; result?: unknown; error?: string };
+
+async function metaGet(path: string, params?: Record<string, string>): Promise<any> {
+    const url = new URL(`${GRAPH}${path}`);
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    url.searchParams.set('access_token', META_TOKEN);
+    const res = await fetch(url.toString());
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) throw new Error(`GET ${path}: ${JSON.stringify(json.error || json)}`);
+    return json;
+}
 
 async function metaPost(path: string, body: Record<string, unknown>, attempt = 1): Promise<any> {
     const url = new URL(`${GRAPH}${path}`);
@@ -43,6 +53,22 @@ async function metaPost(path: string, body: Record<string, unknown>, attempt = 1
         throw new Error(`POST ${path}: ${JSON.stringify(err || json)}`);
     }
     return json;
+}
+
+// Find the image_hash used by the existing subway creative (from cold IG Followers campaign)
+async function findSubwayHash(): Promise<string> {
+    const creatives = await metaGet(`/${AD_ACCOUNT}/adcreatives`, {
+        fields: 'name,object_story_spec',
+        limit: '100',
+    });
+    for (const c of creatives.data || []) {
+        const name = String(c.name || '').toLowerCase();
+        if (name.includes('subway')) {
+            const vd = c?.object_story_spec?.video_data;
+            if (vd?.image_hash) return vd.image_hash;
+        }
+    }
+    throw new Error('Subway image_hash not found in existing creatives');
 }
 
 export async function POST(req: NextRequest) {
@@ -77,20 +103,13 @@ export async function POST(req: NextRequest) {
     };
 
     try {
-        // ─── PHASE 1: Upload creative assets ────────────────────────────────
-        const voicemailImg = await write('upload voicemail image', () =>
-            metaPost(`/${AD_ACCOUNT}/adimages`, { url: IMG_VOICEMAIL_URL }),
-        );
-        const voicemailHash = voicemailImg?.images
-            ? Object.values(voicemailImg.images as Record<string, any>)[0]?.hash
-            : null;
+        // ─── PHASE 1: Resolve image hashes from existing creatives ──────────
+        const voicemailHash = VOICEMAIL_HASH;
+        log.push({ step: ++step, op: `use voicemail hash: ${voicemailHash}`, ok: true });
 
-        const subwayThumb = await write('upload subway thumbnail', () =>
-            metaPost(`/${AD_ACCOUNT}/adimages`, { url: THUMB_SUBWAY_URL }),
-        );
-        const subwayHash = subwayThumb?.images
-            ? Object.values(subwayThumb.images as Record<string, any>)[0]?.hash
-            : null;
+        const subwayHash = dryRun
+            ? 'dry-run-hash'
+            : await run('fetch subway image_hash from existing creative', () => findSubwayHash());
 
         // ─── PHASE 2: Campaign 1 — Retargeting Leads ────────────────────────
         const leadsCampaign = await write('create campaign "StoryHunt Retargeting — Leads"', () =>
