@@ -970,6 +970,12 @@ export default function ExperienceDetailPage() {
                                 value={(formData as any).location || ''} onChange={e => setFormData({ ...formData, location: e.target.value } as any)} />
                         </div>
                     </div>
+                    <div className="form-group">
+                        <label className="form-label">Punto de inicio</label>
+                        <input className="form-input" placeholder="Ej: Bryant Park, 42nd St & 6th Ave"
+                            value={(formData as any).starting_point || ''} onChange={e => setFormData({ ...formData, starting_point: e.target.value } as any)} />
+                        <span className="form-hint">Se muestra en la card, en Stripe y en el email de acceso. El usuario necesita saber donde ir ANTES de comprar.</span>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                         <div className="form-group">
                             <label className="form-label">Duracion</label>
