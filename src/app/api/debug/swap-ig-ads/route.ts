@@ -107,11 +107,7 @@ export async function POST(req: NextRequest) {
                 metaPost(`/${AD_ACCOUNT}/advideos`, { file_url: video.url, title: video.title }),
             );
 
-            const img = await run(`upload thumbnail for ${video.title}`, () =>
-                metaPost(`/${AD_ACCOUNT}/adimages`, { url: video.thumb }),
-            );
-            const hash = img?.images ? Object.values(img.images as Record<string, any>)[0]?.hash : null;
-
+            // Use video thumbnail URL directly (Meta fetches it)
             const creative = await run(`create creative: ${video.title}`, () =>
                 metaPost(`/${AD_ACCOUNT}/adcreatives`, {
                     name: video.title,
@@ -119,7 +115,7 @@ export async function POST(req: NextRequest) {
                         page_id: PAGE_ID,
                         video_data: {
                             video_id: vid.id,
-                            image_hash: hash,
+                            image_url: video.thumb,
                             message: video.caption,
                             call_to_action: { type: 'LEARN_MORE', value: { link: 'https://www.instagram.com/storyhunt.city/' } },
                         },
