@@ -96,6 +96,13 @@ export async function POST(req: NextRequest) {
             lang,
         );
 
+        // Append starting point to Stripe product description if available
+        const exp = experience as any;
+        const startingPoint = exp.starting_point;
+        const fullDescription = startingPoint
+            ? `${productDescription.slice(0, 150)} | ${lang === 'en' ? 'Starts at' : 'Comienza en'}: ${startingPoint}`
+            : productDescription.slice(0, 200);
+
         // Build checkout session params
         const sessionParams: Record<string, any> = {
             mode: 'payment',
@@ -107,7 +114,7 @@ export async function POST(req: NextRequest) {
                     unit_amount: Math.round(price * 100), // price is in dollars, Stripe wants cents
                     product_data: {
                         name: productName,
-                        description: productDescription.slice(0, 200),
+                        description: fullDescription.slice(0, 200),
                     },
                 },
                 quantity: 1,

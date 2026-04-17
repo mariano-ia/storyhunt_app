@@ -27,6 +27,7 @@ export interface Experience {
     duration?: string;            // "45 min", "1.5 hs"
     difficulty?: 'easy' | 'medium' | 'hard';
     location?: string;            // "Midtown Manhattan, NYC"
+    starting_point?: string;      // "Bryant Park, 42nd St & 6th Ave"
 
     // ─── Translations (generated on publish) ────────────────────
     narrator_personality_en?: string;
@@ -182,6 +183,17 @@ export interface Contact {
     email: string;
     created_at: string;
     status: 'new' | 'contacted';
+    lang?: 'es' | 'en';
+
+    // ─── Nurturing cycle tracking ──────────────────────────────
+    welcome_sent?: boolean;         // E1: welcome email
+    welcome_sent_at?: string;
+    teaser_sent?: boolean;          // E2: mystery teaser (+3 days)
+    teaser_sent_at?: string;
+    social_proof_sent?: boolean;    // E3: social proof (+7 days)
+    social_proof_sent_at?: string;
+    converted?: boolean;            // true when contact makes a purchase
+    converted_at?: string;
 }
 
 // ─── Discount Coupons ────────────────────────────────────────────────────────
@@ -217,6 +229,14 @@ export interface AccessToken {
     stripe_session_id?: string;
     created_at: string;
     used_at?: string;
+
+    // ─── Nurturing cycle tracking ──────────────────────────────
+    review_email_sent?: boolean;    // E6: review + coupon (+24h post-play)
+    review_email_date?: string;
+    reminder_sent?: boolean;        // E5: mission pending (+7 days unused)
+    reminder_sent_at?: string;
+    last_call_sent?: boolean;       // E7: last call coupon (+14 days post-review)
+    last_call_sent_at?: string;
 }
 
 // ─── Sales ───────────────────────────────────────────────────────────────────

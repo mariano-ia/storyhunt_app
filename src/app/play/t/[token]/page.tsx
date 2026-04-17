@@ -94,15 +94,34 @@ export default function TokenPlayPage() {
                 return;
             }
 
-            // Valid! Increment usage on the server (Admin SDK) and redirect to player
+            // Check for an existing in_progress session (auto-resume)
+            let fromStep: number | null = null;
+            try {
+                const findRes = await fetch('/api/sessions/find', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ experience_id: accessToken.experience_id, email: accessToken.email }),
+                });
+                if (findRes.ok) {
+                    const { session } = await findRes.json();
+                    if (session && session.current_step > 0) {
+                        fromStep = session.current_step;
+                    }
+                }
+            } catch {
+                // Non-critical — proceed without resume
+            }
+
+            // Increment usage on the server (Admin SDK) — skips increment if resuming
             await fetch('/api/access/use', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: accessToken.id }),
+                body: JSON.stringify({ id: accessToken.id, experience_id: accessToken.experience_id }),
             });
 
             setStatus('valid');
-            router.replace(`/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`);
+            const playUrl = `/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`;
+            router.replace(fromStep !== null ? `${playUrl}&from=${fromStep}` : playUrl);
 
         } catch (err) {
             console.error('[token-play] Error:', err);

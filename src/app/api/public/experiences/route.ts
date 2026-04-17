@@ -46,6 +46,7 @@ export async function GET() {
                 duration: (exp as any).duration || '',
                 difficulty: (exp as any).difficulty || '',
                 location: (exp as any).location || '',
+                starting_point: (exp as any).starting_point || '',
                 narrator_avatar: exp.narrator_avatar || '',
             }))
             .sort((a, b) => {

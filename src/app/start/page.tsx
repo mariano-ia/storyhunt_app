@@ -18,6 +18,7 @@ type Experience = {
   duration?: string;
   distance?: string;
   difficulty?: string;
+  starting_point?: string;
   slug: string;
   price: number;
   status: string;
@@ -94,6 +95,12 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) =
             <>
               <h3>{(exp.name || '').toUpperCase()}</h3>
               <p className="card-description">{exp.web_description || ''}</p>
+              {exp.starting_point && (
+                <div className="starting-point-badge">
+                  <div className="starting-point-label">START_POINT</div>
+                  <div className="starting-point-value">{exp.starting_point}</div>
+                </div>
+              )}
               <div className="card-meta">
                 {exp.duration && <div><span className="label">DURATION:</span> {exp.duration.toUpperCase()}</div>}
                 {exp.distance && <div><span className="label">DISTANCE:</span> {exp.distance.toUpperCase()}</div>}
@@ -854,6 +861,26 @@ export default function StartPage() {
         }
 
         .card-meta .label { color: #888888; }
+
+        .starting-point-badge {
+          background: rgba(255, 0, 51, 0.08);
+          border: 1px solid rgba(255, 0, 51, 0.25);
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin-bottom: 1rem;
+          font-family: 'Space Mono', 'Fira Code', monospace;
+        }
+        .starting-point-label {
+          font-size: 0.6rem;
+          color: #ff0033;
+          letter-spacing: 0.15em;
+          margin-bottom: 4px;
+        }
+        .starting-point-value {
+          font-size: 0.85rem;
+          color: #fff;
+          font-weight: 600;
+        }
 
         .card-buy-btn, .card-notify-btn {
           align-self: stretch;

@@ -6,7 +6,7 @@ import type Stripe from 'stripe';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-async function sendAccessEmail(email: string, token: string, experienceName: string, lang: 'es' | 'en') {
+async function sendAccessEmail(email: string, token: string, experienceName: string, lang: 'es' | 'en', startingPoint?: string) {
     if (!resend) return;
 
     const playUrl = `https://storyhunt.city/play/t/${token}`;
@@ -50,6 +50,17 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
     </p>
 </td></tr>
 
+<!-- Starting point -->
+${startingPoint ? `
+<tr><td style="padding:0 40px 16px;">
+    <div style="background:rgba(255,0,51,0.08);border:1px solid rgba(255,0,51,0.25);border-radius:8px;padding:12px 16px;">
+        <div style="font-size:11px;color:#ff0033;letter-spacing:0.15em;margin-bottom:4px;">${isEn ? 'MEET_POINT' : 'PUNTO_DE_INICIO'}</div>
+        <div style="font-size:16px;color:#fff;font-weight:600;">${startingPoint}</div>
+        <div style="font-size:12px;color:#666;margin-top:4px;">${isEn ? 'Be there before you tap START' : 'Estando ahí, tocá COMENZAR'}</div>
+    </div>
+</td></tr>
+` : ''}
+
 <!-- CTA Button -->
 <tr><td style="padding:0 40px 24px;">
     <a href="${playUrl}" style="display:inline-block;background:#ff0033;color:#fff;padding:16px 32px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
@@ -61,8 +72,8 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
 <tr><td style="padding:0 40px 32px;">
     <p style="font-size:13px;color:#666;line-height:1.6;margin:0;">
         ${isEn
-            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You have 30 days to play'
-            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Tenés 30 días para jugar'
+            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off<br>• You have 30 days to play'
+            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste<br>• Tenés 30 días para jugar'
         }
     </p>
 </td></tr>
@@ -173,9 +184,14 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // 4. Send access email to customer
+            // 4. Send access email to customer (with starting point if available)
             if (email) {
-                await sendAccessEmail(email, token, experienceName, lang);
+                let startingPoint: string | undefined;
+                try {
+                    const expDoc = await db.collection('experiences').doc(experienceId).get();
+                    startingPoint = expDoc.data()?.starting_point;
+                } catch { /* non-critical */ }
+                await sendAccessEmail(email, token, experienceName, lang, startingPoint);
             }
 
             console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${email} → token ${token}`);
