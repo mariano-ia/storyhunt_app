@@ -165,6 +165,8 @@ export default function PlayPage() {
     const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
     const sessionIdRef = useRef<string | null>(null);
+    const failedAttemptsRef = useRef(0);
+    const MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE = 3;
 
     // Keep ref in sync with state (so async callbacks can access latest)
     useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
@@ -538,7 +540,19 @@ export default function PlayPage() {
             });
             const data = await res.json();
 
-            const isCorrect = data.evaluation === 'correct';
+            let isCorrect = data.evaluation === 'correct';
+
+            // Track failed attempts — auto-advance after MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE
+            if (!isCorrect) {
+                failedAttemptsRef.current += 1;
+                if (failedAttemptsRef.current >= MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE) {
+                    isCorrect = true; // force advance
+                    failedAttemptsRef.current = 0;
+                }
+            } else {
+                failedAttemptsRef.current = 0;
+            }
+
             const nextIdx = data.nextStepIndex;
             const nextStepObj = (steps && nextIdx < steps.length) ? steps[nextIdx] : undefined;
 
@@ -546,7 +560,7 @@ export default function PlayPage() {
                 role: 'system',
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
-                evaluation: data.evaluation,
+                evaluation: isCorrect ? 'correct' : data.evaluation,
                 // Inherit media from the next step if we successfully advanced
                 media_type: isCorrect && nextStepObj ? nextStepObj.media_type : undefined,
                 media_url: isCorrect && nextStepObj ? nextStepObj.media_url : undefined
