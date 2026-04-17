@@ -23,6 +23,10 @@ const RT_FOLLOWERS_ADSET_ID = '120244242581940770';
 const VIDEO_847 = '1977537213134944';
 const VIDEO_LIBERTY_UNDERGROUND = '1668015987662884';
 
+// Source ads to fetch image_hash from (IG Bold active ads)
+const AD_847 = '120244239802000770';
+const AD_LIBERTY_UNDERGROUND = '120244239800350770';
+
 type OpResult = { step: number; op: string; ok: boolean; result?: unknown; error?: string };
 
 async function metaGet(path: string, params?: Record<string, string>): Promise<any> {
@@ -56,17 +60,14 @@ async function metaPost(path: string, body: Record<string, unknown>, attempt = 1
     return json;
 }
 
-// Find image_hash from an existing creative by matching its video_id
-async function findImageHashByVideoId(videoId: string): Promise<string> {
-    const creatives = await metaGet(`/${AD_ACCOUNT}/adcreatives`, {
-        fields: 'name,object_story_spec',
-        limit: '100',
+// Fetch image_hash from a specific ad's creative
+async function getImageHashFromAd(adId: string): Promise<string> {
+    const ad = await metaGet(`/${adId}`, {
+        fields: 'creative{object_story_spec}',
     });
-    for (const c of creatives.data || []) {
-        const vd = c?.object_story_spec?.video_data;
-        if (vd?.video_id === videoId && vd?.image_hash) return vd.image_hash;
-    }
-    throw new Error(`image_hash not found for video_id ${videoId}`);
+    const vd = ad?.creative?.object_story_spec?.video_data;
+    if (vd?.image_hash) return vd.image_hash;
+    throw new Error(`image_hash not found in ad ${adId}`);
 }
 
 export async function POST(req: NextRequest) {
@@ -102,8 +103,8 @@ export async function POST(req: NextRequest) {
 
     try {
         // ─── Resolve image hashes ──────────────────────────────────────────
-        const hash847 = dryRun ? 'dry' : await run('fetch image_hash for 847', () => findImageHashByVideoId(VIDEO_847));
-        const hashLiberty = dryRun ? 'dry' : await run('fetch image_hash for liberty-underground', () => findImageHashByVideoId(VIDEO_LIBERTY_UNDERGROUND));
+        const hash847 = dryRun ? 'dry' : await run(`fetch image_hash from ad ${AD_847}`, () => getImageHashFromAd(AD_847));
+        const hashLiberty = dryRun ? 'dry' : await run(`fetch image_hash from ad ${AD_LIBERTY_UNDERGROUND}`, () => getImageHashFromAd(AD_LIBERTY_UNDERGROUND));
 
         // ─── Pause old ads ──────────────────────────────────────────────────
         await write(`pause old RT Leads ad ${RT_LEADS_OLD_AD_ID}`, () =>
