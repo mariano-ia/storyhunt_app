@@ -80,6 +80,8 @@ export async function POST(req: NextRequest) {
     const dryRun = req.nextUrl.searchParams.get('dry_run') === '1';
     const skipLeads = req.nextUrl.searchParams.get('skip_leads') === '1';
     const existingFollowersCampaignId = req.nextUrl.searchParams.get('followers_campaign_id') || '';
+    const existingFollowersAdSetId = req.nextUrl.searchParams.get('followers_adset_id') || '';
+    const existingFollowersCreativeId = req.nextUrl.searchParams.get('followers_creative_id') || '';
 
     const log: OpResult[] = [];
     let step = 0;
@@ -211,39 +213,56 @@ export async function POST(req: NextRequest) {
             instagram_positions: ['stream', 'story', 'reels', 'explore'],
         };
 
-        const followersAdSet = await write('create ad set "RT Followers — Warm Visitors" ($4/day)', () =>
-            metaPost(`/${AD_ACCOUNT}/adsets`, {
-                name: 'RT Followers — Warm Visitors',
-                campaign_id: followersCampaignId,
-                daily_budget: '400',
-                billing_event: 'IMPRESSIONS',
-                optimization_goal: 'POST_ENGAGEMENT',
-                targeting: followersTargeting,
-                status: 'ACTIVE',
-                bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-                start_time: new Date().toISOString(),
-            }),
-        );
-        const followersAdSetId = followersAdSet?.id || 'dry-run';
+        let followersAdSetId: string;
+        if (existingFollowersAdSetId) {
+            await write(`update existing ad set ${existingFollowersAdSetId} (add promoted_object)`, () =>
+                metaPost(`/${existingFollowersAdSetId}`, {
+                    promoted_object: { page_id: PAGE_ID },
+                }),
+            );
+            followersAdSetId = existingFollowersAdSetId;
+        } else {
+            const followersAdSet = await write('create ad set "RT Followers — Warm Visitors" ($4/day)', () =>
+                metaPost(`/${AD_ACCOUNT}/adsets`, {
+                    name: 'RT Followers — Warm Visitors',
+                    campaign_id: followersCampaignId,
+                    daily_budget: '400',
+                    billing_event: 'IMPRESSIONS',
+                    optimization_goal: 'POST_ENGAGEMENT',
+                    targeting: followersTargeting,
+                    status: 'ACTIVE',
+                    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+                    start_time: new Date().toISOString(),
+                    promoted_object: { page_id: PAGE_ID },
+                }),
+            );
+            followersAdSetId = followersAdSet?.id || 'dry-run';
+        }
 
-        const followersCreative = await write('create creative "RT Subway — Second Look"', () =>
-            metaPost(`/${AD_ACCOUNT}/adcreatives`, {
-                name: 'RT Subway — Second Look',
-                object_story_spec: {
-                    page_id: PAGE_ID,
-                    video_data: {
-                        video_id: VIDEO_SUBWAY_ID,
-                        image_hash: subwayHash,
-                        message: 'if you\'re still thinking about it, we post one new NYC secret every week. no ads, no fluff — just the city talking.',
-                        call_to_action: {
-                            type: 'LEARN_MORE',
-                            value: { link: 'https://www.instagram.com/storyhunt.city/' },
+        let followersCreativeId: string | undefined;
+        if (existingFollowersCreativeId) {
+            followersCreativeId = existingFollowersCreativeId;
+            log.push({ step: ++step, op: `reusing followers creative ${existingFollowersCreativeId}`, ok: true });
+        } else {
+            const followersCreative = await write('create creative "RT Subway — Second Look"', () =>
+                metaPost(`/${AD_ACCOUNT}/adcreatives`, {
+                    name: 'RT Subway — Second Look',
+                    object_story_spec: {
+                        page_id: PAGE_ID,
+                        video_data: {
+                            video_id: VIDEO_SUBWAY_ID,
+                            image_hash: subwayHash,
+                            message: 'if you\'re still thinking about it, we post one new NYC secret every week. no ads, no fluff — just the city talking.',
+                            call_to_action: {
+                                type: 'LEARN_MORE',
+                                value: { link: 'https://www.instagram.com/storyhunt.city/' },
+                            },
                         },
                     },
-                },
-            }),
-        );
-        const followersCreativeId = followersCreative?.id;
+                }),
+            );
+            followersCreativeId = followersCreative?.id;
+        }
 
         await write('create ad "RT Subway — Second Look"', () =>
             metaPost(`/${AD_ACCOUNT}/ads`, {
