@@ -5,21 +5,19 @@ import { NextRequest, NextResponse } from 'next/server';
 // Both campaigns + ad sets + ads created ACTIVE.
 //
 // Reuses existing image_hashes (adimages upload lost app capability).
-// Protected by CRON_SECRET. Supports dry_run=1.
+// Protected by CRON_SECRET. Supports:
+//   - dry_run=1
+//   - skip_leads=1 (if leads campaign was already created in a prior run)
+//   - followers_campaign_id=XXX (reuse empty followers campaign from failed run)
 
 const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
 const AD_ACCOUNT = 'act_1614086746553655';
 const PAGE_ID = '1027712467099764';
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
-// Custom audiences
 const AUD_LEAD_MAGNET_VISITORS = '120243989905400770';
 const AUD_LEADS = '120243989905550770';
-
-// Existing subway video (uploaded for cold IG Followers campaign)
 const VIDEO_SUBWAY_ID = '972550711977782';
-
-// Known image hash from prior uploads (persists in ad account)
 const VOICEMAIL_HASH = '679eddb707276bf642aeb34bda419f51';
 
 type OpResult = { step: number; op: string; ok: boolean; result?: unknown; error?: string };
@@ -55,7 +53,6 @@ async function metaPost(path: string, body: Record<string, unknown>, attempt = 1
     return json;
 }
 
-// Find the image_hash used by the existing subway creative (from cold IG Followers campaign)
 async function findSubwayHash(): Promise<string> {
     const creatives = await metaGet(`/${AD_ACCOUNT}/adcreatives`, {
         fields: 'name,object_story_spec',
@@ -81,6 +78,9 @@ export async function POST(req: NextRequest) {
     }
 
     const dryRun = req.nextUrl.searchParams.get('dry_run') === '1';
+    const skipLeads = req.nextUrl.searchParams.get('skip_leads') === '1';
+    const existingFollowersCampaignId = req.nextUrl.searchParams.get('followers_campaign_id') || '';
+
     const log: OpResult[] = [];
     let step = 0;
 
@@ -103,7 +103,6 @@ export async function POST(req: NextRequest) {
     };
 
     try {
-        // ─── PHASE 1: Resolve image hashes from existing creatives ──────────
         const voicemailHash = VOICEMAIL_HASH;
         log.push({ step: ++step, op: `use voicemail hash: ${voicemailHash}`, ok: true });
 
@@ -111,84 +110,97 @@ export async function POST(req: NextRequest) {
             ? 'dry-run-hash'
             : await run('fetch subway image_hash from existing creative', () => findSubwayHash());
 
-        // ─── PHASE 2: Campaign 1 — Retargeting Leads ────────────────────────
-        const leadsCampaign = await write('create campaign "StoryHunt Retargeting — Leads"', () =>
-            metaPost(`/${AD_ACCOUNT}/campaigns`, {
-                name: 'StoryHunt Retargeting — Leads',
-                objective: 'OUTCOME_TRAFFIC',
-                status: 'ACTIVE',
-                special_ad_categories: [],
-                is_adset_budget_sharing_enabled: false,
-            }),
-        );
-        const leadsCampaignId = leadsCampaign?.id || 'dry-run';
+        // ─── Leads campaign ─────────────────────────────────────────────────
+        let leadsCampaignId = 'skipped';
+        let leadsAdSetId = 'skipped';
+        let leadsCreativeId: string | undefined = 'skipped';
 
-        const leadsTargeting = {
-            custom_audiences: [{ id: AUD_LEAD_MAGNET_VISITORS }],
-            excluded_custom_audiences: [{ id: AUD_LEADS }],
-            age_min: 22,
-            age_max: 45,
-            targeting_automation: { advantage_audience: 0 },
-            publisher_platforms: ['facebook', 'instagram'],
-            facebook_positions: ['feed', 'story'],
-            instagram_positions: ['stream', 'story', 'reels'],
-        };
+        if (!skipLeads) {
+            const leadsCampaign = await write('create campaign "StoryHunt Retargeting — Leads"', () =>
+                metaPost(`/${AD_ACCOUNT}/campaigns`, {
+                    name: 'StoryHunt Retargeting — Leads',
+                    objective: 'OUTCOME_TRAFFIC',
+                    status: 'ACTIVE',
+                    special_ad_categories: [],
+                    is_adset_budget_sharing_enabled: false,
+                }),
+            );
+            leadsCampaignId = leadsCampaign?.id || 'dry-run';
 
-        const leadsAdSet = await write('create ad set "RT Leads — Warm Visitors" ($4/day)', () =>
-            metaPost(`/${AD_ACCOUNT}/adsets`, {
-                name: 'RT Leads — Warm Visitors',
-                campaign_id: leadsCampaignId,
-                daily_budget: '400',
-                billing_event: 'IMPRESSIONS',
-                optimization_goal: 'LANDING_PAGE_VIEWS',
-                targeting: leadsTargeting,
-                status: 'ACTIVE',
-                bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-                start_time: new Date().toISOString(),
-            }),
-        );
-        const leadsAdSetId = leadsAdSet?.id || 'dry-run';
+            const leadsTargeting = {
+                custom_audiences: [{ id: AUD_LEAD_MAGNET_VISITORS }],
+                excluded_custom_audiences: [{ id: AUD_LEADS }],
+                age_min: 22,
+                age_max: 45,
+                targeting_automation: { advantage_audience: 0 },
+                publisher_platforms: ['facebook', 'instagram'],
+                facebook_positions: ['feed', 'story'],
+                instagram_positions: ['stream', 'story', 'reels'],
+            };
 
-        const leadsCreative = await write('create creative "RT Voicemail — Second Chance"', () =>
-            metaPost(`/${AD_ACCOUNT}/adcreatives`, {
-                name: 'RT Voicemail — Second Chance',
-                object_story_spec: {
-                    page_id: PAGE_ID,
-                    link_data: {
-                        image_hash: voicemailHash,
-                        link: 'https://storyhunt.city/voicemail',
-                        message: 'You walked past once. The voicemail is still there. Someone left it at 4:12 AM describing a location in NYC. No one has found it yet.',
-                        name: 'Second chance. The voicemail is still unclaimed.',
-                        call_to_action: {
-                            type: 'LEARN_MORE',
-                            value: { link: 'https://storyhunt.city/voicemail' },
+            const leadsAdSet = await write('create ad set "RT Leads — Warm Visitors" ($4/day)', () =>
+                metaPost(`/${AD_ACCOUNT}/adsets`, {
+                    name: 'RT Leads — Warm Visitors',
+                    campaign_id: leadsCampaignId,
+                    daily_budget: '400',
+                    billing_event: 'IMPRESSIONS',
+                    optimization_goal: 'LANDING_PAGE_VIEWS',
+                    targeting: leadsTargeting,
+                    status: 'ACTIVE',
+                    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+                    start_time: new Date().toISOString(),
+                }),
+            );
+            leadsAdSetId = leadsAdSet?.id || 'dry-run';
+
+            const leadsCreative = await write('create creative "RT Voicemail — Second Chance"', () =>
+                metaPost(`/${AD_ACCOUNT}/adcreatives`, {
+                    name: 'RT Voicemail — Second Chance',
+                    object_story_spec: {
+                        page_id: PAGE_ID,
+                        link_data: {
+                            image_hash: voicemailHash,
+                            link: 'https://storyhunt.city/voicemail',
+                            message: 'You walked past once. The voicemail is still there. Someone left it at 4:12 AM describing a location in NYC. No one has found it yet.',
+                            name: 'Second chance. The voicemail is still unclaimed.',
+                            call_to_action: {
+                                type: 'LEARN_MORE',
+                                value: { link: 'https://storyhunt.city/voicemail' },
+                            },
                         },
                     },
-                },
-            }),
-        );
-        const leadsCreativeId = leadsCreative?.id;
+                }),
+            );
+            leadsCreativeId = leadsCreative?.id;
 
-        await write('create ad "RT Voicemail — Second Chance"', () =>
-            metaPost(`/${AD_ACCOUNT}/ads`, {
-                name: 'RT Voicemail — Second Chance',
-                adset_id: leadsAdSetId,
-                creative: { creative_id: leadsCreativeId },
-                status: 'ACTIVE',
-            }),
-        );
+            await write('create ad "RT Voicemail — Second Chance"', () =>
+                metaPost(`/${AD_ACCOUNT}/ads`, {
+                    name: 'RT Voicemail — Second Chance',
+                    adset_id: leadsAdSetId,
+                    creative: { creative_id: leadsCreativeId },
+                    status: 'ACTIVE',
+                }),
+            );
+        } else {
+            log.push({ step: ++step, op: 'skip leads campaign (already created)', ok: true });
+        }
 
-        // ─── PHASE 3: Campaign 2 — Retargeting Followers ────────────────────
-        const followersCampaign = await write('create campaign "StoryHunt Retargeting — Followers"', () =>
-            metaPost(`/${AD_ACCOUNT}/campaigns`, {
-                name: 'StoryHunt Retargeting — Followers',
-                objective: 'OUTCOME_ENGAGEMENT',
-                status: 'ACTIVE',
-                special_ad_categories: [],
-                is_adset_budget_sharing_enabled: false,
-            }),
-        );
-        const followersCampaignId = followersCampaign?.id || 'dry-run';
+        // ─── Followers campaign ─────────────────────────────────────────────
+        let followersCampaignId = existingFollowersCampaignId;
+        if (!followersCampaignId) {
+            const followersCampaign = await write('create campaign "StoryHunt Retargeting — Followers"', () =>
+                metaPost(`/${AD_ACCOUNT}/campaigns`, {
+                    name: 'StoryHunt Retargeting — Followers',
+                    objective: 'OUTCOME_ENGAGEMENT',
+                    status: 'ACTIVE',
+                    special_ad_categories: [],
+                    is_adset_budget_sharing_enabled: false,
+                }),
+            );
+            followersCampaignId = followersCampaign?.id || 'dry-run';
+        } else {
+            log.push({ step: ++step, op: `reusing followers campaign ${followersCampaignId}`, ok: true });
+        }
 
         const followersTargeting = {
             custom_audiences: [{ id: AUD_LEAD_MAGNET_VISITORS }],
@@ -205,12 +217,11 @@ export async function POST(req: NextRequest) {
                 campaign_id: followersCampaignId,
                 daily_budget: '400',
                 billing_event: 'IMPRESSIONS',
-                optimization_goal: 'REACH',
+                optimization_goal: 'POST_ENGAGEMENT',
                 targeting: followersTargeting,
                 status: 'ACTIVE',
                 bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                 start_time: new Date().toISOString(),
-                promoted_object: { page_id: PAGE_ID },
             }),
         );
         const followersAdSetId = followersAdSet?.id || 'dry-run';
@@ -247,17 +258,9 @@ export async function POST(req: NextRequest) {
             ok: true,
             dry_run: dryRun,
             total_steps: step,
-            leads: {
-                campaign_id: leadsCampaignId,
-                ad_set_id: leadsAdSetId,
-                creative_id: leadsCreativeId,
-            },
-            followers: {
-                campaign_id: followersCampaignId,
-                ad_set_id: followersAdSetId,
-                creative_id: followersCreativeId,
-            },
-            daily_spend_added: '$8',
+            leads: { campaign_id: leadsCampaignId, ad_set_id: leadsAdSetId, creative_id: leadsCreativeId },
+            followers: { campaign_id: followersCampaignId, ad_set_id: followersAdSetId, creative_id: followersCreativeId },
+            daily_spend_added: skipLeads ? '$4' : '$8',
             log,
         });
     } catch (err: unknown) {
