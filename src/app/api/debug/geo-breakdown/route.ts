@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
+    const datePreset = req.nextUrl.searchParams.get('date_preset') || 'maximum';
     try {
         const campaignsRes = await metaGet(`/${AD_ACCOUNT}/campaigns`, {
             fields: 'name,effective_status',
@@ -38,18 +39,18 @@ export async function GET(req: NextRequest) {
                 metaGet(`/${c.id}/insights`, {
                     fields: 'spend,impressions,clicks,ctr',
                     breakdowns: 'region',
-                    date_preset: 'maximum',
+                    date_preset: datePreset,
                     limit: '50',
                 }).catch(() => ({ data: [] })),
                 metaGet(`/${c.id}/insights`, {
                     fields: 'spend,impressions,clicks,ctr',
                     breakdowns: 'country',
-                    date_preset: 'maximum',
+                    date_preset: datePreset,
                     limit: '50',
                 }).catch(() => ({ data: [] })),
                 metaGet(`/${c.id}/insights`, {
                     fields: 'spend,impressions,clicks,ctr',
-                    date_preset: 'maximum',
+                    date_preset: datePreset,
                 }).catch(() => ({ data: [] })),
             ]);
 
