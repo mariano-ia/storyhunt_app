@@ -517,7 +517,11 @@ function PlayerPhase({
           // Some browsers fail to seek before metadata loads
         }
         audio.play().then(() => {
-          anchorAudioTimeRef.current = audio.currentTime || AUDIO_START_TIME;
+          // Force anchor to the intended start time. On iOS, audio.currentTime
+          // often reads 0 or small values immediately after play()+seek even
+          // though playback is already at 16.8 — trusting the ref reading
+          // caused 16-second subtitle drift.
+          anchorAudioTimeRef.current = AUDIO_START_TIME;
           playStartRef.current = Date.now();
           setPlaying(true);
           setStarted(true);
@@ -614,8 +618,8 @@ function PlayerPhase({
         try { audio.currentTime = AUDIO_START_TIME; } catch {}
       }
       audio.play().then(() => {
-        // Anchor the wall-clock timer at whatever audio position actually landed.
-        anchorAudioTimeRef.current = audio.currentTime || AUDIO_START_TIME;
+        // Force anchor — iOS lies about audio.currentTime right after seek+play.
+        anchorAudioTimeRef.current = AUDIO_START_TIME;
         playStartRef.current = Date.now();
         setPlaying(true);
         setStarted(true);
@@ -661,24 +665,21 @@ function PlayerPhase({
         flexShrink: 0,
         gap: 12,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <img src="/logo.png" alt="StoryHunt" style={{ height: 20, opacity: 0.8 }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: paused ? '#F59E0B' : playing ? '#ff0033' : '#4B5563',
-              animation: playing && !paused ? 'vmBlink 1.5s ease-in-out infinite' : undefined,
-            }} />
-            <span style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 13,
-              fontWeight: 600,
-              color: paused ? '#F59E0B' : started ? '#ff0033' : '#4B5563',
-              letterSpacing: '0.08em',
-            }}>{paused ? 'PLAYBACK_PAUSED' : started ? 'PLAYING_VOICEMAIL' : 'VOICEMAIL_READY'}</span>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: paused ? '#F59E0B' : playing ? '#ff0033' : '#4B5563',
+            animation: playing && !paused ? 'vmBlink 1.5s ease-in-out infinite' : undefined,
+          }} />
+          <span style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 13,
+            fontWeight: 600,
+            color: paused ? '#F59E0B' : started ? '#ff0033' : '#4B5563',
+            letterSpacing: '0.08em',
+          }}>{paused ? 'PLAYBACK_PAUSED' : started ? 'PLAYING_VOICEMAIL' : 'VOICEMAIL_READY'}</span>
         </div>
         <span style={{
           fontFamily: "'Fira Code', monospace",
@@ -697,6 +698,17 @@ function PlayerPhase({
         alignItems: 'center',
         padding: '40px 24px',
       }}>
+        {/* Logo centered above voice bars */}
+        <img
+          src="/logo.png"
+          alt="StoryHunt"
+          style={{
+            height: 26,
+            opacity: 0.85,
+            marginBottom: 28,
+          }}
+        />
+
         {/* Voice indicator */}
         <div style={{
           display: 'flex',
