@@ -717,7 +717,8 @@ export default function PlayPage() {
 
     return (
         <div style={{
-            height: '100vh',
+            height: '100dvh',
+            minHeight: '100vh', // fallback for older Safari that doesn't support dvh
             background: '#FFFFFF',
             display: 'flex', flexDirection: 'column',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
@@ -766,7 +767,8 @@ export default function PlayPage() {
             <div
                 ref={chatRef}
                 style={{
-                    flex: 1, overflowY: 'auto', padding: '16px 12px',
+                    flex: 1, overflowY: 'auto',
+                    padding: '16px 12px calc(96px + env(safe-area-inset-bottom)) 12px',
                     display: 'flex', flexDirection: 'column',
                     maxWidth: 720, margin: '0 auto', width: '100%',
                 }}
@@ -795,13 +797,18 @@ export default function PlayPage() {
                 <div style={{ flexShrink: 0, height: 8 }} />
             </div>
 
-            {/* Input area */}
+            {/* Input area — fixed at bottom, stays visible on mobile even when chat is short */}
             <div style={{
-                background: 'rgba(249,249,249,0.85)',
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 20,
+                background: 'rgba(249,249,249,0.92)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
                 borderTop: '0.5px solid rgba(0,0,0,0.15)',
-                padding: '8px 16px 24px',
+                padding: '8px 16px calc(16px + env(safe-area-inset-bottom)) 16px',
             }}>
                 <div style={{
                     maxWidth: 720, margin: '0 auto',
