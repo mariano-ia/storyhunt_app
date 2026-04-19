@@ -422,7 +422,7 @@ export default function StartPage() {
               lineHeight: 1.15,
               marginBottom: 28,
             }}>
-              A mystery walk<br />through<br /><span style={{ color: '#ff0033' }}>New York City</span>
+              A mystery experience<br />through<br /><span style={{ color: '#ff0033' }}>New York City</span>
             </h1>
 
             <p style={{

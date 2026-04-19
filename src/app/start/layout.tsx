@@ -9,10 +9,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'Start Your Hunt | StoryHunt',
-  description: 'A chat-based mystery walk through New York City. Your phone sends clues. You decode the city. From $9.99.',
+  description: 'A chat-based mystery experience through New York City. Your phone sends clues. You decode the city. From $9.99.',
   openGraph: {
     title: 'Start Your Hunt | StoryHunt',
-    description: 'A mystery walk through NYC. No guide. No group. Just you and the streets.',
+    description: 'A mystery experience through NYC. No guide. No group. Just you and the streets.',
     type: 'website',
   },
 };

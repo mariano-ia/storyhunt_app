@@ -289,7 +289,7 @@ function EmailModal({
               marginBottom: 4,
               fontWeight: 600,
             }}>
-              A mystery walk through New York City.
+              A mystery experience through New York City.
             </p>
             <p style={{
               fontFamily: "'Fira Sans', sans-serif",
@@ -856,7 +856,7 @@ function CTAPhase({ hasEmail }: { hasEmail: boolean }) {
           color: '#94A3B8',
           lineHeight: 1.6,
         }}>
-          A chat-based mystery walk through NYC neighborhoods. Your phone sends clues. You decode the city. 2-3 hours. No guide, no group — just you and the streets.
+          A chat-based mystery experience through NYC neighborhoods. Your phone sends clues. You decode the city. 2-3 hours. No guide, no group — just you and the streets.
         </p>
       </div>
     </div>
@@ -915,7 +915,7 @@ function IntroPhase({ onDone }: { onDone: () => void }) {
         opacity: step >= 0 ? 1 : 0,
         transition: 'opacity 0.8s',
       }}>
-        A mystery walk<br />through New York City
+        A mystery experience<br />through New York City
       </h1>
 
       <div style={{
