@@ -235,7 +235,6 @@ function EmailModal({
         ) : (
           <>
             {/* Product explanation header */}
-            <img src="/logo.png" alt="StoryHunt" style={{ height: 22, opacity: 0.85, marginBottom: 12 }} />
             <p style={{
               fontFamily: "'Fira Code', monospace",
               fontSize: 11,
