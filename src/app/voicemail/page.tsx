@@ -497,6 +497,11 @@ function PlayerPhase({
   const [playing, setPlaying] = useState(false);
   const [modalTriggered, setModalTriggered] = useState(false);
   const [started, setStarted] = useState(false);
+  // Wall-clock anchor: on iOS, audio.currentTime is unreliable (returns stale
+  // or zero values). We read it once when play starts, then advance via
+  // Date.now() while playing. Re-anchored on every resume.
+  const playStartRef = useRef<number | null>(null);
+  const anchorAudioTimeRef = useRef<number>(AUDIO_START_TIME);
 
   // Start playing on mount — skip directly to peak tension point
   useEffect(() => {
@@ -512,6 +517,8 @@ function PlayerPhase({
           // Some browsers fail to seek before metadata loads
         }
         audio.play().then(() => {
+          anchorAudioTimeRef.current = audio.currentTime || AUDIO_START_TIME;
+          playStartRef.current = Date.now();
           setPlaying(true);
           setStarted(true);
         }).catch(() => {
@@ -553,7 +560,12 @@ function PlayerPhase({
       audio.pause();
       setPlaying(false);
     } else {
-      audio.play().then(() => setPlaying(true)).catch(() => {});
+      audio.play().then(() => {
+        // Re-anchor wall-clock after resume (modal close)
+        anchorAudioTimeRef.current = audio.currentTime || anchorAudioTimeRef.current;
+        playStartRef.current = Date.now();
+        setPlaying(true);
+      }).catch(() => {});
     }
   }, [paused, started]);
 
@@ -570,14 +582,15 @@ function PlayerPhase({
     }
   }, [modalTriggered, onModalTrigger]);
 
-  // iOS fallback: poll audio.currentTime at 100ms intervals while playing.
-  // Safari iOS throttles or drops timeupdate events, which desyncs subtitles.
+  // Wall-clock subtitle timing. On iOS, audio.currentTime is unreliable
+  // (throttled/stale). We advance the visual clock from Date.now() anchored
+  // to the audio position at play/resume time. This guarantees subtitle
+  // rhythm matches wall time regardless of what the audio element reports.
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || playStartRef.current === null) return;
     const id = setInterval(() => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      setCurrentTime(audio.currentTime);
+      const elapsed = (Date.now() - (playStartRef.current || Date.now())) / 1000;
+      setCurrentTime(anchorAudioTimeRef.current + elapsed);
     }, 100);
     return () => clearInterval(id);
   }, [playing]);
@@ -596,12 +609,14 @@ function PlayerPhase({
       setPlaying(false);
     } else {
       // First tap: seek to peak-tension start point so audio matches subtitles.
-      // On iOS the initial useEffect-level seek fails silently when splash
-      // auto-advanced (no gesture), so we redo it here inside the tap handler.
+      // Must happen in the tap handler (gesture context) to satisfy iOS.
       if (!started) {
         try { audio.currentTime = AUDIO_START_TIME; } catch {}
       }
       audio.play().then(() => {
+        // Anchor the wall-clock timer at whatever audio position actually landed.
+        anchorAudioTimeRef.current = audio.currentTime || AUDIO_START_TIME;
+        playStartRef.current = Date.now();
         setPlaying(true);
         setStarted(true);
       }).catch(() => {});
@@ -644,27 +659,32 @@ function PlayerPhase({
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
+        gap: 12,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: paused ? '#F59E0B' : playing ? '#ff0033' : '#4B5563',
-            animation: playing && !paused ? 'vmBlink 1.5s ease-in-out infinite' : undefined,
-          }} />
-          <span style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 15,
-            fontWeight: 600,
-            color: paused ? '#F59E0B' : '#ff0033',
-            letterSpacing: '0.08em',
-          }}>{paused ? 'PLAYBACK_PAUSED' : 'PLAYING_VOICEMAIL'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <img src="/logo.png" alt="StoryHunt" style={{ height: 20, opacity: 0.8 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: paused ? '#F59E0B' : playing ? '#ff0033' : '#4B5563',
+              animation: playing && !paused ? 'vmBlink 1.5s ease-in-out infinite' : undefined,
+            }} />
+            <span style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 13,
+              fontWeight: 600,
+              color: paused ? '#F59E0B' : started ? '#ff0033' : '#4B5563',
+              letterSpacing: '0.08em',
+            }}>{paused ? 'PLAYBACK_PAUSED' : started ? 'PLAYING_VOICEMAIL' : 'VOICEMAIL_READY'}</span>
+          </div>
         </div>
         <span style={{
           fontFamily: "'Fira Code', monospace",
           fontSize: 11,
           color: '#4B5563',
+          whiteSpace: 'nowrap',
         }}>04:12 AM</span>
       </div>
 
@@ -703,7 +723,7 @@ function PlayerPhase({
           ))}
         </div>
 
-        {/* Subtitle */}
+        {/* Subtitle — empty before play, transcribed as audio progresses */}
         <div style={{
           minHeight: 80,
           display: 'flex',
@@ -711,19 +731,20 @@ function PlayerPhase({
           justifyContent: 'center',
           padding: '0 12px',
         }}>
-          <p style={{
-            fontFamily: "'Fira Sans', sans-serif",
-            fontSize: started ? 'clamp(18px, 5vw, 24px)' : 'clamp(20px, 6vw, 28px)',
-            color: '#fff',
-            textAlign: 'center',
-            lineHeight: 1.5,
-            maxWidth: 360,
-            opacity: currentSub || !started ? 1 : 0.3,
-            transition: 'opacity 0.3s',
-            fontWeight: !started ? 600 : 400,
-          }}>
-            {currentSub ? currentSub.text : (started ? '...' : 'TAP TO PLAY VOICEMAIL')}
-          </p>
+          {started && (
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 'clamp(18px, 5vw, 24px)',
+              color: '#fff',
+              textAlign: 'center',
+              lineHeight: 1.5,
+              maxWidth: 360,
+              opacity: currentSub ? 1 : 0.3,
+              transition: 'opacity 0.3s',
+            }}>
+              {currentSub ? currentSub.text : '...'}
+            </p>
+          )}
         </div>
 
         {/* Play/pause button — enlarged + aggressively pulsing when audio hasn't started */}
