@@ -522,6 +522,21 @@ function PlayerPhase({
     tryPlay();
   }, []);
 
+  // iOS fallback: wall-clock timer to trigger modal ~5.2s after playback begins.
+  // iOS Safari sometimes fails to seek or throttles timeupdate events, so the
+  // currentTime-based trigger can never reach threshold. This guarantees the
+  // gate fires on every device.
+  useEffect(() => {
+    if (!started || modalTriggered) return;
+    const t = setTimeout(() => {
+      if (!modalTriggered) {
+        setModalTriggered(true);
+        onModalTrigger();
+      }
+    }, 5200);
+    return () => clearTimeout(t);
+  }, [started, modalTriggered, onModalTrigger]);
+
   // Pause/resume when modal shows/hides
   useEffect(() => {
     const audio = audioRef.current;
@@ -615,7 +630,8 @@ function PlayerPhase({
           }} />
           <span style={{
             fontFamily: "'Fira Code', monospace",
-            fontSize: 12,
+            fontSize: 15,
+            fontWeight: 600,
             color: paused ? '#F59E0B' : '#ff0033',
             letterSpacing: '0.08em',
           }}>{paused ? 'PLAYBACK_PAUSED' : 'PLAYING_VOICEMAIL'}</span>
