@@ -127,7 +127,35 @@ export async function POST(req: NextRequest) {
         const lang = (metadata.lang || 'es') as 'es' | 'en';
         const experienceName = metadata.experience_name || '';
         const couponCode = metadata.coupon_code;
-        const email = session.customer_details?.email || session.customer_email || '';
+
+        // Resolve email from every known Stripe field. If still empty, look up
+        // the Customer or PaymentIntent — handles edge cases where the buyer
+        // finished checkout via Apple/Google Pay and email landed on a
+        // different object than customer_details.
+        let email = session.customer_details?.email || session.customer_email || '';
+        if (!email && session.customer) {
+            try {
+                const stripe = getStripe();
+                const customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
+                const customer = await stripe.customers.retrieve(customerId);
+                if (customer && !('deleted' in customer)) email = customer.email || '';
+            } catch (err) {
+                console.warn('[stripe/webhook] customer fetch failed:', err);
+            }
+        }
+        if (!email && session.payment_intent) {
+            try {
+                const stripe = getStripe();
+                const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent.id;
+                const pi = await stripe.paymentIntents.retrieve(piId);
+                email = pi.receipt_email || '';
+            } catch (err) {
+                console.warn('[stripe/webhook] payment_intent fetch failed:', err);
+            }
+        }
+        if (!email) {
+            console.error(`[stripe/webhook] 🚨 No email found for session ${session.id}. Token will be created but access email will NOT be sent. User can recover via /api/access/verify.`);
+        }
 
         if (!experienceId) {
             console.error('[stripe/webhook] No experience_id in metadata');

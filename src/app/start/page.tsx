@@ -55,7 +55,14 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) =
             <span className={`status-dot ${!isLive ? 'status-dot--pending' : ''}`}></span> {isLive ? 'LIVE' : 'COMING_SOON'}
           </div>
           {exp.web_image ? (
-            <img className="card-image" src={exp.web_image} alt={exp.name} loading="lazy" />
+            <img
+              className="card-image"
+              src={exp.web_image}
+              alt={exp.name}
+              loading="eager"
+              decoding="async"
+              style={{ background: '#111' }}
+            />
           ) : (
             <div className="card-image" style={{ background: '#111' }}></div>
           )}
@@ -144,6 +151,10 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
   const startCheckout = async (lang: 'en' | 'es') => {
     setLoading(true);
     setError('');
+    // Abort the checkout request if mobile network hangs for >15s instead of
+    // leaving the button stuck in "LOADING..." forever.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const body: any = { experience_id: experienceId, lang };
       if (promoCode.trim()) body.coupon_code = promoCode.trim().toUpperCase();
@@ -152,7 +163,9 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -160,8 +173,11 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
         setError(data.error || 'Error creating checkout session');
         setLoading(false);
       }
-    } catch {
-      setError('Connection error. Please try again.');
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      setError(err?.name === 'AbortError'
+        ? 'Request timed out. Check your connection and try again.'
+        : 'Connection error. Please try again.');
       setLoading(false);
     }
   };
