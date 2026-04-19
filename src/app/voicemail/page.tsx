@@ -570,6 +570,18 @@ function PlayerPhase({
     }
   }, [modalTriggered, onModalTrigger]);
 
+  // iOS fallback: poll audio.currentTime at 100ms intervals while playing.
+  // Safari iOS throttles or drops timeupdate events, which desyncs subtitles.
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      setCurrentTime(audio.currentTime);
+    }, 100);
+    return () => clearInterval(id);
+  }, [playing]);
+
   const handleEnded = useCallback(() => {
     setPlaying(false);
     setTimeout(onComplete, 1500);
@@ -583,6 +595,12 @@ function PlayerPhase({
       audio.pause();
       setPlaying(false);
     } else {
+      // First tap: seek to peak-tension start point so audio matches subtitles.
+      // On iOS the initial useEffect-level seek fails silently when splash
+      // auto-advanced (no gesture), so we redo it here inside the tap handler.
+      if (!started) {
+        try { audio.currentTime = AUDIO_START_TIME; } catch {}
+      }
       audio.play().then(() => {
         setPlaying(true);
         setStarted(true);
