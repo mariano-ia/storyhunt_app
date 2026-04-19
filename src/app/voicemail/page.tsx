@@ -708,26 +708,43 @@ function PlayerPhase({
           </p>
         </div>
 
-        {/* Play/pause button — enlarged + pulsing when audio hasn't started */}
+        {/* Play/pause button — enlarged + aggressively pulsing when audio hasn't started */}
         <button
           onClick={togglePlay}
           style={{
-            width: started ? 64 : 96,
-            height: started ? 64 : 96,
+            width: started ? 64 : 112,
+            height: started ? 64 : 112,
             borderRadius: '50%',
-            border: started ? '2px solid rgba(255,255,255,0.15)' : '2px solid #ff0033',
-            background: started ? 'rgba(255,255,255,0.04)' : 'rgba(255,0,51,0.15)',
+            border: started ? '2px solid rgba(255,255,255,0.15)' : '3px solid #ff0033',
+            background: started ? 'rgba(255,255,255,0.04)' : 'rgba(255,0,51,0.2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            marginTop: 40,
-            transition: 'all 0.3s',
-            animation: !started ? 'vmPulse 1.5s ease-in-out infinite' : undefined,
+            marginTop: started ? 40 : 24,
+            transition: started ? 'all 0.3s' : undefined,
+            animation: !started ? 'vmPlayPulse 1.1s ease-in-out infinite' : undefined,
+            willChange: 'transform, box-shadow',
           }}
         >
-          {playing ? <Pause size={started ? 24 : 36} color="#fff" /> : <Play size={started ? 24 : 36} color={started ? '#fff' : '#ff0033'} style={{ marginLeft: started ? 2 : 4 }} />}
+          {playing ? (
+            <Pause size={started ? 24 : 44} color="#fff" />
+          ) : (
+            <Play size={started ? 24 : 44} color={started ? '#fff' : '#fff'} fill={started ? 'transparent' : '#ff0033'} style={{ marginLeft: started ? 2 : 6 }} />
+          )}
         </button>
+
+        {!started && (
+          <p style={{
+            marginTop: 16,
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 12,
+            color: '#ff0033',
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            animation: 'vmTapHint 1.4s ease-in-out infinite',
+          }}>▼ tap to unlock</p>
+        )}
       </div>
 
       {/* Progress bar + time */}
@@ -1160,6 +1177,27 @@ export default function VoicemailPage() {
         @keyframes vmPulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,51,0.3); }
           50% { box-shadow: 0 0 0 12px rgba(255,0,51,0); }
+        }
+
+        @keyframes vmPlayPulse {
+          0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(255,0,51,0.7), 0 0 0 0 rgba(255,0,51,0.45);
+          }
+          50% {
+            transform: scale(1.12);
+            box-shadow: 0 0 0 20px rgba(255,0,51,0), 0 0 0 40px rgba(255,0,51,0);
+            background: rgba(255,0,51,0.35);
+          }
+          100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(255,0,51,0), 0 0 0 0 rgba(255,0,51,0);
+          }
+        }
+
+        @keyframes vmTapHint {
+          0%, 100% { opacity: 1; transform: translateY(0); }
+          50% { opacity: 0.55; transform: translateY(6px); }
         }
 
         @keyframes vmFadeIn {
