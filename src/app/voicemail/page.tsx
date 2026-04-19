@@ -764,16 +764,19 @@ function PlayerPhase({
           padding: '0 12px',
         }}>
           {started && (
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 'clamp(18px, 5vw, 24px)',
-              color: '#fff',
-              textAlign: 'center',
-              lineHeight: 1.5,
-              maxWidth: 360,
-              opacity: currentSub ? 1 : 0.3,
-              transition: 'opacity 0.3s',
-            }}>
+            <p
+              key={currentSub?.start ?? 'idle'}
+              style={{
+                fontFamily: "'Fira Sans', sans-serif",
+                fontSize: 'clamp(18px, 5vw, 24px)',
+                color: '#fff',
+                textAlign: 'center',
+                lineHeight: 1.5,
+                maxWidth: 360,
+                animation: 'vmSubFade 280ms ease-out',
+                willChange: 'opacity, transform',
+              }}
+            >
               {currentSub ? renderSubtitleText(currentSub.text) : '...'}
             </p>
           )}
@@ -1274,6 +1277,11 @@ export default function VoicemailPage() {
         @keyframes vmFadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes vmSubFade {
+          0% { opacity: 0; transform: translateY(4px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes vmBlink {
