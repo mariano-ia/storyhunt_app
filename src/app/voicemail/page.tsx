@@ -363,9 +363,16 @@ function SplashPhase({ onReady }: { onReady: () => void }) {
   const [showButton, setShowButton] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setShowButton(true), 1500);
-    return () => clearTimeout(t);
-  }, []);
+    const buttonTimer = setTimeout(() => setShowButton(true), 1500);
+    // Auto-advance to PlayerPhase after 2s if user hasn't tapped.
+    // On iOS audio still needs a tap (OS restriction), but the next phase
+    // surfaces a large play button so it's unmissable.
+    const autoAdvance = setTimeout(onReady, 2000);
+    return () => {
+      clearTimeout(buttonTimer);
+      clearTimeout(autoAdvance);
+    };
+  }, [onReady]);
 
   return (
     <div style={{
@@ -688,36 +695,38 @@ function PlayerPhase({
         }}>
           <p style={{
             fontFamily: "'Fira Sans', sans-serif",
-            fontSize: 'clamp(18px, 5vw, 24px)',
+            fontSize: started ? 'clamp(18px, 5vw, 24px)' : 'clamp(20px, 6vw, 28px)',
             color: '#fff',
             textAlign: 'center',
             lineHeight: 1.5,
             maxWidth: 360,
-            opacity: currentSub ? 1 : 0.3,
+            opacity: currentSub || !started ? 1 : 0.3,
             transition: 'opacity 0.3s',
+            fontWeight: !started ? 600 : 400,
           }}>
-            {currentSub ? currentSub.text : (started ? '...' : 'Tap play to start')}
+            {currentSub ? currentSub.text : (started ? '...' : 'TAP TO PLAY VOICEMAIL')}
           </p>
         </div>
 
-        {/* Play/pause button */}
+        {/* Play/pause button — enlarged + pulsing when audio hasn't started */}
         <button
           onClick={togglePlay}
           style={{
-            width: 64,
-            height: 64,
+            width: started ? 64 : 96,
+            height: started ? 64 : 96,
             borderRadius: '50%',
-            border: '2px solid rgba(255,255,255,0.15)',
-            background: 'rgba(255,255,255,0.04)',
+            border: started ? '2px solid rgba(255,255,255,0.15)' : '2px solid #ff0033',
+            background: started ? 'rgba(255,255,255,0.04)' : 'rgba(255,0,51,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             marginTop: 40,
-            transition: 'border-color 0.2s',
+            transition: 'all 0.3s',
+            animation: !started ? 'vmPulse 1.5s ease-in-out infinite' : undefined,
           }}
         >
-          {playing ? <Pause size={24} color="#fff" /> : <Play size={24} color="#fff" style={{ marginLeft: 2 }} />}
+          {playing ? <Pause size={started ? 24 : 36} color="#fff" /> : <Play size={started ? 24 : 36} color={started ? '#fff' : '#ff0033'} style={{ marginLeft: started ? 2 : 4 }} />}
         </button>
       </div>
 
