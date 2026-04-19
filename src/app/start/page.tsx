@@ -704,6 +704,7 @@ export default function StartPage() {
 
         .experience-card {
           perspective: 1000px;
+          -webkit-perspective: 1000px;
           aspect-ratio: 3 / 4.5;
           cursor: pointer;
         }
@@ -719,10 +720,12 @@ export default function StartPage() {
           height: 100%;
           transition: transform 0.8s cubic-bezier(0.19, 1, 0.22, 1);
           transform-style: preserve-3d;
+          -webkit-transform-style: preserve-3d;
         }
 
         .experience-card.flipped .card-inner {
           transform: rotateY(180deg);
+          -webkit-transform: rotateY(180deg);
         }
 
         .card-front, .card-back {
@@ -732,7 +735,11 @@ export default function StartPage() {
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
           border: 1px solid rgba(255, 255, 255, 0.08);
-          overflow: hidden;
+          /* overflow: hidden removed — was breaking preserve-3d chain on iOS Safari.
+             Content below uses clip-path / own overflow where needed. */
+          border-radius: inherit;
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
         }
 
         .card-front {
@@ -813,7 +820,8 @@ export default function StartPage() {
         }
 
         .card-back {
-          transform: rotateY(180deg);
+          transform: rotateY(180deg) translateZ(1px);
+          -webkit-transform: rotateY(180deg) translateZ(1px);
           background: rgba(5, 5, 5, 0.95);
           border-color: rgba(255, 0, 51, 0.3);
           padding: 2rem;
