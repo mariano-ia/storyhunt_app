@@ -13,38 +13,59 @@ type Subtitle = {
 };
 
 const SUBTITLES: Subtitle[] = [
-  { start: 0.0, end: 3.8, text: "You're looking for a door, not a front door, a side door." },
-  { start: 3.8, end: 6.4, text: "Red brick, no number on it." },
-  { start: 6.4, end: 9.6, text: "There's a fire escape above it, but nobody uses it." },
-  { start: 9.6, end: 12.8, text: "If you walk past the bodega on the corner," },
-  { start: 12.8, end: 15.0, text: "count three buildings east." },
-  { start: 15.0, end: 16.8, text: "The one with the faded awning." },
-  { start: 16.8, end: 18.8, text: "Look down, there's a grate." },
-  { start: 18.8, end: 21.5, text: "But that's not a grate, that's the entrance." },
-  { start: 21.5, end: 24.3, text: "They sealed it in '94, but the lock," },
-  { start: 24.3, end: 26.4, text: "the lock was never replaced." },
-  { start: 26.4, end: 29.0, text: "Go at night, after the restaurant closes," },
-  { start: 29.1, end: 31.1, text: "you'll hear it before you see it." },
-  { start: 31.1, end: 35.2, text: "A low hum, like the city breathing underneath itself." },
-  { start: 35.2, end: 37.9, text: "Don't bring a flashlight, your phone is enough," },
-  { start: 37.9, end: 40.2, text: "and don't tell anyone where you're going." },
-  { start: 40.2, end: 41.7, text: "You'll know you're in the right place" },
-  { start: 41.7, end: 43.8, text: "when you see the tiles." },
-  { start: 43.8, end: 46.8, text: "Green and white, 1912." },
-  { start: 46.8, end: 49.7, text: "They built this before anyone was watching." },
-  { start: 49.7, end: 52.8, text: "The corridor goes north for about 200 feet," },
-  { start: 52.8, end: 54.4, text: "then it splits." },
-  { start: 54.4, end: 57.5, text: "Take the left, always the left." },
-  { start: 57.5, end: 60.8, text: "There's a room at the end, small concrete walls." },
-  { start: 60.8, end: 62.8, text: "Someone left a chair there." },
-  { start: 62.8, end: 66.0, text: "And on the wall, coordinates." },
-  { start: 66.0, end: 68.6, text: "Written in chalk, I checked them." },
-  { start: 68.6, end: 70.4, text: "They point to another door." },
-  { start: 70.4, end: 72.4, text: "I haven't opened that one yet." },
+  { start: 0.0, end: 4.0, text: "The most beautiful subway station in New York" },
+  { start: 4.0, end: 5.8, text: "was built in 1904." },
+  { start: 5.8, end: 7.5, text: "Closed since 1945." },
+  { start: 7.5, end: 9.0, text: "And you can see it today." },
+  // ─── GATE fires here (~9s) ─────────────────────────────────────
+  { start: 9.0, end: 11.8, text: "Get on the [6] train." },
+  { start: 11.8, end: 14.3, text: "Ride to Brooklyn Bridge — last stop." },
+  { start: 14.3, end: 16.7, text: "Don't get off. Stay in the car." },
+  { start: 16.7, end: 19.9, text: "The train loops back through the old City Hall station." },
+  { start: 19.9, end: 21.5, text: "Sit on the right side." },
+  { start: 21.5, end: 23.0, text: "Green tiles." },
+  { start: 23.0, end: 24.7, text: "Stained glass skylights." },
+  { start: 24.7, end: 26.3, text: "Brass chandeliers." },
+  { start: 26.3, end: 27.3, text: "All still there." },
+  { start: 27.3, end: 28.5, text: "You're welcome." },
 ];
 
-const AUDIO_START_TIME = 16.8; // Skip directly to "Look down, there's a grate..." (peak tension)
-const MODAL_TRIGGER_TIME = 22; // ~5s of playback from start point — gate at "...the lock was never replaced"
+const AUDIO_START_TIME = 0; // New audio starts at the hook — no intro to skip
+const MODAL_TRIGGER_TIME = 9; // Gate fires right after "And you can see it today"
+const MODAL_TRIGGER_WALLCLOCK_MS = 9000; // Matches MODAL_TRIGGER_TIME for iOS fallback
+
+// Renders the NYC 6-train bullet (white "6" in a #00933C green circle) inline.
+// Subtitle text uses "[6]" as a placeholder which we replace at render time.
+function renderSubtitleText(text: string) {
+  const parts = text.split(/(\[6\])/g);
+  return parts.map((p, i) => {
+    if (p === '[6]') {
+      return (
+        <span
+          key={i}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '1.25em',
+            height: '1.25em',
+            borderRadius: '50%',
+            background: '#00933C',
+            color: '#fff',
+            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+            fontWeight: 700,
+            fontSize: '0.82em',
+            verticalAlign: 'middle',
+            margin: '0 0.12em',
+            lineHeight: 1,
+            transform: 'translateY(-0.05em)',
+          }}
+        >6</span>
+      );
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
 
 // ─── Email Modal ─────────────────────────────────────────────────────────────
 
@@ -540,10 +561,9 @@ function PlayerPhase({
     tryPlay();
   }, []);
 
-  // iOS fallback: wall-clock timer to trigger modal ~5.2s after playback begins.
-  // iOS Safari sometimes fails to seek or throttles timeupdate events, so the
-  // currentTime-based trigger can never reach threshold. This guarantees the
-  // gate fires on every device.
+  // iOS fallback: wall-clock timer to trigger modal after MODAL_TRIGGER_WALLCLOCK_MS
+  // of playback. iOS Safari throttles timeupdate events, so the currentTime gate
+  // can miss its threshold. This guarantees the modal fires on every device.
   useEffect(() => {
     if (!started || modalTriggered) return;
     const t = setTimeout(() => {
@@ -551,7 +571,7 @@ function PlayerPhase({
         setModalTriggered(true);
         onModalTrigger();
       }
-    }, 5200);
+    }, MODAL_TRIGGER_WALLCLOCK_MS);
     return () => clearTimeout(t);
   }, [started, modalTriggered, onModalTrigger]);
 
@@ -754,7 +774,7 @@ function PlayerPhase({
               opacity: currentSub ? 1 : 0.3,
               transition: 'opacity 0.3s',
             }}>
-              {currentSub ? currentSub.text : '...'}
+              {currentSub ? renderSubtitleText(currentSub.text) : '...'}
             </p>
           )}
         </div>
