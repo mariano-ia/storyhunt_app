@@ -310,7 +310,9 @@ export default function VoicemailBPage() {
                     <a
                         href="/start"
                         style={{
-                            display: 'block',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             width: '100%',
                             padding: '14px 24px',
                             background: '#ff0033',
@@ -324,9 +326,7 @@ export default function VoicemailBPage() {
                             textDecoration: 'none',
                             textAlign: 'center',
                             minHeight: 52,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            boxSizing: 'border-box',
                         }}
                     >
                         Browse hunts →
