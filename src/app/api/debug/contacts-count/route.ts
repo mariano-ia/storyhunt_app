@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
             contacts_last_7_days: recent.length,
             by_source_last_7_days: bySource,
             most_recent_5: recent.slice(0, 5),
+            all_recent: recent,
         });
     } catch (err: unknown) {
         return NextResponse.json({
