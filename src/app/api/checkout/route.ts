@@ -103,10 +103,11 @@ export async function POST(req: NextRequest) {
             ? `${productDescription.slice(0, 150)} | ${lang === 'en' ? 'Starts at' : 'Comienza en'}: ${startingPoint}`
             : productDescription.slice(0, 200);
 
-        // Build checkout session params
+        // Use default payment_method_configuration (pmc_*) which has:
+        // card=on, apple_pay=on, google_pay=on, link=off.
+        // Omitting payment_method_types lets the PMC drive the offered methods.
         const sessionParams: Record<string, any> = {
             mode: 'payment',
-            payment_method_types: ['card'],
             locale: lang === 'en' ? 'en' : 'es-419',
             line_items: [{
                 price_data: {
