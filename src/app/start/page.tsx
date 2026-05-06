@@ -1016,71 +1016,19 @@ export default function StartPage() {
           marginBottom: 24,
         }}>WHEN</p>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 12,
-        }}>
+        <div className="start-when-grid">
           {/* Planning a trip */}
-          <div style={{
-            padding: '20px 18px',
-            background: 'rgba(0,210,255,0.04)',
-            border: '1px solid rgba(0,210,255,0.2)',
-            borderRadius: 12,
-          }}>
-            <div style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 11,
-              color: '#00d2ff',
-              letterSpacing: '0.1em',
-              marginBottom: 10,
-            }}>🛬 PLANNING_YOUR_TRIP</div>
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 14,
-              color: '#fff',
-              fontWeight: 600,
-              lineHeight: 1.4,
-              margin: '0 0 6px',
-            }}>Buy now.</p>
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 13,
-              color: '#94A3B8',
-              lineHeight: 1.6,
-              margin: 0,
-            }}>Your 30-day clock starts the first time you open the link — not before.</p>
+          <div className="start-when-card start-when-card--planning">
+            <div className="start-when-label" style={{ color: '#00d2ff' }}>🛬 PLANNING_YOUR_TRIP</div>
+            <p className="start-when-headline">Buy now.</p>
+            <p className="start-when-body">Your 30-day clock starts the first time you open the link — not before.</p>
           </div>
 
           {/* Already in NYC */}
-          <div style={{
-            padding: '20px 18px',
-            background: 'rgba(255,0,51,0.04)',
-            border: '1px solid rgba(255,0,51,0.2)',
-            borderRadius: 12,
-          }}>
-            <div style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 11,
-              color: '#ff0033',
-              letterSpacing: '0.1em',
-              marginBottom: 10,
-            }}>📍 ALREADY_IN_NYC</div>
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 14,
-              color: '#fff',
-              fontWeight: 600,
-              lineHeight: 1.4,
-              margin: '0 0 6px',
-            }}>Buy now.</p>
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 13,
-              color: '#94A3B8',
-              lineHeight: 1.6,
-              margin: 0,
-            }}>Get your access link in under 60 seconds.</p>
+          <div className="start-when-card start-when-card--here">
+            <div className="start-when-label" style={{ color: '#ff0033' }}>📍 ALREADY_IN_NYC</div>
+            <p className="start-when-headline">Buy now.</p>
+            <p className="start-when-body">Get your access link in under 60 seconds.</p>
           </div>
         </div>
       </section>
@@ -1611,6 +1559,54 @@ export default function StartPage() {
         @keyframes hiwFadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* WHEN section: 2 columns side-by-side at all widths (they're comparative) */
+        .start-when-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .start-when-card {
+          padding: 20px 18px;
+          border-radius: 12px;
+        }
+        .start-when-card--planning {
+          background: rgba(0,210,255,0.04);
+          border: 1px solid rgba(0,210,255,0.2);
+        }
+        .start-when-card--here {
+          background: rgba(255,0,51,0.04);
+          border: 1px solid rgba(255,0,51,0.2);
+        }
+        .start-when-label {
+          font-family: 'Fira Code', monospace;
+          font-size: 11px;
+          letter-spacing: 0.1em;
+          margin-bottom: 10px;
+          line-height: 1.3;
+        }
+        .start-when-headline {
+          font-family: 'Fira Sans', sans-serif;
+          font-size: 14px;
+          color: #fff;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 0 0 6px;
+        }
+        .start-when-body {
+          font-family: 'Fira Sans', sans-serif;
+          font-size: 13px;
+          color: #94A3B8;
+          line-height: 1.6;
+          margin: 0;
+        }
+        @media (max-width: 480px) {
+          .start-when-grid { gap: 8px; }
+          .start-when-card { padding: 14px 12px; border-radius: 10px; }
+          .start-when-label { font-size: 9px; letter-spacing: 0.06em; margin-bottom: 8px; }
+          .start-when-headline { font-size: 12px; margin-bottom: 4px; }
+          .start-when-body { font-size: 11px; line-height: 1.45; }
         }
 
         .faq-cursor {
