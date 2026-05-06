@@ -69,13 +69,26 @@ ${startingPoint ? `
 </td></tr>
 
 <!-- Instructions -->
-<tr><td style="padding:0 40px 32px;">
+<tr><td style="padding:0 40px 16px;">
     <p style="font-size:13px;color:#666;line-height:1.6;margin:0;">
         ${isEn
-            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off<br>• You have 30 days to play'
-            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste<br>• Tenés 30 días para jugar'
+            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off'
+            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste'
         }
     </p>
+</td></tr>
+
+<!-- Buy-ahead reassurance -->
+<tr><td style="padding:0 40px 32px;">
+    <div style="background:rgba(0,210,255,0.06);border:1px solid rgba(0,210,255,0.2);border-radius:8px;padding:12px 16px;">
+        <div style="font-size:11px;color:#00d2ff;letter-spacing:0.15em;margin-bottom:6px;">${isEn ? 'COMING_TO_NYC_SOON?' : '¿VIAJÁS_PRONTO_A_NYC?'}</div>
+        <div style="font-size:13px;color:#aaa;line-height:1.6;">
+            ${isEn
+                ? 'Save this link for your trip. Your <strong style="color:#fff;">30-day clock starts the first time you open it on your phone</strong> — not before.'
+                : 'Guardá este link para tu viaje. <strong style="color:#fff;">Los 30 días arrancan recién cuando abras el link por primera vez en tu celular</strong> — no antes.'
+            }
+        </div>
+    </div>
 </td></tr>
 
 <!-- Footer -->
@@ -165,12 +178,12 @@ export async function POST(req: NextRequest) {
         try {
             const db = getAdminDb();
 
-            // 1. Create access token (30 days, 2 uses)
+            // 1. Create access token (lazy activation: 365d ceiling, 30d clock starts on first /play/t/[token] visit)
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             let token = 'SH-';
             for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
 
-            const expiresAt = new Date(Date.now() + 720 * 60 * 60 * 1000).toISOString();
+            const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
             const tokenRef = await db.collection('access_tokens').add({
                 token,
                 experience_id: experienceId,
@@ -180,6 +193,7 @@ export async function POST(req: NextRequest) {
                 times_used: 0,
                 status: 'active',
                 expires_at: expiresAt,
+                activated_at: null,
                 stripe_session_id: session.id,
                 created_at: new Date().toISOString(),
             });

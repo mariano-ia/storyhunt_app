@@ -225,7 +225,8 @@ export interface AccessToken {
     max_uses: number;
     times_used: number;
     status: 'active' | 'used' | 'expired';
-    expires_at: string;                     // ISO date
+    expires_at: string;                     // ISO date — initially +365d, becomes +30d on first activation
+    activated_at?: string | null;           // null until user first opens /play/t/[token]
     stripe_session_id?: string;
     created_at: string;
     used_at?: string;

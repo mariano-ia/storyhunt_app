@@ -143,21 +143,76 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) =
 
 // ─── Language Picker Modal ──────────────────────────────────────────────────
 
+// Detect language from URL, localStorage, then navigator. URL > stored > browser.
+function detectLang(): 'en' | 'es' {
+  if (typeof window === 'undefined') return 'en';
+  const params = new URLSearchParams(window.location.search);
+  const urlLang = params.get('lang');
+  if (urlLang === 'es' || urlLang === 'en') return urlLang;
+  try {
+    const stored = window.localStorage.getItem('storyhunt_lang');
+    if (stored === 'es' || stored === 'en') return stored;
+  } catch { /* localStorage unavailable */ }
+  const browserLang = (navigator.language || '').toLowerCase();
+  return browserLang.startsWith('es') ? 'es' : 'en';
+}
+
+function detectPromoFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  return (params.get('promo') || '').trim().toUpperCase();
+}
+
 function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [promoCode, setPromoCode] = useState('');
+  const [defaultLang] = useState<'en' | 'es'>(() => detectLang());
+  const [email, setEmail] = useState('');
+  const [promoCode, setPromoCode] = useState(() => detectPromoFromUrl());
+  const [showPromo, setShowPromo] = useState(() => detectPromoFromUrl() !== '');
+
+  const otherLang: 'en' | 'es' = defaultLang === 'en' ? 'es' : 'en';
+
+  // Bilingual labels — keys are minimal so the picker speaks the user's language.
+  const t = defaultLang === 'es'
+    ? {
+        primary: 'Continuar en Español',
+        secondary: 'Switch to English',
+        emailLabel: 'Email (opcional, para enviarte tu acceso)',
+        emailPlaceholder: 'tu@email.com',
+        promoToggle: 'Tengo un código promo',
+        promoPlaceholder: 'CODIGO',
+        microcopy: 'Tu reloj de 30 días arranca cuando abrís el link por primera vez. Ideal para viajes planificados.',
+        loading: 'PROCESANDO...',
+      }
+    : {
+        primary: 'Continue in English',
+        secondary: 'Switch to Español',
+        emailLabel: 'Email (optional — for your access link)',
+        emailPlaceholder: 'you@email.com',
+        promoToggle: 'I have a promo code',
+        promoPlaceholder: 'CODE',
+        microcopy: 'Your 30-day clock starts the first time you open the link. Perfect for trips planned ahead.',
+        loading: 'PROCESSING...',
+      };
 
   const startCheckout = async (lang: 'en' | 'es') => {
     setLoading(true);
     setError('');
-    // Abort the checkout request if mobile network hangs for >15s instead of
-    // leaving the button stuck in "LOADING..." forever.
+    try { window.localStorage.setItem('storyhunt_lang', lang); } catch { /* ignore */ }
+
+    // Fire Lead pixel event if user provided an email
+    if (email.trim() && typeof window !== 'undefined') {
+      const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
+      if (fbq) fbq('track', 'Lead');
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
-      const body: any = { experience_id: experienceId, lang };
+      const body: Record<string, string> = { experience_id: experienceId, lang };
       if (promoCode.trim()) body.coupon_code = promoCode.trim().toUpperCase();
+      if (email.trim()) body.email = email.trim();
 
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -199,12 +254,11 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
       <div style={{
         position: 'relative',
         width: '100%',
-        maxWidth: 380,
+        maxWidth: 400,
         background: '#0A0A0A',
         border: '1px solid rgba(255,0,51,0.3)',
         borderRadius: 16,
-        padding: '32px 24px',
-        textAlign: 'center',
+        padding: '32px 24px 20px',
       }}>
         <button
           onClick={onClose}
@@ -222,82 +276,138 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
           <X size={20} />
         </button>
 
-        <p style={{
+        {/* Email field (optional) */}
+        <label style={{
+          display: 'block',
           fontFamily: "'Fira Code', monospace",
           fontSize: 11,
-          color: '#ff0033',
-          letterSpacing: '0.1em',
-          marginBottom: 8,
-        }}>SELECT_LANGUAGE</p>
-
-        <p style={{
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 14,
           color: '#94A3B8',
-          marginBottom: 24,
-        }}>Choose your preferred language</p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-          <button
-            onClick={() => startCheckout('en')}
-            disabled={loading}
-            style={{
-              padding: '16px 24px',
-              background: loading ? '#661122' : '#ff0033',
-              border: 'none',
-              borderRadius: 8,
-              color: '#fff',
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-              cursor: loading ? 'wait' : 'pointer',
-              minHeight: 52,
-            }}
-          >
-            {loading ? 'LOADING...' : 'ENGLISH'}
-          </button>
-          <button
-            onClick={() => startCheckout('es')}
-            disabled={loading}
-            style={{
-              padding: '16px 24px',
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 8,
-              color: '#fff',
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-              cursor: loading ? 'wait' : 'pointer',
-              minHeight: 52,
-            }}
-          >
-            ESPAÑOL
-          </button>
-        </div>
-
+          letterSpacing: '0.05em',
+          marginBottom: 6,
+        }}>{t.emailLabel}</label>
         <input
-          type="text"
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value)}
-          placeholder="PROMO_CODE"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t.emailPlaceholder}
+          disabled={loading}
           style={{
             width: '100%',
-            padding: '12px',
+            padding: '12px 14px',
             background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(0,210,255,0.2)',
+            borderRadius: 8,
+            color: '#fff',
+            fontFamily: "'Fira Sans', sans-serif",
+            fontSize: 15,
+            outline: 'none',
+            marginBottom: 16,
+            boxSizing: 'border-box',
+          }}
+        />
+
+        {/* Primary CTA — detected language */}
+        <button
+          onClick={() => startCheckout(defaultLang)}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '16px 24px',
+            background: loading ? '#661122' : '#ff0033',
+            border: 'none',
             borderRadius: 8,
             color: '#fff',
             fontFamily: "'Fira Code', monospace",
-            fontSize: 13,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            outline: 'none',
+            fontSize: 14,
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            cursor: loading ? 'wait' : 'pointer',
+            minHeight: 52,
+            marginBottom: 8,
           }}
-        />
+        >
+          {loading ? t.loading : t.primary}
+        </button>
+
+        {/* Switch language link */}
+        <button
+          onClick={() => startCheckout(otherLang)}
+          disabled={loading}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '8px 0',
+            background: 'transparent',
+            border: 'none',
+            color: '#64748B',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 12,
+            letterSpacing: '0.05em',
+            cursor: loading ? 'wait' : 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: 3,
+          }}
+        >
+          {t.secondary}
+        </button>
+
+        {/* Promo code (collapsed) */}
+        <div style={{ marginTop: 14, marginBottom: 12 }}>
+          {!showPromo ? (
+            <button
+              onClick={() => setShowPromo(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#94A3B8',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 11,
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >▸ {t.promoToggle}</button>
+          ) : (
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              placeholder={t.promoPlaceholder}
+              disabled={loading}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                color: '#fff',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 13,
+                textAlign: 'center',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          )}
+        </div>
+
+        {/* Buy-ahead reassurance — last touchpoint before payment */}
+        <div style={{
+          padding: '10px 12px',
+          background: 'rgba(0,210,255,0.05)',
+          border: '1px solid rgba(0,210,255,0.15)',
+          borderRadius: 8,
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 12,
+          color: '#94A3B8',
+          lineHeight: 1.5,
+          textAlign: 'center',
+        }}>{t.microcopy}</div>
 
         {error && (
           <p style={{
@@ -305,6 +415,7 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
             fontFamily: "'Fira Code', monospace",
             fontSize: 12,
             color: '#ff0033',
+            textAlign: 'center',
           }}>{error}</p>
         )}
       </div>
@@ -547,6 +658,19 @@ export default function StartPage() {
               <span style={{ color: '#ff0033', fontSize: 18, fontWeight: 700 }}>$9.99</span>
               <span style={{ color: '#64748B', fontSize: 12, marginLeft: 8 }}>per group</span>
             </p>
+
+            {/* Buy-ahead badge — destrabar al turista planificador */}
+            <p style={{
+              textAlign: 'center',
+              marginTop: 10,
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 10,
+              color: '#00d2ff',
+              letterSpacing: '0.08em',
+              opacity: 0.85,
+            }}>
+              COMING_TO_NYC // BUY_NOW · ACTIVATE_ON_ARRIVAL
+            </p>
           </div>
         </div>
       </section>
@@ -615,6 +739,90 @@ export default function StartPage() {
         }}>
           One purchase covers <span style={{ color: '#fff', fontWeight: 600 }}>your entire group</span>.
           <br />No per-person pricing.
+        </div>
+      </section>
+
+      {/* ─── WHEN: buy-ahead vs in-NYC ─────────────────────────────── */}
+      <section style={{
+        padding: '20px 24px 60px',
+        maxWidth: 720,
+        margin: '0 auto',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 12,
+          color: '#00d2ff',
+          letterSpacing: '0.1em',
+          textAlign: 'center',
+          marginBottom: 24,
+        }}>WHEN</p>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 12,
+        }}>
+          {/* Planning a trip */}
+          <div style={{
+            padding: '20px 18px',
+            background: 'rgba(0,210,255,0.04)',
+            border: '1px solid rgba(0,210,255,0.2)',
+            borderRadius: 12,
+          }}>
+            <div style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#00d2ff',
+              letterSpacing: '0.1em',
+              marginBottom: 10,
+            }}>🛬 PLANNING_YOUR_TRIP</div>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 14,
+              color: '#fff',
+              fontWeight: 600,
+              lineHeight: 1.4,
+              margin: '0 0 6px',
+            }}>Buy now.</p>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 13,
+              color: '#94A3B8',
+              lineHeight: 1.6,
+              margin: 0,
+            }}>Your 30-day clock starts the first time you open the link — not before.</p>
+          </div>
+
+          {/* Already in NYC */}
+          <div style={{
+            padding: '20px 18px',
+            background: 'rgba(255,0,51,0.04)',
+            border: '1px solid rgba(255,0,51,0.2)',
+            borderRadius: 12,
+          }}>
+            <div style={{
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#ff0033',
+              letterSpacing: '0.1em',
+              marginBottom: 10,
+            }}>📍 ALREADY_IN_NYC</div>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 14,
+              color: '#fff',
+              fontWeight: 600,
+              lineHeight: 1.4,
+              margin: '0 0 6px',
+            }}>Buy now.</p>
+            <p style={{
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 13,
+              color: '#94A3B8',
+              lineHeight: 1.6,
+              margin: 0,
+            }}>Get your access link in under 60 seconds.</p>
+          </div>
         </div>
       </section>
 

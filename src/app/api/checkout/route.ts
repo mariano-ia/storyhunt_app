@@ -65,19 +65,24 @@ async function getLocalizedProduct(
 
 // ─── POST /api/checkout ──────────────────────────────────────────────────────
 // Creates a Stripe Checkout Session for an experience purchase.
-// Body: { experience_id: string; lang: 'es' | 'en'; coupon_code?: string }
+// Body: { experience_id: string; lang: 'es' | 'en'; coupon_code?: string; email?: string }
 
 export async function POST(req: NextRequest) {
     try {
-        const { experience_id, lang, coupon_code } = await req.json() as {
+        const { experience_id, lang, coupon_code, email } = await req.json() as {
             experience_id: string;
             lang: 'es' | 'en';
             coupon_code?: string;
+            email?: string;
         };
 
         if (!experience_id || !lang) {
             return NextResponse.json({ error: 'experience_id y lang son requeridos' }, { status: 400 });
         }
+
+        // Light email validation (only if provided — field is optional)
+        const trimmedEmail = email?.trim().toLowerCase() || '';
+        const validEmail = trimmedEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail) ? trimmedEmail : '';
 
         const experience = await getExperience(experience_id);
         if (!experience) {
@@ -129,6 +134,11 @@ export async function POST(req: NextRequest) {
             cancel_url: `${req.nextUrl.origin}/${experience.slug || `play/${experience_id}`}?cancelled=1`,
         };
 
+        // Pre-fill email at Stripe checkout (skips re-typing on mobile)
+        if (validEmail) {
+            sessionParams.customer_email = validEmail;
+        }
+
         // Apply discount coupon
         if (coupon_code) {
             // First check our DB (Admin SDK — bypasses Firestore rules)
@@ -158,11 +168,29 @@ export async function POST(req: NextRequest) {
                     sessionParams.allow_promotion_codes = true;
                 }
             }
-        } else {
-            sessionParams.allow_promotion_codes = true;
         }
+        // No `allow_promotion_codes` when no coupon supplied — keeps the empty promo
+        // field off Stripe Checkout (was a friction point: users hesitating thinking
+        // they were missing a code).
 
         const session = await getStripe().checkout.sessions.create(sessionParams);
+
+        // Best-effort: capture the email as a contact so we can email-retarget abandoners.
+        // Fire-and-forget; never block checkout on this. Wrapped in try because
+        // getAdminDb() can throw synchronously if env vars misbehave.
+        if (validEmail) {
+            try {
+                getAdminDb().collection('contacts').add({
+                    email: validEmail,
+                    lang,
+                    source: 'checkout-abandoned-capture',
+                    created_at: new Date().toISOString(),
+                    status: 'new',
+                }).catch(err => console.error('[checkout] contact save failed', err));
+            } catch (err) {
+                console.error('[checkout] contact save failed (sync)', err);
+            }
+        }
 
         return NextResponse.json({ url: session.url, session_id: session.id });
     } catch (err: unknown) {

@@ -69,13 +69,26 @@ ${startingPoint ? `
 </td></tr>
 
 <!-- Instructions -->
-<tr><td style="padding:0 40px 32px;">
+<tr><td style="padding:0 40px 16px;">
     <p style="font-size:13px;color:#666;line-height:1.6;margin:0;">
         ${isEn
-            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off<br>• You have 30 days to play'
-            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste<br>• Tenés 30 días para jugar'
+            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off'
+            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste'
         }
     </p>
+</td></tr>
+
+<!-- Buy-ahead reassurance -->
+<tr><td style="padding:0 40px 32px;">
+    <div style="background:rgba(0,210,255,0.06);border:1px solid rgba(0,210,255,0.2);border-radius:8px;padding:12px 16px;">
+        <div style="font-size:11px;color:#00d2ff;letter-spacing:0.15em;margin-bottom:6px;">${isEn ? 'COMING_TO_NYC_SOON?' : '¿VIAJÁS_PRONTO_A_NYC?'}</div>
+        <div style="font-size:13px;color:#aaa;line-height:1.6;">
+            ${isEn
+                ? 'Save this link for your trip. Your <strong style="color:#fff;">30-day clock starts the first time you open it on your phone</strong> — not before.'
+                : 'Guardá este link para tu viaje. <strong style="color:#fff;">Los 30 días arrancan recién cuando abras el link por primera vez en tu celular</strong> — no antes.'
+            }
+        </div>
+    </div>
 </td></tr>
 
 <!-- Footer -->
@@ -116,13 +129,29 @@ export async function POST(req: NextRequest) {
         const { session_id, token } = await req.json() as { session_id?: string; token?: string };
         const db = getAdminDb();
 
-        // If it's an SH- token, just look it up
+        // If it's an SH- token, look it up + lazy-activate on first visit
         if (token && !token.startsWith('cs_')) {
             const snap = await db.collection('access_tokens').where('token', '==', token).limit(1).get();
             if (snap.empty) {
                 return NextResponse.json({ error: 'Token not found' }, { status: 404 });
             }
+            const docRef = snap.docs[0].ref;
             const accessToken = { id: snap.docs[0].id, ...snap.docs[0].data() } as AccessToken;
+
+            // Lazy activation: only triggers when activated_at is explicitly null
+            // (legacy tokens with activated_at === undefined keep their original expires_at)
+            if (accessToken.activated_at === null) {
+                const nowIso = new Date().toISOString();
+                const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+                await docRef.update({
+                    activated_at: nowIso,
+                    expires_at: newExpiresAt,
+                });
+                accessToken.activated_at = nowIso;
+                accessToken.expires_at = newExpiresAt;
+                console.log(`[access/verify] Lazy-activated token ${accessToken.token} — 30d clock started`);
+            }
+
             return NextResponse.json({ access_token: accessToken });
         }
 
@@ -162,9 +191,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No experience_id in session metadata' }, { status: 400 });
         }
 
-        // Create access token (Admin SDK)
+        // Create access token (Admin SDK) — lazy activation: 365d ceiling, 30d clock starts on first /play/t/[token] visit
         const nowIso = new Date().toISOString();
-        const expiresAt = new Date(Date.now() + 720 * 60 * 60 * 1000).toISOString();
+        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
         const tokenData = {
             token: generateToken(),
             experience_id: experienceId,
@@ -174,6 +203,7 @@ export async function POST(req: NextRequest) {
             times_used: 0,
             status: 'active' as const,
             expires_at: expiresAt,
+            activated_at: null,
             stripe_session_id: checkoutId,
             created_at: nowIso,
         };
