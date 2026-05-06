@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronRight, MapPin, Smartphone, Compass, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, MapPin, Smartphone, Compass, X } from 'lucide-react';
 import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead } from '@/lib/analytics';
+import { getVariant, syncExperimentsToPostHog } from '@/lib/experiments';
 
 // ─── Experience Card ────────────────────────────────────────────────────────
 
@@ -138,6 +139,109 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (exp: Experien
           <span className="card-flip-hint">&lt; FLIP_BACK</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── FAQ Accordion ──────────────────────────────────────────────────────────
+
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  {
+    q: 'Do I need an app? Is this a download?',
+    a: 'No. It runs in your phone’s browser. Nothing to install, nothing to update.',
+  },
+  {
+    q: 'Do I need international data?',
+    a: 'You need basic 4G/5G to receive clues as you walk. Most US carriers and prepaid SIMs work fine. Wifi-only doesn’t work mid-walk.',
+  },
+  {
+    q: 'What if I get lost?',
+    a: 'Each clue includes GPS-friendly hints (street names, landmarks). You can also tap "I’m stuck" to get the next hint without losing the experience.',
+  },
+  {
+    q: 'What if it rains?',
+    a: 'You can pause and resume on a different day. The 30-day window starts on first tap, so no rush.',
+  },
+  {
+    q: 'Is it safe to walk alone?',
+    a: 'All routes go through public, well-trafficked NYC neighborhoods. Designed to feel adventurous, not dangerous. Best done in daylight.',
+  },
+  {
+    q: 'What time of day works best?',
+    a: 'Anytime between 9am and 9pm. Most hunts assume daylight so you can see the visual details.',
+  },
+  {
+    q: 'How long is the walk?',
+    a: '2–3 hours total, ~2–3 km of walking with frequent stops. You can pause anytime.',
+  },
+  {
+    q: 'Can I do it with my partner or friends?',
+    a: 'Yes — one purchase covers your whole group. You walk and decode together, sharing the same chat.',
+  },
+  {
+    q: 'What kind of clues are these?',
+    a: 'Real chat messages from a narrator character. Sometimes riddles, sometimes "go to X and find Y", sometimes "look up here — what do you see?".',
+  },
+  {
+    q: 'What if my phone dies mid-walk?',
+    a: 'Use the same link the next day to continue where you left off. You have 30 days from first tap.',
+  },
+  {
+    q: 'What’s the refund policy?',
+    a: 'If something is genuinely broken on our end, full refund. Just email hello@storyhunt.city.',
+  },
+  {
+    q: 'Will my battery survive?',
+    a: 'About 3–5% per hour of active use. Bring a portable charger if you’re paranoid — we recommend it anyway.',
+  },
+];
+
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%',
+          padding: '16px 0',
+          background: 'transparent',
+          border: 'none',
+          color: '#fff',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          textAlign: 'left',
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 15,
+          fontWeight: 500,
+          lineHeight: 1.4,
+        }}
+      >
+        <span>{q}</span>
+        <ChevronDown
+          size={18}
+          style={{
+            color: '#00d2ff',
+            transition: 'transform 0.2s ease',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            flexShrink: 0,
+          }}
+        />
+      </button>
+      {open && (
+        <div style={{
+          padding: '0 0 16px',
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 14,
+          color: '#94A3B8',
+          lineHeight: 1.6,
+        }}>{a}</div>
+      )}
     </div>
   );
 }
@@ -444,6 +548,15 @@ export default function StartPage() {
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pickerExp, setPickerExp] = useState<Experience | null>(null);
+  const [heroVariant, setHeroVariant] = useState<'control' | 'emotional'>('control');
+
+  // Assign hero copy variant on mount + sync to PostHog
+  useEffect(() => {
+    const v = getVariant('hero-copy-v1') as 'control' | 'emotional';
+    setHeroVariant(v);
+    // Wait a tick for PostHog to be ready, then re-register the variant
+    setTimeout(() => syncExperimentsToPostHog(), 1000);
+  }, []);
 
   useEffect(() => {
     fetch('/api/public/experiences')
@@ -572,7 +685,11 @@ export default function StartPage() {
               lineHeight: 1.15,
               marginBottom: 28,
             }}>
-              A mystery experience<br />through<br /><span style={{ color: '#ff0033' }}>New York City</span>
+              {heroVariant === 'emotional' ? (
+                <>Decode the <span style={{ color: '#ff0033' }}>NYC</span><br />most tourists<br />never see</>
+              ) : (
+                <>A mystery experience<br />through<br /><span style={{ color: '#ff0033' }}>New York City</span></>
+              )}
             </h1>
 
             <p style={{
@@ -696,6 +813,95 @@ export default function StartPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      {/* ─── How it works in practice (chat demo) ──────────────────── */}
+      <section style={{
+        padding: '60px 24px',
+        maxWidth: 720,
+        margin: '0 auto',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 12,
+          color: '#00d2ff',
+          letterSpacing: '0.1em',
+          textAlign: 'center',
+          marginBottom: 12,
+        }}>HOW_IT_WORKS_IN_PRACTICE</p>
+
+        <h2 style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 'clamp(18px, 4.5vw, 24px)',
+          fontWeight: 700,
+          color: '#fff',
+          textAlign: 'center',
+          marginBottom: 24,
+          lineHeight: 1.3,
+        }}>
+          You walk. Your phone messages you.<br />You decode the city.
+        </h2>
+
+        {/* Chat demo */}
+        <div style={{
+          maxWidth: 420,
+          margin: '0 auto 24px',
+          padding: '20px',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 16,
+        }}>
+          {[
+            { side: 'left', text: "You're standing in front of the New York Public Library. Look up at the lions. The one on the left has a name. Find it." },
+            { side: 'right', text: 'Patience' },
+            { side: 'left', text: "Right. The one on the right is Fortitude. They've watched this city since 1911. Now walk east on 42nd. Stop when you see something marked 'TIMES'." },
+            { side: 'right', text: 'I see a clock' },
+            { side: 'left', text: "Look closer. The numbers aren't numbers. They tell time the old way." },
+          ].map((m, i) => {
+            const isLeft = m.side === 'left';
+            return (
+              <div
+                key={i}
+                className="hiw-bubble"
+                style={{
+                  display: 'flex',
+                  justifyContent: isLeft ? 'flex-start' : 'flex-end',
+                  marginBottom: 8,
+                  // Stagger fade-in
+                  animation: 'hiwFadeIn 0.5s ease-out forwards',
+                  animationDelay: `${i * 0.6}s`,
+                  opacity: 0,
+                }}
+              >
+                <div style={{
+                  maxWidth: '78%',
+                  padding: '10px 14px',
+                  borderRadius: isLeft ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
+                  background: isLeft ? 'rgba(255,255,255,0.06)' : 'rgba(0,210,255,0.12)',
+                  border: `1px solid ${isLeft ? 'rgba(255,255,255,0.08)' : 'rgba(0,210,255,0.18)'}`,
+                  fontFamily: "'Fira Sans', sans-serif",
+                  fontSize: 14,
+                  color: isLeft ? '#E2E8F0' : '#E0F7FF',
+                  lineHeight: 1.45,
+                }}>
+                  {m.text}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 14,
+          color: '#94A3B8',
+          textAlign: 'center',
+          lineHeight: 1.6,
+          margin: 0,
+        }}>
+          2&ndash;3 hours. 8&ndash;12 stops. Hidden details everywhere.<br />
+          <span style={{ color: '#fff', fontWeight: 600 }}>No tour guide. No bus. No group.</span>
+        </p>
       </section>
 
       {/* ─── Not a tour ───────────────────────────────────────────── */}
@@ -849,6 +1055,64 @@ export default function StartPage() {
         </div>
       </section>
 
+      {/* ─── What you get ──────────────────────────────────────────── */}
+      <section style={{
+        padding: '20px 24px 60px',
+        maxWidth: 600,
+        margin: '0 auto',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 12,
+          color: '#00d2ff',
+          letterSpacing: '0.1em',
+          textAlign: 'center',
+          marginBottom: 20,
+        }}>WHAT_YOU_GET</p>
+
+        <ul style={{
+          listStyle: 'none',
+          padding: 0,
+          margin: 0,
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: 10,
+        }}>
+          {[
+            'A unique link sent to your email after purchase',
+            'Works on any modern phone — no app to download',
+            'Pause and resume anytime within 30 days from first tap',
+            'One link covers your whole group',
+            'Live chat-style narration — not a recording',
+            'GPS-friendly hints in case you get lost',
+            'Email support if something goes wrong',
+          ].map((item, i) => (
+            <li key={i} style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              padding: '10px 14px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: 10,
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 14,
+              color: '#CBD5E1',
+              lineHeight: 1.5,
+            }}>
+              <span style={{
+                color: '#00ff66',
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 14,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}>✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {/* ─── Available Hunts ──────────────────────────────────────── */}
       <section id="hunts" style={{
         padding: '40px 24px 80px',
@@ -875,6 +1139,28 @@ export default function StartPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ─── FAQ ──────────────────────────────────────────────────── */}
+      <section style={{
+        padding: '20px 24px 60px',
+        maxWidth: 720,
+        margin: '0 auto',
+      }}>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 12,
+          color: '#00d2ff',
+          letterSpacing: '0.1em',
+          textAlign: 'center',
+          marginBottom: 24,
+        }}>FREQUENTLY_ASKED</p>
+
+        <div>
+          {FAQ_ITEMS.map((item, i) => (
+            <FaqItem key={i} q={item.q} a={item.a} />
+          ))}
+        </div>
       </section>
 
       {/* ─── Final CTA ────────────────────────────────────────────── */}
@@ -1284,6 +1570,11 @@ export default function StartPage() {
         @keyframes startBlink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
+        }
+
+        @keyframes hiwFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         ::-webkit-scrollbar { display: none; }

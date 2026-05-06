@@ -1,9 +1,11 @@
 // ─── Client-side analytics wrapper ──────────────────────────────────────────
 //
-// Single entry point that fires Meta Pixel + GA4 with the same payload.
+// Single entry point that fires Meta Pixel + GA4 + PostHog with the same payload.
 // Generates an `event_id` per call so server-side counterparts can dedup.
 // Stores last 50 events in localStorage for quick inspection in DevTools:
 //   JSON.parse(localStorage.eventLog)
+
+import posthog from 'posthog-js';
 
 type EventName =
     | 'PageView'
@@ -132,6 +134,19 @@ export function track(eventName: EventName, payload: EventPayload = {}): string 
         }
     } catch (err) {
         console.warn('[analytics] gtag error', err);
+    }
+
+    // PostHog — uses GA4-style names (snake_case) for consistency with funnels
+    try {
+        if (posthog.__loaded) {
+            posthog.capture(ga4Name(eventName), {
+                ...payload,
+                event_id: eventId,
+                // PostHog will auto-include $current_url, $referrer, etc.
+            });
+        }
+    } catch (err) {
+        console.warn('[analytics] posthog error', err);
     }
 
     logToLocalStorage(eventName, payload, eventId);

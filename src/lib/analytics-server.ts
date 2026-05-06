@@ -3,13 +3,29 @@
 // Mirrors the client-side wrapper but fires from the server:
 //   - Meta Conversions API (CAPI) — survives ad blockers + iOS tracking prevention
 //   - GA4 Measurement Protocol — same
+//   - PostHog server-side capture — same
 //   - Firestore `events` collection — our own log, queryable from /dashboard
 //
-// All three receive the SAME event_id when one is provided, so platforms dedupe
+// All four receive the SAME event_id when one is provided, so platforms dedupe
 // against client-side counterparts.
 
 import crypto from 'crypto';
+import { PostHog } from 'posthog-node';
 import { getAdminDb } from './firebase-admin';
+
+let posthogClient: PostHog | null = null;
+function getPostHog(): PostHog | null {
+    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    if (!key) return null;
+    if (!posthogClient) {
+        posthogClient = new PostHog(key, {
+            host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+            flushAt: 1, // server-side: flush every event immediately
+            flushInterval: 0,
+        });
+    }
+    return posthogClient;
+}
 
 const META_PIXEL_ID = '1719479962357595';
 const GA4_MEASUREMENT_ID = 'G-4EWN9RMYR9';
@@ -159,9 +175,44 @@ async function sendGA4MP(eventName: EventName, p: ServerEventPayload): Promise<b
     }
 }
 
+// ─── PostHog server-side ────────────────────────────────────────────────────
+
+async function sendPostHog(eventName: EventName, p: ServerEventPayload): Promise<boolean> {
+    const ph = getPostHog();
+    if (!ph) {
+        console.warn(`[analytics-server] PostHog disabled (no key) — skipping ${eventName}`);
+        return false;
+    }
+    // PostHog needs a stable distinct_id. Use email hash if available, else a server-tag.
+    const distinctId = p.email ? `email-${sha256(p.email).slice(0, 16)}` : `srv-anon-${p.event_id || uuid()}`;
+    try {
+        ph.capture({
+            distinctId,
+            event: ga4Name(eventName),
+            properties: {
+                event_id: p.event_id,
+                value: p.value,
+                currency: p.currency,
+                content_ids: p.content_ids,
+                content_name: p.content_name,
+                coupon: p.coupon,
+                lang: p.lang,
+                transaction_id: p.transaction_id,
+                $current_url: undefined, // not available server-side
+                $set: p.email ? { email: p.email } : undefined,
+            },
+        });
+        await ph.flush();
+        return true;
+    } catch (err) {
+        console.error(`[analytics-server] PostHog ${eventName} error:`, err);
+        return false;
+    }
+}
+
 // ─── Firestore log ──────────────────────────────────────────────────────────
 
-async function logToFirestore(eventName: EventName, p: ServerEventPayload, sourceUrl: string, status: { meta: boolean; ga4: boolean }) {
+async function logToFirestore(eventName: EventName, p: ServerEventPayload, sourceUrl: string, status: { meta: boolean; ga4: boolean; posthog: boolean }) {
     try {
         await getAdminDb().collection('events').add({
             event_name: eventName,
@@ -177,6 +228,7 @@ async function logToFirestore(eventName: EventName, p: ServerEventPayload, sourc
             source_url: sourceUrl,
             sent_to_meta: status.meta,
             sent_to_ga4: status.ga4,
+            sent_to_posthog: status.posthog,
             timestamp: new Date().toISOString(),
         });
     } catch (err) {
@@ -195,17 +247,18 @@ export async function trackServer(
     eventName: EventName,
     payload: ServerEventPayload,
     sourceUrl: string = 'https://storyhunt.city',
-): Promise<{ event_id: string; meta: boolean; ga4: boolean }> {
+): Promise<{ event_id: string; meta: boolean; ga4: boolean; posthog: boolean }> {
     const eventId = payload.event_id || uuid();
     const enriched = { ...payload, event_id: eventId };
 
-    const [metaOk, ga4Ok] = await Promise.all([
+    const [metaOk, ga4Ok, posthogOk] = await Promise.all([
         sendMetaCAPI(eventName, enriched, sourceUrl).catch(() => false),
         sendGA4MP(eventName, enriched).catch(() => false),
+        sendPostHog(eventName, enriched).catch(() => false),
     ]);
 
     // Log to Firestore (don't block on this)
-    logToFirestore(eventName, enriched, sourceUrl, { meta: metaOk, ga4: ga4Ok }).catch(() => { /* logged inside */ });
+    logToFirestore(eventName, enriched, sourceUrl, { meta: metaOk, ga4: ga4Ok, posthog: posthogOk }).catch(() => { /* logged inside */ });
 
-    return { event_id: eventId, meta: metaOk, ga4: ga4Ok };
+    return { event_id: eventId, meta: metaOk, ga4: ga4Ok, posthog: posthogOk };
 }
