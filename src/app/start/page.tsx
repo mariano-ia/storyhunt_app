@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, MapPin, Smartphone, Compass, X } from 'lucide-react';
 import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead } from '@/lib/analytics';
-import { getVariant, syncExperimentsToPostHog } from '@/lib/experiments';
+import { syncExperimentsToPostHog } from '@/lib/experiments';
 
 // ─── Experience Card ────────────────────────────────────────────────────────
 
@@ -581,14 +581,11 @@ export default function StartPage() {
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pickerExp, setPickerExp] = useState<Experience | null>(null);
-  const [heroVariant, setHeroVariant] = useState<'control' | 'emotional'>('control');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  // Assign hero copy variant on mount + sync to PostHog
+  // Sync any active experiments to PostHog (currently none — hero-copy-v1 retired
+  // 2026-05-06 in favor of single Variant D copy).
   useEffect(() => {
-    const v = getVariant('hero-copy-v1') as 'control' | 'emotional';
-    setHeroVariant(v);
-    // Wait a tick for PostHog to be ready, then re-register the variant
     setTimeout(() => syncExperimentsToPostHog(), 1000);
   }, []);
 
@@ -711,39 +708,38 @@ export default function StartPage() {
 
             <h1 className="start-glitch" style={{
               fontFamily: "'Fira Code', monospace",
-              fontSize: 'clamp(24px, 7vw, 42px)',
+              fontSize: 'clamp(22px, 6.5vw, 38px)',
               fontWeight: 700,
               color: '#fff',
               textTransform: 'uppercase',
-              letterSpacing: '0.02em',
+              letterSpacing: '0.01em',
               lineHeight: 1.15,
-              marginBottom: 28,
+              marginBottom: 24,
             }}>
-              {heroVariant === 'emotional' ? (
-                <>Decode the <span style={{ color: '#ff0033' }}>NYC</span><br />most tourists<br />never see</>
-              ) : (
-                <>A mystery experience<br />through<br /><span style={{ color: '#ff0033' }}>New York City</span></>
-              )}
+              The 2-hour walk<br />that shows you the<br /><span style={{ color: '#ff0033' }}>NYC</span> nobody else sees.
             </h1>
 
             <p style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 'clamp(14px, 4vw, 17px)',
-              color: '#fff',
-              letterSpacing: '0.04em',
-              lineHeight: 1.7,
-              marginBottom: 8,
-              fontWeight: 500,
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 'clamp(14px, 3.8vw, 16px)',
+              color: '#CBD5E1',
+              lineHeight: 1.65,
+              marginBottom: 12,
+              maxWidth: 420,
+              marginLeft: 'auto',
+              marginRight: 'auto',
             }}>
-              Your phone sends clues.<br />You decode the city.
+              Your phone sends real-time clues. You walk where they tell you.
             </p>
 
             <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 13,
-              color: '#64748B',
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 11,
+              color: '#94A3B8',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
             }}>
-              No guide. No group. Just you and the streets.
+              No app · No guide · No tour group · 2 hours
             </p>
           </div>
 

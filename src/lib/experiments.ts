@@ -19,14 +19,9 @@ export interface ExperimentDefinition {
 }
 
 export const EXPERIMENTS: Record<string, ExperimentDefinition> = {
-    'hero-copy-v1': {
-        id: 'hero-copy-v1',
-        description: 'Hero headline on /start — control vs emotional framing',
-        variants: [
-            { name: 'control', weight: 0.5 },     // "A mystery experience through New York City"
-            { name: 'emotional', weight: 0.5 },   // "Decode the NYC most tourists never see"
-        ],
-    },
+    // 'hero-copy-v1' retired 2026-05-06 — Variant D ("The 2-hour walk that shows
+    // you the NYC nobody else sees") replaced both control and emotional variants
+    // outright. Old cookies persist 90 days but no longer alter rendering.
 };
 
 const COOKIE_PREFIX = 'sh_exp_';
