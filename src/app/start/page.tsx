@@ -772,15 +772,15 @@ export default function StartPage() {
                 >
                   <div style={{
                     fontFamily: "'Fira Code', monospace",
-                    fontSize: 9,
+                    fontSize: 11,
                     color: '#ff0033',
-                    letterSpacing: '0.1em',
+                    letterSpacing: '0.08em',
                     marginBottom: 4,
                   }}>{label}</div>
                   <Icon size={18} color="#00d2ff" style={{ marginBottom: 4 }} />
                   <div style={{
                     fontFamily: "'Fira Sans', sans-serif",
-                    fontSize: 11,
+                    fontSize: 12,
                     color: '#fff',
                     lineHeight: 1.3,
                   }}>{text}</div>
