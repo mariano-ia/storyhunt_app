@@ -196,14 +196,43 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   },
 ];
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
+function FaqItem({ q, a, isOpen, onToggle }: { q: string; a: string; isOpen: boolean; onToggle: () => void }) {
+  const [typed, setTyped] = useState('');
+  const [done, setDone] = useState(false);
+
+  // Typewriter: only runs when item opens. Skips animation if user has prefers-reduced-motion.
+  useEffect(() => {
+    if (!isOpen) {
+      setTyped('');
+      setDone(false);
+      return;
+    }
+    const reduced = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      setTyped(a);
+      setDone(true);
+      return;
+    }
+    let i = 0;
+    const tick = setInterval(() => {
+      i++;
+      setTyped(a.slice(0, i));
+      if (i >= a.length) {
+        clearInterval(tick);
+        setDone(true);
+      }
+    }, 18);
+    return () => clearInterval(tick);
+  }, [isOpen, a]);
+
   return (
     <div style={{
       borderBottom: '1px solid rgba(255,255,255,0.06)',
+      width: '100%',
     }}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
         style={{
           width: '100%',
           padding: '16px 0',
@@ -228,19 +257,23 @@ function FaqItem({ q, a }: { q: string; a: string }) {
           style={{
             color: '#00d2ff',
             transition: 'transform 0.2s ease',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             flexShrink: 0,
           }}
         />
       </button>
-      {open && (
+      {isOpen && (
         <div style={{
           padding: '0 0 16px',
           fontFamily: "'Fira Sans', sans-serif",
           fontSize: 14,
           color: '#94A3B8',
           lineHeight: 1.6,
-        }}>{a}</div>
+          minHeight: '3em',
+        }}>
+          {typed}
+          {!done && <span className="faq-cursor">|</span>}
+        </div>
       )}
     </div>
   );
@@ -549,6 +582,7 @@ export default function StartPage() {
   const [loaded, setLoaded] = useState(false);
   const [pickerExp, setPickerExp] = useState<Experience | null>(null);
   const [heroVariant, setHeroVariant] = useState<'control' | 'emotional'>('control');
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // Assign hero copy variant on mount + sync to PostHog
   useEffect(() => {
@@ -1156,9 +1190,15 @@ export default function StartPage() {
           marginBottom: 24,
         }}>FREQUENTLY_ASKED</p>
 
-        <div>
+        <div style={{ width: '100%' }}>
           {FAQ_ITEMS.map((item, i) => (
-            <FaqItem key={i} q={item.q} a={item.a} />
+            <FaqItem
+              key={i}
+              q={item.q}
+              a={item.a}
+              isOpen={openFaq === i}
+              onToggle={() => setOpenFaq(openFaq === i ? null : i)}
+            />
           ))}
         </div>
       </section>
@@ -1575,6 +1615,16 @@ export default function StartPage() {
         @keyframes hiwFadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        .faq-cursor {
+          color: #00d2ff;
+          margin-left: 2px;
+          animation: faqCursorBlink 0.8s step-end infinite;
+        }
+        @keyframes faqCursorBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
         }
 
         ::-webkit-scrollbar { display: none; }
