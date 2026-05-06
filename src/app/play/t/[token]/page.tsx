@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AccessToken } from '@/lib/types';
+import { trackPurchase } from '@/lib/analytics';
 
 // ─── Token-based Player Entry ────────────────────────────────────────────────
 // Validates access via server-side verification, then redirects to the player.
@@ -113,6 +114,18 @@ export default function TokenPlayPage() {
             }
 
             // NOTE: increment moved to /play/[id] so email scanner pre-fetches don't consume uses.
+
+            // Fire client-side Purchase event ONLY if redirected from Stripe (?success=1).
+            // Server-side webhook will fire the same event with the same event_id for dedup.
+            // Pass the Stripe session_id (the token) as event_id so platforms dedupe correctly.
+            if (searchParams.get('success') === '1' && token.startsWith('cs_')) {
+                trackPurchase(
+                    accessToken.experience_id,
+                    0, // price not in token — server has it from Stripe webhook
+                    token, // event_id = Stripe session_id (matches webhook server-side event)
+                    { email: accessToken.email, lang: accessToken.lang },
+                );
+            }
 
             setStatus('valid');
             const playUrl = `/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`;

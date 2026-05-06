@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ChevronRight, MapPin, Smartphone, Compass, X } from 'lucide-react';
+import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead } from '@/lib/analytics';
 
 // ─── Experience Card ────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ function difficultyBar(d?: string) {
   return '░░░░░';
 }
 
-function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) => void }) {
+function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (exp: Experience) => void }) {
   const [flipped, setFlipped] = useState(false);
   const isLive = exp.status === 'published';
   const originalPrice = exp.price > 0 ? Math.ceil(exp.price * 1.5) - 0.01 : 0;
@@ -86,7 +87,7 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) =
               {isLive ? (
                 <button
                   className="primary-btn mono card-front-cta"
-                  onClick={(e) => { e.stopPropagation(); onBuy(exp.id); }}
+                  onClick={(e) => { e.stopPropagation(); onBuy(exp); }}
                 >{ctaLabel}</button>
               ) : (
                 <a href="#hunts" className="secondary-btn mono card-front-cta" onClick={(e) => e.stopPropagation()}>NOTIFY_ME</a>
@@ -118,7 +119,7 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (id: string) =
               </div>
               <button
                 className="primary-btn mono card-buy-btn"
-                onClick={(e) => { e.stopPropagation(); onBuy(exp.id); }}
+                onClick={(e) => { e.stopPropagation(); onBuy(exp); }}
               >
                 <span className="btn-text">{ctaLabel}</span>
               </button>
@@ -163,13 +164,23 @@ function detectPromoFromUrl(): string {
   return (params.get('promo') || '').trim().toUpperCase();
 }
 
-function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: () => void }) {
+function LangPicker({ experience, onClose }: { experience: Experience; onClose: () => void }) {
+  const experienceId = experience.id;
+  const price = experience.price || 0;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [defaultLang] = useState<'en' | 'es'>(() => detectLang());
   const [email, setEmail] = useState('');
   const [promoCode, setPromoCode] = useState(() => detectPromoFromUrl());
   const [showPromo, setShowPromo] = useState(() => detectPromoFromUrl() !== '');
+
+  // Fire InitiateCheckout when modal opens (user has clear intent to buy)
+  useEffect(() => {
+    trackInitiateCheckout(experienceId, price, detectLang(), {
+      content_name: experience.name,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const otherLang: 'en' | 'es' = defaultLang === 'en' ? 'es' : 'en';
 
@@ -201,10 +212,9 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
     setError('');
     try { window.localStorage.setItem('storyhunt_lang', lang); } catch { /* ignore */ }
 
-    // Fire Lead pixel event if user provided an email
-    if (email.trim() && typeof window !== 'undefined') {
-      const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
-      if (fbq) fbq('track', 'Lead');
+    // Fire Lead event if user provided an email (Meta Pixel + GA4)
+    if (email.trim()) {
+      trackLead({ email: email.trim(), lang, content_ids: [experienceId] });
     }
 
     const controller = new AbortController();
@@ -223,6 +233,11 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
       clearTimeout(timeoutId);
       const data = await res.json();
       if (data.url) {
+        // AddPaymentInfo: user is about to enter payment details on Stripe
+        trackAddPaymentInfo(experienceId, price, {
+          content_name: experience.name,
+          coupon: promoCode.trim() || undefined,
+        });
         window.location.href = data.url;
       } else {
         setError(data.error || 'Error creating checkout session');
@@ -428,7 +443,7 @@ function LangPicker({ experienceId, onClose }: { experienceId: string; onClose: 
 export default function StartPage() {
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [pickerExpId, setPickerExpId] = useState<string | null>(null);
+  const [pickerExp, setPickerExp] = useState<Experience | null>(null);
 
   useEffect(() => {
     fetch('/api/public/experiences')
@@ -443,6 +458,14 @@ export default function StartPage() {
         });
         setExperiences(sorted);
         setLoaded(true);
+
+        // Fire ViewContent with the published hunts visible above the fold
+        const publishedIds = sorted
+          .filter((e: Experience) => e.status === 'published')
+          .map((e: Experience) => e.id);
+        if (publishedIds.length > 0) {
+          trackViewContent(publishedIds, { content_name: 'StoryHunt — Available Hunts' });
+        }
       })
       .catch(() => setLoaded(true));
   }, []);
@@ -848,7 +871,7 @@ export default function StartPage() {
         ) : (
           <div className="experience-grid">
             {experiences.map(exp => (
-              <ExperienceCard key={exp.id} exp={exp} onBuy={setPickerExpId} />
+              <ExperienceCard key={exp.id} exp={exp} onBuy={setPickerExp} />
             ))}
           </div>
         )}
@@ -908,10 +931,10 @@ export default function StartPage() {
         </div>
       </section>
 
-      {pickerExpId && (
+      {pickerExp && (
         <LangPicker
-          experienceId={pickerExpId}
-          onClose={() => setPickerExpId(null)}
+          experience={pickerExp}
+          onClose={() => setPickerExp(null)}
         />
       )}
 

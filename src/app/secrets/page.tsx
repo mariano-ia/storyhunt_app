@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, ChevronRight, Radio, Eye, Copy, Check } from 'lucide-react';
-import { trackLead } from '@/components/MetaPixel';
+import { trackLead } from '@/lib/analytics';
 
 // ─── NYC Secrets Data ────────────────────────────────────────────────────────
 

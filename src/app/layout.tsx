@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
 import MetaPixel from '@/components/MetaPixel';
+import GA4 from '@/components/GA4';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body>
         <MetaPixel />
+        <GA4 />
         <AuthProvider>
           {children}
         </AuthProvider>

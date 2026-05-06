@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Resend } from 'resend';
 import { welcomeEmail } from '@/lib/email-templates';
+import { trackServer } from '@/lib/analytics-server';
 
 const ALLOWED_ORIGINS = ['https://storyhunt.city', 'https://www.storyhunt.city', 'http://localhost:3000'];
 const CORS_HEADERS = {
@@ -12,8 +13,6 @@ const CORS_HEADERS = {
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL || '';
-const META_PIXEL_ID = '1719479962357595';
-const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
 
 async function sendWelcomeEmail(contactEmail: string, lang: 'es' | 'en') {
     if (!resend) return;
@@ -55,39 +54,20 @@ async function sendNotification(contactEmail: string) {
     }
 }
 
-async function sendMetaConversion(contactEmail: string, source: string, request: Request) {
-    if (!META_TOKEN) return;
-    try {
-        const crypto = await import('crypto');
-        const hashedEmail = crypto.createHash('sha256').update(contactEmail.toLowerCase().trim()).digest('hex');
-        const userAgent = request.headers.get('user-agent') || '';
-        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
-        const sourceUrl = source.includes('secrets') ? 'https://storyhunt.city/secrets'
-            : source.includes('intercepted') ? 'https://storyhunt.city/intercepted'
-            : source.includes('voicemail') ? 'https://storyhunt.city/voicemail'
-            : 'https://storyhunt.city';
+async function fireLeadEvent(contactEmail: string, source: string, request: Request, lang: 'es' | 'en') {
+    const userAgent = request.headers.get('user-agent') || '';
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
+    const sourceUrl = source.includes('secrets') ? 'https://storyhunt.city/secrets'
+        : source.includes('intercepted') ? 'https://storyhunt.city/intercepted'
+        : source.includes('voicemail') ? 'https://storyhunt.city/voicemail'
+        : 'https://storyhunt.city';
 
-        await fetch(`https://graph.facebook.com/v21.0/${META_PIXEL_ID}/events?access_token=${META_TOKEN}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                data: [{
-                    event_name: 'Lead',
-                    event_time: Math.floor(Date.now() / 1000),
-                    action_source: 'website',
-                    event_source_url: sourceUrl,
-                    user_data: {
-                        em: [hashedEmail],
-                        client_ip_address: ip,
-                        client_user_agent: userAgent,
-                    },
-                }],
-            }),
-        });
-        console.log(`[contacts] Meta Conversion API Lead sent for ${contactEmail}`);
-    } catch (err) {
-        console.error('[contacts] Meta Conversion API error:', err);
-    }
+    return trackServer('Lead', {
+        email: contactEmail,
+        lang,
+        client_ip_address: ip,
+        client_user_agent: userAgent,
+    }, sourceUrl);
 }
 
 export async function OPTIONS() {
@@ -129,10 +109,10 @@ export async function POST(request: Request) {
             welcome_sent_at: new Date().toISOString(),
         });
 
-        // Send E1 welcome email + admin notification + Meta Conversions API (non-blocking)
+        // Send E1 welcome email + admin notification + Lead event (non-blocking)
         sendWelcomeEmail(email, lang);
         sendNotification(email);
-        sendMetaConversion(email, source, request);
+        fireLeadEvent(email, source, request, lang).catch(err => console.error('[contacts] Lead event failed', err));
 
         // If it came from an HTML form, redirect to success page
         if (!contentType.includes('application/json')) {

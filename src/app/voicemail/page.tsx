@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, ChevronRight, Phone, Copy, Check, Play, Pause } from 'lucide-react';
-import { trackLead } from '@/components/MetaPixel';
+import { trackLead } from '@/lib/analytics';
 
 // ─── Subtitle Data (timed to audio) ─────────────────────────────────────────
 

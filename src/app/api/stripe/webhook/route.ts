@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Resend } from 'resend';
 import type Stripe from 'stripe';
+import { trackServer } from '@/lib/analytics-server';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -235,6 +236,23 @@ export async function POST(req: NextRequest) {
                 } catch { /* non-critical */ }
                 await sendAccessEmail(email, token, experienceName, lang, startingPoint);
             }
+
+            // 5. Fire Purchase event server-side (Meta CAPI + GA4 MP + Firestore log).
+            // event_id = Stripe session.id so the client-side fire on /play/t/[token]
+            // dedupes against this. Non-blocking — errors logged but don't fail webhook.
+            trackServer('Purchase', {
+                event_id: session.id,
+                value: (session.amount_total ?? 0) / 100,
+                currency: (session.currency || 'usd').toUpperCase(),
+                content_ids: [experienceId],
+                content_name: experienceName,
+                email: email || undefined,
+                coupon: couponCode || undefined,
+                lang,
+                transaction_id: session.id,
+            }, 'https://storyhunt.city/play/t/' + session.id).catch(err =>
+                console.error('[stripe/webhook] trackServer Purchase failed:', err)
+            );
 
             console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${email} → token ${token}`);
 
