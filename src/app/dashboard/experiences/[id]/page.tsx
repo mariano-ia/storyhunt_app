@@ -127,12 +127,14 @@ const STEP_LABELS: Record<string, string> = {
     error_screen: 'Pantalla Error',
 };
 
-function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd, scenes, allSteps, onPlayFrom, globalStepIndex }: {
+function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverPosition, onDragStart, onDragOver, onDrop, onDragEnd, scenes, allSteps, onPlayFrom, globalStepIndex }: {
     step: Step; index: number;
     onSave: (data: Partial<StepFormData>) => Promise<void>;
     onDelete: () => void;
-    isDragging: boolean; isDragOver: boolean;
-    onDragStart: () => void; onDragOver: (e: React.DragEvent) => void;
+    isDragging: boolean;
+    dragOverPosition: 'before' | 'after' | null;
+    onDragStart: () => void;
+    onDragOver: (e: React.DragEvent<HTMLDivElement>, position: 'before' | 'after') => void;
     onDrop: () => void; onDragEnd: () => void;
     scenes: Scene[];
     allSteps: Step[];
@@ -196,14 +198,35 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
 
     // ─── Collapsed view ───────────────────────────────────────────────────────
     if (!editing) {
+        const dropLine = (
+            <div style={{
+                height: 3, borderRadius: 2, margin: '4px 0',
+                background: 'var(--brand-primary)',
+                boxShadow: '0 0 8px var(--brand-primary)',
+                pointerEvents: 'none',
+            }} />
+        );
         return (
+            <div style={{ position: 'relative' }}>
+                {dragOverPosition === 'before' && dropLine}
             <div
-                draggable onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
+                draggable
+                onDragStart={onDragStart}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                    onDragOver(e, position);
+                }}
+                onDrop={onDrop}
+                onDragEnd={onDragEnd}
                 style={{
-                    border: `1.5px solid ${isDragOver ? 'var(--brand-primary)' : borderColor}`,
+                    border: `1.5px solid ${borderColor}`,
                     borderRadius: 10, opacity: isDragging ? 0.4 : 1,
-                    cursor: 'grab', transition: 'opacity 0.15s, border-color 0.15s',
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    transition: 'opacity 0.15s, border-color 0.15s, transform 0.15s',
                     background: 'var(--bg-card)', overflow: 'hidden',
+                    transform: dragOverPosition && !isDragging ? 'scale(1.005)' : 'scale(1)',
                 }}
             >
                 {/* Type selector bar (outside card body) */}
@@ -330,6 +353,8 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, isDragOve
                         <Trash2 size={13} />
                     </button>
                 </div>
+            </div>
+                {dragOverPosition === 'after' && dropLine}
             </div>
         );
     }
@@ -573,7 +598,7 @@ export default function ExperienceDetailPage() {
     const [collapsedScenes, setCollapsedScenes] = useState<Set<string>>(new Set());
     const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
     const [dragState, setDragState] = useState<{ sceneId: string; index: number } | null>(null);
-    const [dragOverState, setDragOverState] = useState<{ sceneId: string; index: number } | null>(null);
+    const [dragOverState, setDragOverState] = useState<{ sceneId: string; index: number; position: 'before' | 'after' } | null>(null);
     const [previewFromStep, setPreviewFromStep] = useState<number | null>(null);
 
     const load = async () => {
@@ -598,13 +623,29 @@ export default function ExperienceDetailPage() {
         setSaving(false);
     };
 
-    const handleDrop = async (sceneId: string, dropIdx: number) => {
-        if (!dragState || dragState.sceneId !== sceneId || dragState.index === dropIdx) {
+    const handleDrop = async (sceneId: string, targetIdx: number, position: 'before' | 'after') => {
+        if (!dragState || dragState.sceneId !== sceneId) {
             setDragState(null); setDragOverState(null); return;
         }
-        const sceneSteps = steps.filter(s => s.scene_id === sceneId);
-        const [removed] = sceneSteps.splice(dragState.index, 1);
-        sceneSteps.splice(dropIdx, 0, removed);
+        // Always work on a sorted snapshot (.order is the source of truth)
+        const sceneSteps = steps
+            .filter(s => s.scene_id === sceneId)
+            .sort((a, b) => a.order - b.order);
+
+        const dragIdx = dragState.index;
+        // Translate (target, position) → desired insertion index in original array
+        let insertAt = position === 'before' ? targetIdx : targetIdx + 1;
+
+        // No-op if the user dropped on the same slot (next to the source on either side)
+        if (insertAt === dragIdx || insertAt === dragIdx + 1) {
+            setDragState(null); setDragOverState(null); return;
+        }
+
+        const [removed] = sceneSteps.splice(dragIdx, 1);
+        // After removing the source, indices > dragIdx shifted down by 1
+        if (insertAt > dragIdx) insertAt -= 1;
+        sceneSteps.splice(insertAt, 0, removed);
+
         const reordered = sceneSteps.map((st, idx) => ({ ...st, order: idx + 1 }));
         setSteps(prev => [...prev.filter(s => s.scene_id !== sceneId), ...reordered].sort((a, b) => a.order - b.order));
         setDragState(null); setDragOverState(null);
@@ -674,7 +715,9 @@ export default function ExperienceDetailPage() {
         setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, next_scene_id: nextSceneId || undefined } : s));
     };
 
-    const stepsForScene = (sceneId: string) => steps.filter(s => s.scene_id === sceneId);
+    const stepsForScene = (sceneId: string) => steps
+        .filter(s => s.scene_id === sceneId)
+        .sort((a, b) => a.order - b.order);
 
     const toggleSceneCollapse = (sceneId: string) => {
         setCollapsedScenes(prev => {
@@ -859,10 +902,22 @@ export default function ExperienceDetailPage() {
                                                     onSave={async (data) => { await updateStep(id, step.id, data); }}
                                                     onDelete={() => setToDeleteStep(step)}
                                                     isDragging={dragState?.sceneId === scene.id && dragState.index === i}
-                                                    isDragOver={dragOverState?.sceneId === scene.id && dragOverState.index === i}
+                                                    dragOverPosition={
+                                                        dragOverState?.sceneId === scene.id && dragOverState.index === i
+                                                            ? dragOverState.position
+                                                            : null
+                                                    }
                                                     onDragStart={() => setDragState({ sceneId: scene.id, index: i })}
-                                                    onDragOver={(e) => { e.preventDefault(); setDragOverState({ sceneId: scene.id, index: i }); }}
-                                                    onDrop={() => handleDrop(scene.id, i)}
+                                                    onDragOver={(_e, position) => {
+                                                        setDragOverState(prev => {
+                                                            if (prev && prev.sceneId === scene.id && prev.index === i && prev.position === position) return prev;
+                                                            return { sceneId: scene.id, index: i, position };
+                                                        });
+                                                    }}
+                                                    onDrop={() => {
+                                                        const pos = dragOverState?.position ?? 'before';
+                                                        handleDrop(scene.id, i, pos);
+                                                    }}
                                                     onDragEnd={() => { setDragState(null); setDragOverState(null); }}
                                                     scenes={scenes}
                                                     allSteps={steps}
