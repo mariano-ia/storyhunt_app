@@ -655,7 +655,10 @@ export default function ExperienceDetailPage() {
     const handleAddStep = async () => {
         if (!newStep) return;
         const sceneSteps = steps.filter(s => s.scene_id === newStep.sceneId);
-        const order = sceneSteps.length + 1;
+        // Append after the highest existing order so we never collide with or
+        // sort before steps in scenes that have non-sequential orders.
+        const maxOrder = sceneSteps.reduce((m, s) => Math.max(m, s.order || 0), 0);
+        const order = maxOrder + 1;
         const newId = await createStep(id, { ...newStep.data, scene_id: newStep.sceneId, order });
         // Optimistic update: add to local state without full reload
         setSteps(prev => [...prev, {
