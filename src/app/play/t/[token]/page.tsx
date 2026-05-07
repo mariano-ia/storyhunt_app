@@ -5,7 +5,13 @@ import type { AccessToken } from '@/lib/types';
 import { trackPurchase } from '@/lib/analytics';
 
 // ─── Token-based Player Entry ────────────────────────────────────────────────
-// Validates access via server-side verification, then redirects to the player.
+// Two flows:
+//   1. POST-PURCHASE (URL has ?success=1, token is `cs_xxx`):
+//      Show a "thank you / your access is ready" screen with explicit
+//      "Start hunt now" button. Lazy activation is intentionally NOT triggered
+//      until the user clicks Start.
+//   2. EMAIL-LINK (URL has SH-XXXXX token, no success param):
+//      Validate, lazy-activate the 30-day clock, redirect to /play/[id].
 
 const COPY = {
     es: {
@@ -23,6 +29,18 @@ const COPY = {
         missingExperience: 'La experiencia asociada a este link ya no existe.',
         genericError: 'Ocurrio un error al validar tu acceso. Intenta recargar la pagina.',
         back: 'Volver a StoryHunt',
+        // Post-purchase
+        ppEyebrow: 'ACCESO_LISTO // PAGO_RECIBIDO',
+        ppHeading: 'Tu hunt está lista.',
+        ppSub: 'Podés empezar ahora o guardar el link para cuando llegues al punto de inicio.',
+        ppMeetPoint: 'PUNTO_DE_INICIO',
+        ppMeetPointHint: 'Andá hasta acá antes de tocar Start',
+        ppEmailLine: (email: string) => <>Te enviamos el link de acceso a <strong style={{ color: '#fff' }}>{email}</strong>.</>,
+        ppEmailMissing: 'Guardá esta página o usá tu link cuando lo recibas.',
+        ppClockHint: 'Tu reloj de 30 días arranca recién cuando toques Start. No antes.',
+        ppCta: 'Empezar hunt ahora',
+        ppCtaWait: 'Activando...',
+        ppLater: 'O cerrá esta pestaña — el link queda activo hasta dentro de 1 año.',
     },
     en: {
         verifying: 'Verifying access...',
@@ -39,17 +57,37 @@ const COPY = {
         missingExperience: 'The experience linked to this access is no longer available.',
         genericError: 'Something went wrong while validating your access. Try reloading the page.',
         back: 'Back to StoryHunt',
+        // Post-purchase
+        ppEyebrow: 'ACCESS_GRANTED // PAYMENT_RECEIVED',
+        ppHeading: 'Your hunt is ready.',
+        ppSub: 'You can start now or save the link for when you arrive at the meeting point.',
+        ppMeetPoint: 'MEET_POINT',
+        ppMeetPointHint: 'Be there before you tap Start',
+        ppEmailLine: (email: string) => <>We sent the access link to <strong style={{ color: '#fff' }}>{email}</strong>.</>,
+        ppEmailMissing: 'Save this page or use the link from your email when it arrives.',
+        ppClockHint: 'Your 30-day clock starts only when you tap Start. Not before.',
+        ppCta: 'Start hunt now',
+        ppCtaWait: 'Activating...',
+        ppLater: 'Or close this tab — the link stays active for up to 1 year.',
     },
 } as const;
+
+type Status = 'loading' | 'valid' | 'invalid' | 'expired' | 'used' | 'post_purchase';
 
 export default function TokenPlayPage() {
     const { token } = useParams() as { token: string };
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialLang: 'es' | 'en' = searchParams.get('lang') === 'en' ? 'en' : 'es';
+    const isPostPurchase = searchParams.get('success') === '1';
+
     const [lang, setLang] = useState<'es' | 'en'>(initialLang);
-    const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'expired' | 'used'>('loading');
+    const [status, setStatus] = useState<Status>('loading');
     const [message, setMessage] = useState('');
+    const [accessToken, setAccessToken] = useState<AccessToken | null>(null);
+    const [startingPoint, setStartingPoint] = useState<string>('');
+    const [experienceName, setExperienceName] = useState<string>('');
+    const [activating, setActivating] = useState(false);
 
     const t = COPY[lang];
 
@@ -60,7 +98,6 @@ export default function TokenPlayPage() {
 
     const validateToken = async () => {
         try {
-            // Call server-side verify endpoint (handles both SH- tokens and cs_ session IDs)
             const res = await fetch('/api/access/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -74,34 +111,32 @@ export default function TokenPlayPage() {
                 return;
             }
 
-            const { access_token: accessToken } = await res.json() as { access_token: AccessToken };
+            const { access_token: at } = await res.json() as { access_token: AccessToken };
+            setAccessToken(at);
 
-            // Sync UI language to the token's language (source of truth)
-            const tokenLang: 'es' | 'en' = accessToken.lang === 'en' ? 'en' : 'es';
+            const tokenLang: 'es' | 'en' = at.lang === 'en' ? 'en' : 'es';
             if (tokenLang !== lang) setLang(tokenLang);
             const tt = COPY[tokenLang];
 
-            // Check expiration
-            if (new Date(accessToken.expires_at) < new Date()) {
+            if (new Date(at.expires_at) < new Date()) {
                 setStatus('expired');
                 setMessage(tt.expiredMsg);
                 return;
             }
 
-            // Check usage
-            if (accessToken.times_used >= accessToken.max_uses) {
+            if (at.times_used >= at.max_uses) {
                 setStatus('used');
                 setMessage(tt.usedMsg);
                 return;
             }
 
-            // Check for an existing in_progress session (auto-resume)
+            // Auto-resume detection for returning users
             let fromStep: number | null = null;
             try {
                 const findRes = await fetch('/api/sessions/find', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ experience_id: accessToken.experience_id, email: accessToken.email }),
+                    body: JSON.stringify({ experience_id: at.experience_id, email: at.email }),
                 });
                 if (findRes.ok) {
                     const { session } = await findRes.json();
@@ -110,25 +145,43 @@ export default function TokenPlayPage() {
                     }
                 }
             } catch {
-                // Non-critical — proceed without resume
+                // Non-critical
             }
 
-            // NOTE: increment moved to /play/[id] so email scanner pre-fetches don't consume uses.
-
-            // Fire client-side Purchase event ONLY if redirected from Stripe (?success=1).
-            // Server-side webhook will fire the same event with the same event_id for dedup.
-            // Pass the Stripe session_id (the token) as event_id so platforms dedupe correctly.
-            if (searchParams.get('success') === '1' && token.startsWith('cs_')) {
+            // Fire client-side Purchase event ONLY on post-purchase entry.
+            // Server webhook fires the same event with the same event_id for dedup.
+            if (isPostPurchase && token.startsWith('cs_')) {
                 trackPurchase(
-                    accessToken.experience_id,
-                    0, // price not in token — server has it from Stripe webhook
-                    token, // event_id = Stripe session_id (matches webhook server-side event)
-                    { email: accessToken.email, lang: accessToken.lang },
+                    at.experience_id,
+                    0,
+                    token,
+                    { email: at.email, lang: at.lang },
                 );
             }
 
+            // POST-PURCHASE flow: show "Your hunt is ready" screen, don't auto-redirect.
+            // Activation is deferred until user clicks "Start hunt now".
+            // (Note: cs_xxx path in /api/access/verify never activates by design;
+            //  only the SH-xxx path activates, and only the explicit Start button calls it.)
+            if (isPostPurchase) {
+                try {
+                    const expRes = await fetch('/api/public/experiences');
+                    const expData = await expRes.json();
+                    const exps = Array.isArray(expData) ? expData : expData.experiences || [];
+                    const exp = exps.find((e: { id: string }) => e.id === at.experience_id);
+                    if (exp) {
+                        setExperienceName(exp.name || '');
+                        setStartingPoint(exp.starting_point || '');
+                    }
+                } catch { /* non-critical */ }
+                setStatus('post_purchase');
+                return;
+            }
+
+            // EMAIL-LINK flow: token is SH-xxx, lazy activation already happened
+            // server-side via verify(). Redirect into the experience.
             setStatus('valid');
-            const playUrl = `/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${token}`;
+            const playUrl = `/play/${at.experience_id}?lang=${at.lang}&token=${token}`;
             router.replace(fromStep !== null ? `${playUrl}&from=${fromStep}` : playUrl);
 
         } catch (err) {
@@ -138,10 +191,35 @@ export default function TokenPlayPage() {
         }
     };
 
+    const handleStartNow = async () => {
+        if (!accessToken || activating) return;
+        setActivating(true);
+        try {
+            // Hit verify with the SH-token explicitly (no skip_activation) — this
+            // triggers lazy activation server-side: activated_at set, expires_at
+            // becomes now + 30d.
+            await fetch('/api/access/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: accessToken.token }),
+            });
+        } catch (err) {
+            console.error('[token-play] Activation error:', err);
+            // Continue anyway — /play/[id] will work with the token even if
+            // activation API call hiccupped; the next visit will activate.
+        }
+        router.push(`/play/${accessToken.experience_id}?lang=${accessToken.lang}&token=${accessToken.token}`);
+    };
+
     return (
         <div style={{
-            height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#000', fontFamily: "'Fira Code', monospace",
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#000',
+            fontFamily: "'Fira Code', monospace",
+            padding: '20px',
         }}>
             {status === 'loading' && (
                 <div style={{ textAlign: 'center', color: '#00ff41' }}>
@@ -154,6 +232,134 @@ export default function TokenPlayPage() {
                 <div style={{ textAlign: 'center', color: '#00ff41' }}>
                     <div style={{ fontSize: 18, marginBottom: 12 }}>{t.verified}</div>
                     <div style={{ fontSize: 13, opacity: 0.6 }}>{t.loading}</div>
+                </div>
+            )}
+
+            {/* POST-PURCHASE confirmation screen */}
+            {status === 'post_purchase' && accessToken && (
+                <div style={{
+                    width: '100%',
+                    maxWidth: 440,
+                    padding: '32px 24px',
+                    background: '#0a0a0a',
+                    border: '1px solid rgba(0,255,102,0.2)',
+                    borderRadius: 16,
+                }}>
+                    <div style={{
+                        fontFamily: "'Fira Code', monospace",
+                        fontSize: 11,
+                        color: '#00ff66',
+                        letterSpacing: '0.15em',
+                        marginBottom: 14,
+                    }}>{t.ppEyebrow}</div>
+
+                    <h1 style={{
+                        fontFamily: "'Fira Code', monospace",
+                        fontSize: 24,
+                        color: '#fff',
+                        margin: '0 0 10px',
+                        lineHeight: 1.2,
+                    }}>{t.ppHeading}</h1>
+
+                    {experienceName && (
+                        <p style={{
+                            fontFamily: "'Fira Sans', sans-serif",
+                            fontSize: 14,
+                            color: '#94A3B8',
+                            margin: '0 0 14px',
+                        }}>{experienceName}</p>
+                    )}
+
+                    <p style={{
+                        fontFamily: "'Fira Sans', sans-serif",
+                        fontSize: 14,
+                        color: '#94A3B8',
+                        lineHeight: 1.6,
+                        margin: '0 0 18px',
+                    }}>{t.ppSub}</p>
+
+                    {startingPoint && (
+                        <div style={{
+                            padding: '12px 14px',
+                            background: 'rgba(255,0,51,0.06)',
+                            border: '1px solid rgba(255,0,51,0.2)',
+                            borderRadius: 8,
+                            marginBottom: 16,
+                        }}>
+                            <div style={{
+                                fontFamily: "'Fira Code', monospace",
+                                fontSize: 10,
+                                color: '#ff0033',
+                                letterSpacing: '0.12em',
+                                marginBottom: 4,
+                            }}>{t.ppMeetPoint}</div>
+                            <div style={{
+                                fontFamily: "'Fira Sans', sans-serif",
+                                fontSize: 15,
+                                color: '#fff',
+                                fontWeight: 600,
+                                marginBottom: 2,
+                            }}>{startingPoint}</div>
+                            <div style={{
+                                fontFamily: "'Fira Sans', sans-serif",
+                                fontSize: 12,
+                                color: '#64748B',
+                            }}>{t.ppMeetPointHint}</div>
+                        </div>
+                    )}
+
+                    <p style={{
+                        fontFamily: "'Fira Sans', sans-serif",
+                        fontSize: 13,
+                        color: '#94A3B8',
+                        lineHeight: 1.6,
+                        margin: '0 0 14px',
+                    }}>
+                        {accessToken.email
+                            ? t.ppEmailLine(accessToken.email)
+                            : t.ppEmailMissing}
+                    </p>
+
+                    <p style={{
+                        padding: '10px 12px',
+                        background: 'rgba(0,210,255,0.05)',
+                        border: '1px solid rgba(0,210,255,0.15)',
+                        borderRadius: 8,
+                        fontFamily: "'Fira Sans', sans-serif",
+                        fontSize: 13,
+                        color: '#94A3B8',
+                        lineHeight: 1.5,
+                        margin: '0 0 18px',
+                    }}>{t.ppClockHint}</p>
+
+                    <button
+                        onClick={handleStartNow}
+                        disabled={activating}
+                        style={{
+                            width: '100%',
+                            padding: '14px 20px',
+                            background: activating ? '#661122' : '#ff0033',
+                            border: 'none',
+                            borderRadius: 10,
+                            color: '#fff',
+                            fontFamily: "'Fira Code', monospace",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            letterSpacing: '0.06em',
+                            cursor: activating ? 'wait' : 'pointer',
+                            minHeight: 50,
+                            marginBottom: 10,
+                        }}
+                    >▶ {activating ? t.ppCtaWait : t.ppCta}</button>
+
+                    <p style={{
+                        textAlign: 'center',
+                        fontFamily: "'Fira Code', monospace",
+                        fontSize: 11,
+                        color: '#4B5563',
+                        margin: 0,
+                        lineHeight: 1.5,
+                    }}>{t.ppLater}</p>
                 </div>
             )}
 

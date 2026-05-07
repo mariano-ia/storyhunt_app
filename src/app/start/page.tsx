@@ -304,9 +304,10 @@ function detectPromoFromUrl(): string {
 function LangPicker({ experience, onClose }: { experience: Experience; onClose: () => void }) {
   const experienceId = experience.id;
   const price = experience.price || 0;
+  const startingPoint = experience.starting_point || 'your starting point';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [defaultLang] = useState<'en' | 'es'>(() => detectLang());
+  const [lang, setLang] = useState<'en' | 'es'>(() => detectLang());
   const [email, setEmail] = useState('');
   const [promoCode, setPromoCode] = useState(() => detectPromoFromUrl());
   const [showPromo, setShowPromo] = useState(() => detectPromoFromUrl() !== '');
@@ -319,32 +320,37 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const otherLang: 'en' | 'es' = defaultLang === 'en' ? 'es' : 'en';
-
-  // Bilingual labels — keys are minimal so the picker speaks the user's language.
-  const t = defaultLang === 'es'
+  const t = lang === 'es'
     ? {
-        primary: 'Continuar en Español',
-        secondary: 'Switch to English',
-        emailLabel: 'Email (opcional, para enviarte tu acceso)',
+        eyebrow: 'ESTÁS POR DESBLOQUEAR',
+        intro: <>Una vez que pagues, podés <strong style={{ color: '#fff' }}>jugar ahora o guardar el link para tu viaje</strong>. Tu reloj de 30 días arranca cuando toques &ldquo;Start hunt&rdquo; en el punto de partida — no cuando pagás.</>,
+        startPointLabel: 'PUNTO_DE_INICIO',
+        cta: 'Continuar al pago',
+        ctaHint: '→ Pago seguro vía Stripe',
+        emailLabel: 'Email (opcional)',
+        emailHint: 'Para enviarte el link de acceso',
         emailPlaceholder: 'tu@email.com',
-        promoToggle: 'Tengo un código promo',
+        promoToggle: '¿Tenés un código promo?',
         promoPlaceholder: 'CODIGO',
-        microcopy: 'Tu reloj de 30 días arranca cuando abrís el link por primera vez. Ideal para viajes planificados.',
         loading: 'PROCESANDO...',
+        priceFooter: 'por grupo · paga 1 vez, jugás cuando quieras',
       }
     : {
-        primary: 'Continue in English',
-        secondary: 'Switch to Español',
-        emailLabel: 'Email (optional — for your access link)',
+        eyebrow: 'YOU\'RE ABOUT TO UNLOCK',
+        intro: <>After payment, you can <strong style={{ color: '#fff' }}>play now or save the link for your trip</strong>. Your 30-day clock starts when you tap &ldquo;Start hunt&rdquo; at the meeting point — not when you pay.</>,
+        startPointLabel: 'MEET_POINT',
+        cta: 'Continue to checkout',
+        ctaHint: '→ Secure payment via Stripe',
+        emailLabel: 'Email (optional)',
+        emailHint: 'To send you your access link',
         emailPlaceholder: 'you@email.com',
-        promoToggle: 'I have a promo code',
+        promoToggle: 'Have a promo code?',
         promoPlaceholder: 'CODE',
-        microcopy: 'Your 30-day clock starts the first time you open the link. Perfect for trips planned ahead.',
         loading: 'PROCESSING...',
+        priceFooter: 'per group · pay once, play whenever',
       };
 
-  const startCheckout = async (lang: 'en' | 'es') => {
+  const startCheckout = async () => {
     setLoading(true);
     setError('');
     try { window.localStorage.setItem('storyhunt_lang', lang); } catch { /* ignore */ }
@@ -406,27 +412,113 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
       <div style={{
         position: 'relative',
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 420,
         background: '#0A0A0A',
         border: '1px solid rgba(255,0,51,0.3)',
         borderRadius: 16,
-        padding: '32px 24px 20px',
+        padding: '24px 24px 20px',
+        maxHeight: '92vh',
+        overflowY: 'auto',
       }}>
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            background: 'none',
-            border: 'none',
-            color: '#4B5563',
-            cursor: 'pointer',
-            padding: 4,
-          }}
-        >
-          <X size={20} />
-        </button>
+        {/* Top row: language pill + close */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 14,
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 999,
+            padding: 3,
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            {(['en', 'es'] as const).map(L => (
+              <button
+                key={L}
+                onClick={() => setLang(L)}
+                disabled={loading}
+                style={{
+                  padding: '5px 14px',
+                  background: lang === L ? '#ff0033' : 'transparent',
+                  border: 'none',
+                  borderRadius: 999,
+                  color: lang === L ? '#fff' : '#94A3B8',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  cursor: loading ? 'wait' : 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >{L.toUpperCase()}</button>
+            ))}
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#4B5563',
+              cursor: 'pointer',
+              padding: 4,
+              lineHeight: 0,
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Eyebrow + experience name */}
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 10,
+          color: '#00d2ff',
+          letterSpacing: '0.15em',
+          margin: '0 0 6px',
+        }}>{t.eyebrow}</p>
+        <h2 style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 18,
+          color: '#fff',
+          margin: '0 0 14px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.01em',
+          lineHeight: 1.25,
+        }}>{experience.name}</h2>
+
+        {/* Intro paragraph */}
+        <p style={{
+          fontFamily: "'Fira Sans', sans-serif",
+          fontSize: 13,
+          color: '#94A3B8',
+          lineHeight: 1.6,
+          margin: '0 0 14px',
+        }}>{t.intro}</p>
+
+        {/* Starting point card */}
+        <div style={{
+          padding: '10px 12px',
+          background: 'rgba(255,0,51,0.06)',
+          border: '1px solid rgba(255,0,51,0.2)',
+          borderRadius: 8,
+          marginBottom: 16,
+        }}>
+          <div style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 9,
+            color: '#ff0033',
+            letterSpacing: '0.12em',
+            marginBottom: 3,
+          }}>{t.startPointLabel}</div>
+          <div style={{
+            fontFamily: "'Fira Sans', sans-serif",
+            fontSize: 13,
+            color: '#fff',
+            fontWeight: 500,
+          }}>{startingPoint}</div>
+        </div>
 
         {/* Email field (optional) */}
         <label style={{
@@ -435,8 +527,8 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
           fontSize: 11,
           color: '#94A3B8',
           letterSpacing: '0.05em',
-          marginBottom: 6,
-        }}>{t.emailLabel}</label>
+          marginBottom: 4,
+        }}>{t.emailLabel} <span style={{ color: '#4B5563', fontWeight: 400 }}>— {t.emailHint}</span></label>
         <input
           type="email"
           inputMode="email"
@@ -447,66 +539,61 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
           disabled={loading}
           style={{
             width: '100%',
-            padding: '12px 14px',
+            padding: '11px 14px',
             background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(0,210,255,0.2)',
             borderRadius: 8,
             color: '#fff',
             fontFamily: "'Fira Sans', sans-serif",
-            fontSize: 15,
+            fontSize: 14,
             outline: 'none',
-            marginBottom: 16,
+            marginBottom: 14,
             boxSizing: 'border-box',
           }}
         />
 
-        {/* Primary CTA — detected language */}
+        {/* Primary CTA — neutral copy, language is set via the pill above */}
         <button
-          onClick={() => startCheckout(defaultLang)}
+          onClick={startCheckout}
           disabled={loading}
           style={{
             width: '100%',
-            padding: '16px 24px',
+            padding: '14px 24px',
             background: loading ? '#661122' : '#ff0033',
             border: 'none',
-            borderRadius: 8,
+            borderRadius: 10,
             color: '#fff',
             fontFamily: "'Fira Code', monospace",
             fontSize: 14,
             fontWeight: 700,
             letterSpacing: '0.05em',
             cursor: loading ? 'wait' : 'pointer',
-            minHeight: 52,
-            marginBottom: 8,
+            minHeight: 50,
+            marginBottom: 6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
           }}
         >
-          {loading ? t.loading : t.primary}
+          {loading ? t.loading : (
+            <>
+              {t.cta}
+              <ChevronRight size={16} />
+            </>
+          )}
         </button>
-
-        {/* Switch language link */}
-        <button
-          onClick={() => startCheckout(otherLang)}
-          disabled={loading}
-          style={{
-            display: 'block',
-            width: '100%',
-            padding: '8px 0',
-            background: 'transparent',
-            border: 'none',
-            color: '#64748B',
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 12,
-            letterSpacing: '0.05em',
-            cursor: loading ? 'wait' : 'pointer',
-            textDecoration: 'underline',
-            textUnderlineOffset: 3,
-          }}
-        >
-          {t.secondary}
-        </button>
+        <p style={{
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 10,
+          color: '#4B5563',
+          textAlign: 'center',
+          margin: '0 0 12px',
+          letterSpacing: '0.05em',
+        }}>{t.ctaHint}</p>
 
         {/* Promo code (collapsed) */}
-        <div style={{ marginTop: 14, marginBottom: 12 }}>
+        <div style={{ marginBottom: 14 }}>
           {!showPromo ? (
             <button
               onClick={() => setShowPromo(true)}
@@ -548,18 +635,19 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
           )}
         </div>
 
-        {/* Buy-ahead reassurance — last touchpoint before payment */}
+        {/* Price footer */}
         <div style={{
-          padding: '10px 12px',
-          background: 'rgba(0,210,255,0.05)',
-          border: '1px solid rgba(0,210,255,0.15)',
-          borderRadius: 8,
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 12,
-          color: '#94A3B8',
-          lineHeight: 1.5,
+          paddingTop: 12,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
           textAlign: 'center',
-        }}>{t.microcopy}</div>
+          fontFamily: "'Fira Code', monospace",
+          fontSize: 11,
+          color: '#64748B',
+          letterSpacing: '0.04em',
+        }}>
+          <span style={{ color: '#ff0033', fontSize: 16, fontWeight: 700, marginRight: 6 }}>${price.toFixed(2)}</span>
+          {t.priceFooter}
+        </div>
 
         {error && (
           <p style={{

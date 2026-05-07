@@ -126,10 +126,16 @@ function generateToken(): string {
 
 export async function POST(req: NextRequest) {
     try {
-        const { session_id, token } = await req.json() as { session_id?: string; token?: string };
+        const { session_id, token, skip_activation } = await req.json() as {
+            session_id?: string;
+            token?: string;
+            skip_activation?: boolean;
+        };
         const db = getAdminDb();
 
         // If it's an SH- token, look it up + lazy-activate on first visit
+        // (unless skip_activation: true — used by the post-purchase confirmation
+        //  screen which only wants to display token info without burning the clock)
         if (token && !token.startsWith('cs_')) {
             const snap = await db.collection('access_tokens').where('token', '==', token).limit(1).get();
             if (snap.empty) {
@@ -140,7 +146,7 @@ export async function POST(req: NextRequest) {
 
             // Lazy activation: only triggers when activated_at is explicitly null
             // (legacy tokens with activated_at === undefined keep their original expires_at)
-            if (accessToken.activated_at === null) {
+            if (accessToken.activated_at === null && !skip_activation) {
                 const nowIso = new Date().toISOString();
                 const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
                 await docRef.update({
