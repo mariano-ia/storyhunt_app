@@ -138,7 +138,16 @@ Step features:
 - `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7)
 - Lee social-calendar.json del repo StoryHuntWeb en GitHub
 - Env vars requeridas: INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
-- Repo: github.com/mariano-ia/storyhunt_app
+
+### Local LaunchAgent: conversion-review (carpeta `conversion-review/`)
+- Lunes 9 AM NYC — pulls 7d PostHog → Anthropic Opus 4.7 → email Resend
+- Análisis CRO autónomo de /start con propuestas data-driven en español
+- Pipeline: pull_metrics.py → analyze.py → send_review.py (orquestado por weekly-review.sh)
+- LaunchAgent: `~/Library/LaunchAgents/com.storyhunt.conversion-review.plist`
+- Wrapper TCC-safe: `~/Library/Scripts/storyhunt/conversion-cron.sh`
+- Trigger manual: `bash conversion-review/weekly-review.sh`
+- Env vars requeridas: ANTHROPIC_API_KEY, POSTHOG_PERSONAL_API_KEY, POSTHOG_PROJECT_ID, POSTHOG_HOST, RESEND_API_KEY
+- state.json + logs gitignored — solo en disco local
 - Repo: github.com/mariano-ia/storyhunt_app
 
 ## Estructura de archivos
