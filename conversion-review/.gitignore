@@ -1,0 +1,5 @@
+# Runtime artifacts — never commit
+state.json
+review.log
+.last-metrics.json
+.last-analysis.json
