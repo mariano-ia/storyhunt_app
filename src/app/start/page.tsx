@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, MapPin, Smartphone, Compass, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, Star } from 'lucide-react';
 import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead } from '@/lib/analytics';
 import { syncExperimentsToPostHog } from '@/lib/experiments';
 
@@ -147,52 +147,20 @@ function ExperienceCard({ exp, onBuy }: { exp: Experience; onBuy: (exp: Experien
 
 const FAQ_ITEMS: { q: string; a: string }[] = [
   {
-    q: 'Do I need an app? Is this a download?',
-    a: 'No. It runs in your phone’s browser. Nothing to install, nothing to update.',
-  },
-  {
     q: 'Do I need international data?',
-    a: 'You need basic 4G/5G to receive clues as you walk. Most US carriers and prepaid SIMs work fine. Wifi-only doesn’t work mid-walk.',
-  },
-  {
-    q: 'What if I get lost?',
-    a: 'Each clue includes GPS-friendly hints (street names, landmarks). You can also tap "I’m stuck" to get the next hint without losing the experience.',
-  },
-  {
-    q: 'What if it rains?',
-    a: 'You can pause and resume on a different day. The 30-day window starts on first tap, so no rush.',
-  },
-  {
-    q: 'Is it safe to walk alone?',
-    a: 'All routes go through public, well-trafficked NYC neighborhoods. Designed to feel adventurous, not dangerous. Best done in daylight.',
-  },
-  {
-    q: 'What time of day works best?',
-    a: 'Anytime between 9am and 9pm. Most hunts assume daylight so you can see the visual details.',
-  },
-  {
-    q: 'How long is the walk?',
-    a: '2–3 hours total, ~2–3 km of walking with frequent stops. You can pause anytime.',
+    a: 'Yes — basic 4G/5G to receive clues as you walk. Most US carriers and prepaid SIMs work fine. Wifi-only doesn’t work mid-walk.',
   },
   {
     q: 'Can I do it with my partner or friends?',
     a: 'Yes — one purchase covers your whole group. You walk and decode together, sharing the same chat.',
   },
   {
-    q: 'What kind of clues are these?',
-    a: 'Real chat messages from a narrator character. Sometimes riddles, sometimes "go to X and find Y", sometimes "look up here — what do you see?".',
-  },
-  {
-    q: 'What if my phone dies mid-walk?',
-    a: 'Use the same link the next day to continue where you left off. You have 30 days from first tap.',
+    q: 'How long is the walk?',
+    a: '2–3 hours total, ~2–3 km with frequent stops. You can pause and resume anytime within 30 days.',
   },
   {
     q: 'What’s the refund policy?',
     a: 'If something is genuinely broken on our end, full refund. Just email hello@storyhunt.city.',
-  },
-  {
-    q: 'Will my battery survive?',
-    a: 'About 3–5% per hour of active use. Bring a portable charger if you’re paranoid — we recommend it anyway.',
   },
 ];
 
@@ -708,175 +676,99 @@ export default function StartPage() {
       color: '#fff',
       minHeight: '100dvh',
     }}>
-      {/* ─── Hero with video background ───────────────────────────── */}
+      {/* ─── Hero with CSS-only background ────────────────────────── */}
       <section style={{
-        minHeight: '100dvh',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
+        background: '#050505',
       }}>
-        {/* Video background */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            zIndex: 0,
-            opacity: 0.4,
-          }}
-        >
-          <source src="/hero-bg.mp4" type="video/mp4" />
-        </video>
-
-        {/* Gradient overlay */}
+        {/* Background: radial accents (red top-left, cyan top-right) + bottom fade to black */}
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(180deg, rgba(5,5,5,0.6) 0%, rgba(5,5,5,0.85) 60%, #050505 100%)',
+          background:
+            'radial-gradient(ellipse 80% 60% at 15% 10%, rgba(255,0,51,0.18) 0%, transparent 60%),' +
+            'radial-gradient(ellipse 70% 60% at 85% 15%, rgba(0,210,255,0.14) 0%, transparent 60%),' +
+            'linear-gradient(180deg, rgba(5,5,5,0) 0%, rgba(5,5,5,0.85) 70%, #050505 100%)',
           zIndex: 1,
         }} />
 
         {/* Scanline */}
         <div className="start-scanline" />
 
-        {/* Hero content */}
+        {/* Hero content — 4 blocks: logo / headline / steps / CTA */}
         <div style={{
           position: 'relative',
           zIndex: 2,
-          flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '32px 24px 32px',
-          minHeight: '100dvh',
+          padding: '24px 24px 40px',
+          gap: 36,
         }}>
-          {/* Top: logo + tag */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <img src="/logo.png" alt="StoryHunt" style={{ height: 24, opacity: 0.8 }} />
-            <div style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 10,
-              color: '#ff0033',
-              letterSpacing: '0.1em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              <span style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: '#ff0033',
-                animation: 'startBlink 1.5s ease-in-out infinite',
-              }} />
-              LIVE_IN_NYC
-            </div>
+          {/* Block 1: Logo */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <img src="/logo.png" alt="StoryHunt" style={{ height: 24, opacity: 0.85 }} />
           </div>
 
-          {/* Middle: main title */}
-          <div style={{ textAlign: 'center' }}>
-            <p style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 11,
-              color: '#00d2ff',
-              letterSpacing: '0.15em',
-              marginBottom: 20,
-              opacity: 0.7,
-            }}>
-              // SIGNAL_ACQUIRED
-            </p>
+          {/* Block 2: Value proposition */}
+          <h1 className="start-glitch" style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 'clamp(20px, 5.5vw, 30px)',
+            fontWeight: 700,
+            color: '#fff',
+            textTransform: 'uppercase',
+            letterSpacing: '0.01em',
+            lineHeight: 1.2,
+            margin: 0,
+            textAlign: 'center',
+          }}>
+            The <span style={{ color: '#ff0033' }}>New York</span> walking tour<br />that chats back
+          </h1>
 
-            <h1 className="start-glitch" style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 'clamp(22px, 6.5vw, 38px)',
-              fontWeight: 700,
-              color: '#fff',
-              textTransform: 'uppercase',
-              letterSpacing: '0.01em',
-              lineHeight: 1.15,
-              marginBottom: 24,
-            }}>
-              The 2-hour walk<br />that shows you the<br /><span style={{ color: '#ff0033' }}>NYC</span> nobody else sees.
-            </h1>
-
-            <p style={{
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 'clamp(14px, 3.8vw, 16px)',
-              color: '#CBD5E1',
-              lineHeight: 1.65,
-              marginBottom: 12,
-              maxWidth: 420,
-              marginLeft: 'auto',
-              marginRight: 'auto',
-            }}>
-              Your phone sends real-time clues. You walk where they tell you.
-            </p>
-
-            <p style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 11,
-              color: '#94A3B8',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-            }}>
-              No app · No guide · No tour group · 2 hours
-            </p>
+          {/* Block: 3 steps */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 8,
+            maxWidth: 480,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            width: '100%',
+          }}>
+            {[
+              { label: '01', text: 'Walk real NYC blocks' },
+              { label: '02', text: 'A character texts you clues' },
+              { label: '03', text: 'Decode hidden stories' },
+            ].map(({ label, text }, i) => (
+              <div
+                key={i}
+                style={{
+                  textAlign: 'center',
+                  fontFamily: "'Fira Sans', sans-serif",
+                  fontSize: 14,
+                  color: '#E2E8F0',
+                  lineHeight: 1.4,
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale',
+                }}
+              >
+                <div style={{
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 12,
+                  color: '#ff3355',
+                  letterSpacing: '0.08em',
+                  fontWeight: 700,
+                  marginBottom: 6,
+                }}>{label}</div>
+                {text}
+              </div>
+            ))}
           </div>
 
-          {/* Bottom: how it works (compact) + CTA */}
+          {/* Block: CTA + price + buy-ahead badge */}
           <div>
-            {/* Compact how-it-works */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 8,
-              marginBottom: 24,
-              maxWidth: 400,
-              margin: '0 auto 24px',
-            }}>
-              {[
-                { icon: Smartphone, label: '01', text: 'Open your phone' },
-                { icon: MapPin, label: '02', text: 'Walk to the start' },
-                { icon: Compass, label: '03', text: 'Decode the city' },
-              ].map(({ icon: Icon, label, text }, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: '12px 8px',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 10,
-                    textAlign: 'center',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  <div style={{
-                    fontFamily: "'Fira Code', monospace",
-                    fontSize: 11,
-                    color: '#ff0033',
-                    letterSpacing: '0.08em',
-                    marginBottom: 4,
-                  }}>{label}</div>
-                  <Icon size={18} color="#00d2ff" style={{ marginBottom: 4 }} />
-                  <div style={{
-                    fontFamily: "'Fira Sans', sans-serif",
-                    fontSize: 12,
-                    color: '#fff',
-                    lineHeight: 1.3,
-                  }}>{text}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
             <a
               href="#hunts"
               style={{
@@ -902,281 +794,96 @@ export default function StartPage() {
                 boxShadow: '0 0 40px rgba(255,0,51,0.3)',
               }}
             >
-              CHOOSE_YOUR_HUNT
+              CHOOSE_YOUR_EXPERIENCE
               <ChevronRight size={20} />
             </a>
 
-            {/* Price */}
             <p style={{
               textAlign: 'center',
               marginTop: 14,
+              marginBottom: 12,
               fontFamily: "'Fira Code', monospace",
             }}>
-              <span style={{ color: '#4B5563', textDecoration: 'line-through', fontSize: 14, marginRight: 8 }}>$14.99</span>
-              <span style={{ color: '#ff0033', fontSize: 18, fontWeight: 700 }}>$9.99</span>
-              <span style={{ color: '#64748B', fontSize: 12, marginLeft: 8 }}>per group</span>
+              <span style={{ color: '#94A3B8', textDecoration: 'line-through', fontSize: 14, marginRight: 8 }}>$14.99</span>
+              <span style={{ color: '#ff3355', fontSize: 18, fontWeight: 700 }}>$9.99</span>
+              <span style={{ color: '#CBD5E1', fontSize: 13, marginLeft: 8 }}>flat — covers your whole group</span>
             </p>
 
-            {/* Buy-ahead badge — destrabar al turista planificador */}
             <p style={{
               textAlign: 'center',
-              marginTop: 10,
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 10,
-              color: '#00d2ff',
-              letterSpacing: '0.08em',
-              opacity: 0.85,
+              margin: 0,
+              fontFamily: "'Fira Sans', sans-serif",
+              fontSize: 13,
+              color: '#E2E8F0',
+              lineHeight: 1.5,
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
             }}>
-              COMING_TO_NYC // BUY_NOW · ACTIVATE_ON_ARRIVAL
+              Full refund if anything’s broken · <span style={{ color: '#fff', fontWeight: 600 }}>30-day flexible window</span>
             </p>
           </div>
         </div>
       </section>
 
-      {/* ─── How it works in practice (chat demo) ──────────────────── */}
+      {/* ─── Editor's Choice: award-style seal ────────────────────── */}
       <section style={{
-        padding: '60px 24px',
-        maxWidth: 720,
+        padding: '40px 24px 24px',
+        maxWidth: 560,
         margin: '0 auto',
+        textAlign: 'center',
       }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 12,
-          color: '#00d2ff',
-          letterSpacing: '0.1em',
-          textAlign: 'center',
-          marginBottom: 12,
-        }}>HOW_IT_WORKS_IN_PRACTICE</p>
-
-        <h2 style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 'clamp(18px, 4.5vw, 24px)',
-          fontWeight: 700,
-          color: '#fff',
-          textAlign: 'center',
-          marginBottom: 24,
-          lineHeight: 1.3,
+        <div className="editor-badge" style={{
+          display: 'inline-flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+          padding: '20px 40px 22px',
+          background: 'linear-gradient(180deg, rgba(255,0,51,0.12), rgba(255,0,51,0.04))',
+          border: '1.5px solid rgba(255,0,51,0.55)',
+          borderRadius: 12,
+          marginBottom: 18,
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
         }}>
-          You walk. Your phone messages you.<br />You decode the city.
-        </h2>
-
-        {/* Chat demo */}
-        <div style={{
-          maxWidth: 420,
-          margin: '0 auto 24px',
-          padding: '20px',
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: 16,
-        }}>
-          {[
-            { side: 'left', text: "You're standing in front of the New York Public Library. Look up at the lions. The one on the left has a name. Find it." },
-            { side: 'right', text: 'Patience' },
-            { side: 'left', text: "Right. The one on the right is Fortitude. They've watched this city since 1911. Now walk east on 42nd. Stop when you see something marked 'TIMES'." },
-            { side: 'right', text: 'I see a clock' },
-            { side: 'left', text: "Look closer. The numbers aren't numbers. They tell time the old way." },
-          ].map((m, i) => {
-            const isLeft = m.side === 'left';
-            return (
-              <div
-                key={i}
-                className="hiw-bubble"
-                style={{
-                  display: 'flex',
-                  justifyContent: isLeft ? 'flex-start' : 'flex-end',
-                  marginBottom: 8,
-                  // Stagger fade-in
-                  animation: 'hiwFadeIn 0.5s ease-out forwards',
-                  animationDelay: `${i * 0.6}s`,
-                  opacity: 0,
-                }}
-              >
-                <div style={{
-                  maxWidth: '78%',
-                  padding: '10px 14px',
-                  borderRadius: isLeft ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
-                  background: isLeft ? 'rgba(255,255,255,0.06)' : 'rgba(0,210,255,0.12)',
-                  border: `1px solid ${isLeft ? 'rgba(255,255,255,0.08)' : 'rgba(0,210,255,0.18)'}`,
-                  fontFamily: "'Fira Sans', sans-serif",
-                  fontSize: 14,
-                  color: isLeft ? '#E2E8F0' : '#E0F7FF',
-                  lineHeight: 1.45,
-                }}>
-                  {m.text}
-                </div>
-              </div>
-            );
-          })}
+          <div style={{ display: 'flex', gap: 3 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Star key={i} size={16} fill="#FFB800" color="#FFB800" strokeWidth={1.5} />
+            ))}
+          </div>
+          <span style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 15,
+            color: '#fff',
+            letterSpacing: '0.14em',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+          }}>
+            Editor&apos;s Choice
+          </span>
+          <span style={{
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 10,
+            color: 'rgba(255,255,255,0.72)',
+            letterSpacing: '0.2em',
+          }}>
+            2026 · STORYHUNT NYC
+          </span>
         </div>
 
         <p style={{
           fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 14,
+          fontSize: 13,
           color: '#94A3B8',
-          textAlign: 'center',
-          lineHeight: 1.6,
+          lineHeight: 1.55,
           margin: 0,
+          maxWidth: 380,
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
         }}>
-          2&ndash;3 hours. 8&ndash;12 stops. Hidden details everywhere.<br />
-          <span style={{ color: '#fff', fontWeight: 600 }}>No tour guide. No bus. No group.</span>
+          Hand-crafted in NYC by writers, photographers, and people who walk these streets.
         </p>
-      </section>
-
-      {/* ─── Not a tour ───────────────────────────────────────────── */}
-      <section style={{
-        padding: '60px 24px',
-        maxWidth: 600,
-        margin: '0 auto',
-      }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 12,
-          color: '#ff0033',
-          letterSpacing: '0.1em',
-          textAlign: 'center',
-          marginBottom: 32,
-        }}>NOT_A_TOUR</p>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: 12,
-          marginBottom: 20,
-        }}>
-          {[
-            { label: 'Duration', value: '2-3 hours' },
-            { label: 'Group size', value: 'You + your group' },
-            { label: 'Guide', value: 'Your phone' },
-            { label: 'Schedule', value: 'Anytime' },
-          ].map(({ label, value }, i) => (
-            <div key={i} style={{
-              padding: 14,
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: 10,
-            }}>
-              <div style={{
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 10,
-                color: '#4B5563',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginBottom: 4,
-              }}>{label}</div>
-              <div style={{
-                fontFamily: "'Fira Sans', sans-serif",
-                fontSize: 14,
-                color: '#fff',
-                fontWeight: 500,
-              }}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{
-          padding: '16px',
-          background: 'rgba(255,0,51,0.05)',
-          border: '1px solid rgba(255,0,51,0.15)',
-          borderRadius: 10,
-          textAlign: 'center',
-          fontFamily: "'Fira Sans', sans-serif",
-          fontSize: 14,
-          color: '#94A3B8',
-          lineHeight: 1.6,
-        }}>
-          One purchase covers <span style={{ color: '#fff', fontWeight: 600 }}>your entire group</span>.
-          <br />No per-person pricing.
-        </div>
-      </section>
-
-      {/* ─── WHEN: buy-ahead vs in-NYC ─────────────────────────────── */}
-      <section style={{
-        padding: '20px 24px 60px',
-        maxWidth: 720,
-        margin: '0 auto',
-      }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 12,
-          color: '#00d2ff',
-          letterSpacing: '0.1em',
-          textAlign: 'center',
-          marginBottom: 24,
-        }}>WHEN</p>
-
-        <div className="start-when-grid">
-          {/* Planning a trip */}
-          <div className="start-when-card start-when-card--planning">
-            <div className="start-when-label" style={{ color: '#00d2ff' }}>🛬 PLANNING_YOUR_TRIP</div>
-            <p className="start-when-headline">Buy now.</p>
-            <p className="start-when-body">Your 30-day clock starts the first time you open the link — not before.</p>
-          </div>
-
-          {/* Already in NYC */}
-          <div className="start-when-card start-when-card--here">
-            <div className="start-when-label" style={{ color: '#ff0033' }}>📍 ALREADY_IN_NYC</div>
-            <p className="start-when-headline">Buy now.</p>
-            <p className="start-when-body">Get your access link in under 60 seconds.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── What you get ──────────────────────────────────────────── */}
-      <section style={{
-        padding: '20px 24px 60px',
-        maxWidth: 600,
-        margin: '0 auto',
-      }}>
-        <p style={{
-          fontFamily: "'Fira Code', monospace",
-          fontSize: 12,
-          color: '#00d2ff',
-          letterSpacing: '0.1em',
-          textAlign: 'center',
-          marginBottom: 20,
-        }}>WHAT_YOU_GET</p>
-
-        <ul style={{
-          listStyle: 'none',
-          padding: 0,
-          margin: 0,
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: 10,
-        }}>
-          {[
-            'A unique link sent to your email after purchase',
-            'Works on any modern phone — no app to download',
-            'Pause and resume anytime within 30 days from first tap',
-            'One link covers your whole group',
-            'Live chat-style narration — not a recording',
-            'GPS-friendly hints in case you get lost',
-            'Email support if something goes wrong',
-          ].map((item, i) => (
-            <li key={i} style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 12,
-              padding: '10px 14px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: 10,
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 14,
-              color: '#CBD5E1',
-              lineHeight: 1.5,
-            }}>
-              <span style={{
-                color: '#00ff66',
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 14,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}>✓</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       {/* ─── Available Hunts ──────────────────────────────────────── */}
@@ -1192,7 +899,7 @@ export default function StartPage() {
           letterSpacing: '0.1em',
           textAlign: 'center',
           marginBottom: 32,
-        }}>AVAILABLE_HUNTS</p>
+        }}>AVAILABLE_EXPERIENCES</p>
 
         {!loaded ? (
           <div style={{ textAlign: 'center', color: '#4B5563', padding: 40 }}>Loading...</div>
@@ -1280,7 +987,7 @@ export default function StartPage() {
             cursor: 'pointer',
           }}
         >
-          START_YOUR_HUNT
+          START_YOUR_EXPERIENCE
           <ChevronRight size={18} />
         </a>
 
@@ -1639,64 +1346,6 @@ export default function StartPage() {
           95% { transform: translate(-1px, 0); opacity: 1; }
         }
 
-        @keyframes startBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-
-        @keyframes hiwFadeIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* WHEN section: 2 columns side-by-side at all widths (they're comparative) */
-        .start-when-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-        .start-when-card {
-          padding: 20px 18px;
-          border-radius: 12px;
-        }
-        .start-when-card--planning {
-          background: rgba(0,210,255,0.04);
-          border: 1px solid rgba(0,210,255,0.2);
-        }
-        .start-when-card--here {
-          background: rgba(255,0,51,0.04);
-          border: 1px solid rgba(255,0,51,0.2);
-        }
-        .start-when-label {
-          font-family: 'Fira Code', monospace;
-          font-size: 11px;
-          letter-spacing: 0.1em;
-          margin-bottom: 10px;
-          line-height: 1.3;
-        }
-        .start-when-headline {
-          font-family: 'Fira Sans', sans-serif;
-          font-size: 14px;
-          color: #fff;
-          font-weight: 600;
-          line-height: 1.4;
-          margin: 0 0 6px;
-        }
-        .start-when-body {
-          font-family: 'Fira Sans', sans-serif;
-          font-size: 13px;
-          color: #94A3B8;
-          line-height: 1.6;
-          margin: 0;
-        }
-        @media (max-width: 480px) {
-          .start-when-grid { gap: 8px; }
-          .start-when-card { padding: 14px 12px; border-radius: 10px; }
-          .start-when-label { font-size: 9px; letter-spacing: 0.06em; margin-bottom: 8px; }
-          .start-when-headline { font-size: 12px; margin-bottom: 4px; }
-          .start-when-body { font-size: 11px; line-height: 1.45; }
-        }
-
         .faq-cursor {
           color: #00d2ff;
           margin-left: 2px;
@@ -1705,6 +1354,23 @@ export default function StartPage() {
         @keyframes faqCursorBlink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0; }
+        }
+
+        .editor-badge {
+          animation: editorBadgePulse 3.6s ease-in-out infinite;
+        }
+        @keyframes editorBadgePulse {
+          0%, 100% {
+            box-shadow: 0 0 24px rgba(255, 0, 51, 0.16);
+            border-color: rgba(255, 0, 51, 0.5);
+          }
+          50% {
+            box-shadow: 0 0 56px rgba(255, 0, 51, 0.42);
+            border-color: rgba(255, 0, 51, 0.85);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .editor-badge { animation: none; }
         }
 
         ::-webkit-scrollbar { display: none; }
