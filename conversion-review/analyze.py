@@ -91,7 +91,7 @@ REGLAS:
 """
 
 
-def call_anthropic(env, system_prompt, user_message, model="claude-sonnet-4-6", max_tokens=4096):
+def call_anthropic(env, system_prompt, user_message, model="claude-opus-4-7", max_tokens=4096):
     """Call Anthropic Messages API. Returns the assistant text content."""
     url = "https://api.anthropic.com/v1/messages"
     body = json.dumps({
