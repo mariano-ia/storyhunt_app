@@ -61,6 +61,16 @@ DECODE_THE_CITY → storyhunt.city
 
 #NYC #StoryHunt #HiddenNYC #MysteryWalk #InteractiveAdventure #DecodeTheCity #NYCAdventure #NYCExperience`,
 
+    HOW_IT_WORKS: (topic) => `SYSTEM_BRIEF // HOW_THIS_WORKS
+
+${topic}
+
+StoryHunt is a chat-based mystery walk through NYC. No tour. No bus. No app to download. Just you, your phone, and the city.
+
+DECODE_THE_CITY → storyhunt.city
+
+#NYC #StoryHunt #HowItWorks #MysteryWalk #InteractiveAdventure #DecodeTheCity #NYCAdventure #ThingsToDoNYC #NYCExperience #SelfGuidedTour #ChatBasedAdventure`,
+
     QUOTE: (topic) => `FIELD_NOTE // NYC_DISPATCH
 
 ${topic}
