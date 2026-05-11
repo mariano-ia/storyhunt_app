@@ -8,6 +8,7 @@
 PIPELINE_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="$PIPELINE_DIR/review.log"
 METRICS_FILE="$PIPELINE_DIR/.last-metrics.json"
+META_METRICS_FILE="$PIPELINE_DIR/.last-meta-metrics.json"
 ANALYSIS_FILE="$PIPELINE_DIR/.last-analysis.json"
 STATE_FILE="$PIPELINE_DIR/state.json"
 
@@ -37,21 +38,26 @@ set -e
 
 log "=== Starting weekly conversion review ==="
 
-# 1) Pull metrics
+# 1) Pull PostHog metrics
 log "Pulling PostHog metrics..."
 python3 pull_metrics.py > "$METRICS_FILE"
 log "Metrics written: $(wc -c < "$METRICS_FILE" | tr -d ' ') bytes"
 
-# 2) Analyze
+# 2) Pull Meta Ads metrics (graceful — emits skipped: true if token missing)
+log "Pulling Meta Ads metrics..."
+python3 pull_meta_metrics.py > "$META_METRICS_FILE"
+log "Meta metrics written: $(wc -c < "$META_METRICS_FILE" | tr -d ' ') bytes"
+
+# 3) Analyze (PostHog + Meta + history + deploy log)
 log "Calling Anthropic for analysis..."
-python3 analyze.py "$METRICS_FILE" "$STATE_FILE" > "$ANALYSIS_FILE"
+python3 analyze.py "$METRICS_FILE" "$STATE_FILE" "$META_METRICS_FILE" > "$ANALYSIS_FILE"
 log "Analysis written: $(wc -c < "$ANALYSIS_FILE" | tr -d ' ') bytes"
 
-# 3) Send email
+# 4) Send email
 log "Sending review email..."
-python3 send_review.py "$ANALYSIS_FILE" "$METRICS_FILE" 2>&1 | tee -a "$LOG_FILE"
+python3 send_review.py "$ANALYSIS_FILE" "$METRICS_FILE" "$META_METRICS_FILE" 2>&1 | tee -a "$LOG_FILE"
 
-# 4) Append to state for next run's context
+# 5) Append to state for next run's context
 log "Updating state.json..."
 python3 - "$STATE_FILE" "$ANALYSIS_FILE" "$METRICS_FILE" <<'PYEOF'
 import json

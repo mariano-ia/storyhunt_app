@@ -4,9 +4,11 @@ Send weekly metrics + state history to Anthropic Claude for analysis.
 Outputs structured analysis JSON to stdout.
 
 Usage:
-    python3 analyze.py metrics.json [state.json] > analysis.json
+    python3 analyze.py metrics.json [state.json] [meta-metrics.json] > analysis.json
 
 If state.json is omitted, defaults to ./state.json (created empty if missing).
+If meta-metrics.json is provided, Meta Ads context is included in the prompt
+and the analysis correlates PostHog funnel with paid spend.
 """
 import glob
 import json
@@ -65,21 +67,28 @@ def load_deploy_log(max_entries=6):
     return "\n\n---\n\n".join(sections)
 
 
-SYSTEM_PROMPT = """Sos un analista senior de conversion-rate-optimization (CRO) trabajando con el founder de StoryHunt — un walking tour por NYC a USD 9,99 que se vive por chat ("The New York walking tour that chats back"). El producto vive en storyhunt.city y el landing bajo análisis es /start. El founder es argentino — escribile en español rioplatense (vos / podés / sería bueno...), directo y opinionado, sin diplomacia vacía.
+SYSTEM_PROMPT = """Sos un analista senior de conversion-rate-optimization (CRO) + paid media trabajando con el founder de StoryHunt — un walking tour por NYC a USD 9,99 que se vive por chat ("The New York walking tour that chats back"). El producto vive en storyhunt.city y el landing principal bajo análisis es /start. También existe /founders (campaña 100 free, lanzada 2026-05-11). El founder es argentino — escribile en español rioplatense (vos / podés / sería bueno...), directo y opinionado, sin diplomacia vacía.
 
 Cada semana recibís:
 1. Funnel de PostHog para /start (pageviews → view_item → begin_checkout → add_payment_info → purchase)
 2. Breakdown diario, fuentes de tráfico, split de devices, engagement
 3. Comparación con los 7 días previos
-4. Deploy log reciente (docs/CHANGES-YYYY-MM-DD.md, newest first) — qué se shippeó cada semana y el porqué. Úsalo para atribuir deltas a deploys concretos: si la métrica X saltó después del deploy del Y, decilo. Si una propuesta de una semana anterior aparece en un CHANGES posterior, considerala "implementada" y evaluá su impacto.
-5. Historia reciente de hipótesis ya propuestas (para no repetirte, y para dar crédito si algo propuesto antes movió la aguja)
+4. **Performance de Meta Ads últimos 7d** — spend, impressions, CTR, CPC, breakdown por campaña, daily trend, comparación WoW. Si la sección dice `"skipped": true`, decilo y seguí solo con PostHog.
+5. Deploy log reciente (docs/CHANGES-YYYY-MM-DD.md, newest first) — qué se shippeó cada semana y el porqué. Úsalo para atribuir deltas a deploys concretos: si la métrica X saltó después del deploy del Y, decilo. Si una propuesta de una semana anterior aparece en un CHANGES posterior, considerala "implementada" y evaluá su impacto.
+6. Historia reciente de hipótesis ya propuestas (para no repetirte, y para dar crédito si algo propuesto antes movió la aguja)
 
-TU JOB: producir un review semanal compacto, basado en datos. Honesto, opinionado, específico. Cero lugares comunes de CRO ("optimizá los CTAs!"). Siempre fundamentá las propuestas en los números reales y conectalas a un elemento puntual de /start.
+TU JOB: producir un review semanal compacto, basado en datos. Honesto, opinionado, específico. Cero lugares comunes de CRO ("optimizá los CTAs!"). Siempre fundamentá las propuestas en los números reales y conectalas a un elemento puntual de /start o a una campaña/ad set específico de Meta.
+
+ANÁLISIS CRUZADO PostHog ↔ Meta — Esto es lo más valioso del review. Cuando ambas fuentes están presentes:
+- Si Meta tiene CTR alto + CPC bajo pero PostHog muestra que esa cohorte no convierte → el bug está en /start. Decilo así.
+- Si PostHog muestra purchases pero Meta no tiene reportadas conversiones → falla de tracking pixel/CAPI. Flagealo.
+- Si una campaña paga mucho y no genera landing_page_view comparado con sus link_clicks → la página tarda en cargar o redirige.
+- Si Meta está corriendo a $X/día y trae N visitas, calculá CAC implícito vs ventas reales del funnel.
 
 OUTPUT — devolvé SÓLO JSON válido, sin prosa alrededor. Schema:
 
 {
-  "executive_summary": "2-3 oraciones sobre lo que pasó esta semana vs la anterior. Empezá con el número titular.",
+  "executive_summary": "2-3 oraciones sobre lo que pasó esta semana vs la anterior. Empezá con el número titular. Si Meta está corriendo, incluí spend + ratio gasto/venta.",
   "key_metrics": {
     "start_pageviews": <int>,
     "view_item": <int>,
@@ -94,13 +103,26 @@ OUTPUT — devolvé SÓLO JSON válido, sin prosa alrededor. Schema:
     "top_traffic_source": "<fuente · campaña — N sesiones>",
     "device_split": "<X% mobile · Y% desktop · Z% tablet>"
   },
-  "analysis": "150-250 palabras en español. El bottleneck de la semana y por qué. Conectalo a una sección/elemento puntual de la página. Si el sample size es muy chico para conclusiones firmes, decilo explícitamente y planteá las propuestas como 'experimentos baratos' en vez de fixes definitivos.",
+  "meta_metrics": {
+    "spend_usd": "<$X.XX>",
+    "spend_wow_delta_pct": "<+X% o -X% o 'n/a'>",
+    "impressions": <int>,
+    "clicks": <int>,
+    "ctr": "<X.XX%>",
+    "cpc": "<$X.XX>",
+    "landing_page_views": <int o null>,
+    "active_campaigns": <int>,
+    "top_campaign": "<nombre — $X.XX spend, X clicks>",
+    "implicit_cac": "<$X.XX = spend / purchases, o 'sin compras' si purchases = 0>"
+  },
+  "analysis": "150-250 palabras en español. El bottleneck de la semana y por qué. Conectalo a una sección/elemento puntual de la página O a una campaña/ad set específico. Si el sample size es muy chico para conclusiones firmes, decilo explícitamente y planteá las propuestas como 'experimentos baratos'. Si Meta está corriendo, dedicá AL MENOS una oración a correlacionar paid spend con conversiones reales.",
   "proposals": [
     {
       "rank": 1,
+      "scope": "landing | ads | tracking",
       "hypothesis": "Hipótesis concisa en una oración (en español).",
       "evidence": "Qué métrica(s) apuntan a esto. Citá el número.",
-      "implementation": "Cambio concreto — copy textual (el copy en sí podés dejarlo en inglés ya que la página está en inglés), path de archivo, o snippet de código. Nada de 'probá un headline nuevo'; escribí el headline nuevo.",
+      "implementation": "Cambio concreto — copy textual (el copy en sí podés dejarlo en inglés ya que la página está en inglés), path de archivo, snippet, o acción específica en Ads Manager (campaña X, ad set Y, cambiá Z a W).",
       "expected_impact": "Qué mirarías en el review de la próxima semana para validar. Específico (qué métrica, qué umbral).",
       "effort": "bajo | medio | alto"
     },
@@ -110,13 +132,15 @@ OUTPUT — devolvé SÓLO JSON válido, sin prosa alrededor. Schema:
 }
 
 REGLAS:
-- Máximo 3 propuestas. Calidad > cantidad.
+- Máximo 3 propuestas. Calidad > cantidad. Mezclá scopes (landing/ads/tracking) si la data lo pide.
 - Si la comparación WoW no es válida (semana previa = 0), declaralo. No fabriques tendencias.
 - No propongas cambios ya testeados en las últimas 4 semanas del state, salvo que la data muestre regresión.
-- Si la data es ambigua (N chico), preferí "experimentos baratos" (copy/headline) sobre los caros (rebuilds).
-- Mencioná paths reales cuando aplique: src/app/start/page.tsx es el landing.
+- Si la data es ambigua (N chico), preferí "experimentos baratos" (copy/headline/cambiar destino de una campaña) sobre los caros (rebuilds).
+- Mencioná paths reales cuando aplique: src/app/start/page.tsx es el landing, src/app/founders/page.tsx es la landing free de los 100 doors.
+- Para ads, mencioná nombre de campaña real cuando sugiráas cambios.
+- Si Meta data está skipped, omití `meta_metrics` del output (campos opcionales) y mencionalo en el executive_summary.
 - Lenguaje claro. Cero jerga CRO porque sí.
-- IMPORTANTE: escribí los textos del análisis en español rioplatense. Los nombres de métricas y eventos (begin_checkout, view_item, etc.) y los snippets de código se quedan en inglés. El copy textual de la página se queda en inglés (la página está en inglés).
+- IMPORTANTE: escribí los textos del análisis en español rioplatense. Los nombres de métricas/eventos (begin_checkout, view_item, link_click, etc.) y los snippets de código se quedan en inglés. El copy textual de la página se queda en inglés (la página está en inglés).
 """
 
 
@@ -165,15 +189,24 @@ def extract_json(text):
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit("Usage: analyze.py metrics.json [state.json]")
+        sys.exit("Usage: analyze.py metrics.json [state.json] [meta-metrics.json]")
 
     metrics_path = sys.argv[1]
     state_path = sys.argv[2] if len(sys.argv) >= 3 else os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "state.json"
     )
+    meta_path = sys.argv[3] if len(sys.argv) >= 4 else None
 
     with open(metrics_path, "r") as f:
         metrics = json.load(f)
+
+    meta_metrics = None
+    if meta_path and os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r") as f:
+                meta_metrics = json.load(f)
+        except json.JSONDecodeError:
+            meta_metrics = None
 
     state = {"history": []}
     if os.path.exists(state_path):
@@ -193,6 +226,19 @@ def main():
         "Here is this week's PostHog data for /start:\n"
         f"```json\n{json.dumps(metrics, indent=2, default=str)}\n```",
     ]
+    if meta_metrics is not None:
+        if meta_metrics.get("skipped"):
+            message_parts.append(
+                "Meta Ads data was SKIPPED this week — no token configured:\n"
+                f"```json\n{json.dumps(meta_metrics, indent=2)}\n```\n"
+                "Continue the analysis using only PostHog data and note the missing Meta context."
+            )
+        else:
+            message_parts.append(
+                "Meta Ads performance last 7d (account-level + per-campaign + daily trend). "
+                "Correlate this with the PostHog funnel above — same audience, same week:\n"
+                f"```json\n{json.dumps(meta_metrics, indent=2, default=str)}\n```"
+            )
     if deploy_log:
         message_parts.append(
             "Recent deploys (newest first) — what was shipped, when, and the why. "
