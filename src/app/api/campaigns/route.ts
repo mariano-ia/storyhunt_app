@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 
-const META_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
-const AD_ACCOUNT_ID = 'act_1614086746553655';
+// Accept either env var name for backwards compatibility:
+// - META_ADS_TOKEN: the name used by meta-ads/ tooling + conversion-review cron
+// - META_ADS_ACCESS_TOKEN: the legacy name in this route
+const META_TOKEN = process.env.META_ADS_TOKEN || process.env.META_ADS_ACCESS_TOKEN || '';
+const AD_ACCOUNT_ID = process.env.META_AD_ACCOUNT_ID || 'act_1614086746553655';
 
 type MetaAction = { action_type: string; value: string };
 
@@ -29,7 +32,10 @@ async function fetchMeta(path: string, params: Record<string, string> = {}): Pro
 
 export async function GET() {
   if (!META_TOKEN) {
-    return NextResponse.json({ error: 'META_ADS_ACCESS_TOKEN not configured' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'META_ADS_TOKEN (or legacy META_ADS_ACCESS_TOKEN) not configured' },
+      { status: 500 }
+    );
   }
 
   try {
