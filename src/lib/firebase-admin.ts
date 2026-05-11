@@ -4,13 +4,37 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 let adminApp: App;
 
+function parseServiceAccount(raw: string): Record<string, unknown> {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        // dotenv may convert \n escape sequences inside string values (like private_key) to actual newlines,
+        // which is invalid JSON. Walk the string and re-escape literal control chars inside string literals.
+        let out = '';
+        let inStr = false;
+        let escaped = false;
+        for (const c of raw) {
+            if (escaped) { out += c; escaped = false; continue; }
+            if (c === '\\') { out += c; escaped = true; continue; }
+            if (c === '"') { inStr = !inStr; out += c; continue; }
+            if (inStr) {
+                if (c === '\n') { out += '\\n'; continue; }
+                if (c === '\r') { out += '\\r'; continue; }
+                if (c === '\t') { out += '\\t'; continue; }
+            }
+            out += c;
+        }
+        return JSON.parse(out);
+    }
+}
+
 function getAdminApp(): App {
     if (getApps().length === 0) {
         const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
         if (serviceAccount) {
             // Full credentials — needed for Firestore admin writes
-            const parsed = JSON.parse(serviceAccount);
-            adminApp = initializeApp({ credential: cert(parsed) });
+            const parsed = parseServiceAccount(serviceAccount);
+            adminApp = initializeApp({ credential: cert(parsed as Parameters<typeof cert>[0]) });
         } else {
             // Fallback: project ID only (sufficient for verifyIdToken)
             adminApp = initializeApp({
