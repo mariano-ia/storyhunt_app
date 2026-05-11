@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  trackViewContent,
+  trackInitiateCheckout,
+  trackAddPaymentInfo,
+  flushPendingEvents,
+} from '@/lib/analytics';
 
 type Experience = {
   id: string;
@@ -36,7 +42,11 @@ export default function FoundersPage() {
       .then(r => r.json())
       .then(data => {
         const all: Experience[] = Array.isArray(data) ? data : (data.experiences || []);
-        setExperiences(all.filter(e => e.status === 'published'));
+        const published = all.filter(e => e.status === 'published');
+        setExperiences(published);
+        if (published.length > 0) {
+          trackViewContent(published.map(e => e.id), { source: 'founders_landing', campaign: 'founders_100_doors' });
+        }
       })
       .catch(() => setError('Could not load doors. Reload the page.'))
       .finally(() => setLoading(false));
@@ -45,6 +55,12 @@ export default function FoundersPage() {
   const handleClaim = async (exp: Experience) => {
     setCheckoutLoading(exp.id);
     setError('');
+    trackInitiateCheckout(exp.id, 0, lang, {
+      content_name: exp.name,
+      coupon: PROMO_CODE,
+      source: 'founders_landing',
+      campaign: 'founders_100_doors',
+    });
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -57,6 +73,13 @@ export default function FoundersPage() {
       });
       const data = await res.json();
       if (data.url) {
+        trackAddPaymentInfo(exp.id, 0, {
+          content_name: exp.name,
+          coupon: PROMO_CODE,
+          source: 'founders_landing',
+          campaign: 'founders_100_doors',
+        }, { flush: true });
+        await flushPendingEvents();
         window.location.href = data.url;
       } else {
         setError(data.error || 'Doors closed. Try another.');
