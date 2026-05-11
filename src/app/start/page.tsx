@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, X, Star } from 'lucide-react';
-import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead } from '@/lib/analytics';
+import { trackViewContent, trackInitiateCheckout, trackAddPaymentInfo, trackLead, flushPendingEvents } from '@/lib/analytics';
 import { syncExperimentsToPostHog } from '@/lib/experiments';
 
 // ─── Experience Card ────────────────────────────────────────────────────────
@@ -344,11 +344,14 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
       clearTimeout(timeoutId);
       const data = await res.json();
       if (data.url) {
-        // AddPaymentInfo: user is about to enter payment details on Stripe
+        // AddPaymentInfo: user is about to enter payment details on Stripe.
+        // flush: true → PostHog send_instantly + GA4 beacon. Then await flushPendingEvents
+        // so Meta Pixel (no flush API) has time to fire its XHR before navigation.
         trackAddPaymentInfo(experienceId, price, {
           content_name: experience.name,
           coupon: promoCode.trim() || undefined,
-        });
+        }, { flush: true });
+        await flushPendingEvents();
         window.location.href = data.url;
       } else {
         setError(data.error || 'Error creating checkout session');
@@ -631,6 +634,62 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
   );
 }
 
+// ─── Chat Preview ───────────────────────────────────────────────────────────
+// Plays once on mount: two typing bubbles in parallel, resolve staggered to
+// text, then third bubble drops in. Stops static after ~2.4s. Decorative.
+
+function ChatPreview() {
+  const [phase, setPhase] = useState(0); // 0=typing both · 1=left text · 2=right text · 3=third bubble
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase(1), 700);
+    const t2 = setTimeout(() => setPhase(2), 1500);
+    const t3 = setTimeout(() => setPhase(3), 2400);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        maxWidth: 360,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      {phase < 1 ? (
+        <div key="b1-typing" className="sh-chat-bubble sh-chat-bubble--left sh-chat-bubble--typing">
+          <span className="sh-typing-dots"><span /><span /><span /></span>
+        </div>
+      ) : (
+        <div key="b1-text" className="sh-chat-bubble sh-chat-bubble--left">
+          Did you know 21 elephants once walked across the Brooklyn Bridge?
+        </div>
+      )}
+
+      {phase < 2 ? (
+        <div key="b2-typing" className="sh-chat-bubble sh-chat-bubble--right sh-chat-bubble--typing">
+          <span className="sh-typing-dots"><span /><span /><span /></span>
+        </div>
+      ) : (
+        <div key="b2-text" className="sh-chat-bubble sh-chat-bubble--right">
+          wait, elephants??
+        </div>
+      )}
+
+      {phase >= 3 && (
+        <div key="b3" className="sh-chat-bubble sh-chat-bubble--left">
+          1883 opening day. P.T. Barnum led them to prove it wouldn&apos;t collapse. You&apos;re standing on the same stones.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function StartPage() {
@@ -684,143 +743,263 @@ export default function StartPage() {
         flexDirection: 'column',
         background: '#050505',
       }}>
-        {/* Background: radial accents (red top-left, cyan top-right) + bottom fade to black */}
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'radial-gradient(ellipse 80% 60% at 15% 10%, rgba(255,0,51,0.18) 0%, transparent 60%),' +
-            'radial-gradient(ellipse 70% 60% at 85% 15%, rgba(0,210,255,0.14) 0%, transparent 60%),' +
-            'linear-gradient(180deg, rgba(5,5,5,0) 0%, rgba(5,5,5,0.85) 70%, #050505 100%)',
-          zIndex: 1,
-        }} />
+        {/* Background: 2 red blobs breathing in offset (one inhales while the other exhales) */}
+        <div className="sh-hero-bg" aria-hidden="true">
+          <div className="sh-hero-bg-blob sh-hero-bg-blob--1" />
+          <div className="sh-hero-bg-blob sh-hero-bg-blob--2" />
+        </div>
 
         {/* Scanline */}
         <div className="start-scanline" />
 
-        {/* Hero content — 4 blocks: logo / headline / steps / CTA */}
+        {/* Hero styles — keyframes for animated gradient, chat bubbles, typing dots */}
+        <style>{`
+          @keyframes sh-hero-gradient {
+            0%, 100% { background-position: 0% 50%, 100% 50%; }
+            50% { background-position: 100% 50%, 0% 50%; }
+          }
+          /* Breathing red blobs — scale + opacity in sync, offset between the two
+             so one inhales while the other exhales. ~10s human-rate breathing. */
+          @keyframes sh-blob-1 {
+            0%, 100% { transform: translate(0, 0) scale(1);          opacity: 0.55; }
+            50%      { transform: translate(20%, 16%) scale(1.28);   opacity: 1;    }
+          }
+          @keyframes sh-blob-2 {
+            0%, 100% { transform: translate(0, 0) scale(1.22);       opacity: 1;    }
+            50%      { transform: translate(-18%, -12%) scale(1);    opacity: 0.55; }
+          }
+          .sh-hero-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            overflow: hidden;
+            pointer-events: none;
+            background: linear-gradient(180deg, rgba(5,5,5,0) 0%, rgba(5,5,5,0.65) 85%, #050505 100%);
+          }
+          .sh-hero-bg-blob {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            will-change: transform, opacity;
+          }
+          .sh-hero-bg-blob--1 {
+            top: -18%;
+            left: -22%;
+            width: 80%;
+            height: 70%;
+            background: rgba(255, 0, 51, 0.70);
+            filter: blur(70px);
+            animation: sh-blob-1 10s ease-in-out infinite;
+          }
+          .sh-hero-bg-blob--2 {
+            top: 18%;
+            right: -28%;
+            width: 80%;
+            height: 65%;
+            background: rgba(255, 0, 51, 0.60);
+            filter: blur(80px);
+            animation: sh-blob-2 12s ease-in-out infinite;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .sh-hero-bg-blob { animation: none !important; }
+          }
+          @keyframes sh-hero-border {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+          }
+          @keyframes sh-chat-in {
+            from { opacity: 0; transform: translateY(8px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          @keyframes sh-typing-dot {
+            0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-2px); }
+          }
+          .sh-hero-card {
+            position: relative;
+            padding: 28px 22px 24px;
+            border-radius: 22px;
+            background:
+              radial-gradient(ellipse 70% 50% at 15% 10%, rgba(255,0,51,0.10) 0%, transparent 60%),
+              radial-gradient(ellipse 70% 50% at 85% 90%, rgba(0,210,255,0.09) 0%, transparent 60%),
+              linear-gradient(135deg, #0c0c0e 0%, #0a0a0c 100%);
+            background-size: 220% 220%, 220% 220%, 100% 100%;
+            animation: sh-hero-gradient 22s ease-in-out infinite;
+            box-shadow: 0 0 80px rgba(255,0,51,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
+            overflow: hidden;
+            isolation: isolate;
+          }
+          .sh-hero-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 22px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(255,0,51,0.45) 0%, rgba(0,210,255,0.25) 50%, rgba(255,0,51,0.45) 100%);
+            background-size: 200% 100%;
+            animation: sh-hero-border 18s ease-in-out infinite;
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+                    mask-composite: exclude;
+            pointer-events: none;
+            z-index: 0;
+          }
+          .sh-chat-bubble {
+            max-width: 90%;
+            padding: 9px 13px;
+            color: #fff;
+            font-family: 'Fira Sans', sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            animation: sh-chat-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+          }
+          .sh-chat-bubble--left {
+            align-self: flex-start;
+            background: #2d2d2f;
+            border-radius: 18px 18px 18px 4px;
+          }
+          .sh-chat-bubble--right {
+            align-self: flex-end;
+            background: #0a84ff;
+            border-radius: 18px 18px 4px 18px;
+          }
+          .sh-chat-bubble--typing {
+            padding: 13px 16px;
+          }
+          .sh-typing-dots {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+          }
+          .sh-typing-dots span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.75);
+            animation: sh-typing-dot 1.2s ease-in-out infinite;
+          }
+          .sh-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+          .sh-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+          @media (prefers-reduced-motion: reduce) {
+            .sh-hero-card, .sh-hero-card::before, .sh-chat-bubble, .sh-typing-dots span {
+              animation: none !important;
+            }
+          }
+        `}</style>
+
+        {/* Hero content: card (claim → proof → CTA) + spec strip below */}
         <div style={{
           position: 'relative',
           zIndex: 2,
           display: 'flex',
           flexDirection: 'column',
-          padding: '24px 24px 40px',
-          gap: 36,
+          padding: '20px 16px 36px',
+          gap: 20,
         }}>
-          {/* Block 1: Logo */}
+          {/* Logo */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <img src="/logo.png" alt="StoryHunt" style={{ height: 24, opacity: 0.85 }} />
+            <img src="/logo.png" alt="StoryHunt" style={{ height: 22, opacity: 0.85 }} />
           </div>
 
-          {/* Block 2: Value proposition */}
-          <h1 className="start-glitch" style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 'clamp(20px, 5.5vw, 30px)',
-            fontWeight: 700,
-            color: '#fff',
-            textTransform: 'uppercase',
-            letterSpacing: '0.01em',
-            lineHeight: 1.2,
-            margin: 0,
-            textAlign: 'center',
-          }}>
-            The <span style={{ color: '#ff0033' }}>New York</span> walking tour<br />that chats back
-          </h1>
+          {/* HERO CARD: H1 + chat preview + CTA + price + refund */}
+          <div className="sh-hero-card" style={{ maxWidth: 520, margin: '0 auto', width: '100%' }}>
+            <h1 className="start-glitch" style={{
+              position: 'relative',
+              zIndex: 1,
+              fontFamily: "'Fira Code', monospace",
+              fontSize: 'clamp(20px, 5.5vw, 30px)',
+              fontWeight: 700,
+              color: '#fff',
+              textTransform: 'uppercase',
+              letterSpacing: '0.01em',
+              lineHeight: 1.2,
+              margin: '0 0 22px',
+              textAlign: 'center',
+            }}>
+              The <span style={{ color: '#ff0033' }}>New York</span> walking tour<br />that chats back
+            </h1>
 
-          {/* Block: 3 steps */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 8,
-            maxWidth: 480,
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            width: '100%',
-          }}>
-            {[
-              { label: '01', text: 'Walk real NYC blocks' },
-              { label: '02', text: 'A character texts you clues' },
-              { label: '03', text: 'Decode hidden stories' },
-            ].map(({ label, text }, i) => (
-              <div
-                key={i}
+            <div style={{ position: 'relative', zIndex: 1, marginBottom: 22 }}>
+              <ChatPreview />
+            </div>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <a
+                href="#hunts"
                 style={{
-                  textAlign: 'center',
-                  fontFamily: "'Fira Sans', sans-serif",
-                  fontSize: 14,
-                  color: '#E2E8F0',
-                  lineHeight: 1.4,
-                  WebkitFontSmoothing: 'antialiased',
-                  MozOsxFontSmoothing: 'grayscale',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  padding: '18px 36px',
+                  background: '#ff0033',
+                  border: 'none',
+                  borderRadius: 10,
+                  color: '#fff',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  minHeight: 56,
+                  maxWidth: 400,
+                  margin: '0 auto',
+                  boxShadow: '0 0 40px rgba(255,0,51,0.3)',
                 }}
               >
-                <div style={{
-                  fontFamily: "'Fira Code', monospace",
-                  fontSize: 12,
-                  color: '#ff3355',
-                  letterSpacing: '0.08em',
-                  fontWeight: 700,
-                  marginBottom: 6,
-                }}>{label}</div>
-                {text}
-              </div>
-            ))}
+                CHOOSE_YOUR_EXPERIENCE
+                <ChevronRight size={20} />
+              </a>
+
+              <p style={{
+                textAlign: 'center',
+                marginTop: 14,
+                marginBottom: 10,
+                fontFamily: "'Fira Code', monospace",
+              }}>
+                <span style={{ color: '#94A3B8', textDecoration: 'line-through', fontSize: 14, marginRight: 8 }}>$14.99</span>
+                <span style={{ color: '#ff3355', fontSize: 18, fontWeight: 700 }}>$9.99</span>
+                <span style={{ color: '#CBD5E1', fontSize: 13, marginLeft: 8 }}>flat — covers your whole group</span>
+              </p>
+
+              <p style={{
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: "'Fira Sans', sans-serif",
+                fontSize: 12,
+                color: '#94A3B8',
+                lineHeight: 1.5,
+                WebkitFontSmoothing: 'antialiased',
+                MozOsxFontSmoothing: 'grayscale',
+              }}>
+                Full refund if anything’s broken · <span style={{ color: '#CBD5E1', fontWeight: 600 }}>30-day flexible window</span>
+              </p>
+            </div>
           </div>
 
-          {/* Block: CTA + price + buy-ahead badge */}
-          <div>
-            <a
-              href="#hunts"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                padding: '18px 36px',
-                background: '#ff0033',
-                border: 'none',
-                borderRadius: 10,
-                color: '#fff',
-                fontFamily: "'Fira Code', monospace",
-                fontSize: 15,
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                minHeight: 56,
-                maxWidth: 400,
-                margin: '0 auto',
-                boxShadow: '0 0 40px rgba(255,0,51,0.3)',
-              }}
-            >
-              CHOOSE_YOUR_EXPERIENCE
-              <ChevronRight size={20} />
-            </a>
-
-            <p style={{
-              textAlign: 'center',
-              marginTop: 14,
-              marginBottom: 12,
-              fontFamily: "'Fira Code', monospace",
-            }}>
-              <span style={{ color: '#94A3B8', textDecoration: 'line-through', fontSize: 14, marginRight: 8 }}>$14.99</span>
-              <span style={{ color: '#ff3355', fontSize: 18, fontWeight: 700 }}>$9.99</span>
-              <span style={{ color: '#CBD5E1', fontSize: 13, marginLeft: 8 }}>flat — covers your whole group</span>
-            </p>
-
-            <p style={{
-              textAlign: 'center',
-              margin: 0,
-              fontFamily: "'Fira Sans', sans-serif",
-              fontSize: 13,
-              color: '#E2E8F0',
-              lineHeight: 1.5,
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
-            }}>
-              Full refund if anything’s broken · <span style={{ color: '#fff', fontWeight: 600 }}>30-day flexible window</span>
-            </p>
+          {/* Spec strip: 3 steps demoted to thin horizontal row below card */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 14,
+            flexWrap: 'wrap',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: 11,
+            color: '#94A3B8',
+            letterSpacing: '0.04em',
+            padding: '0 8px',
+            marginTop: 4,
+          }}>
+            <span><span style={{ color: '#ff3355', fontWeight: 700, marginRight: 6 }}>01</span>WALK</span>
+            <span style={{ color: '#3a3a3a' }}>·</span>
+            <span><span style={{ color: '#ff3355', fontWeight: 700, marginRight: 6 }}>02</span>CHAT</span>
+            <span style={{ color: '#3a3a3a' }}>·</span>
+            <span><span style={{ color: '#ff3355', fontWeight: 700, marginRight: 6 }}>03</span>DECODE</span>
           </div>
         </div>
       </section>

@@ -99,12 +99,19 @@ function ga4Payload(eventName: EventName, p: EventPayload): Record<string, unkno
     return base;
 }
 
+export interface TrackOptions {
+    // Set true when the event fires immediately before a navigation (window.location.href = ...).
+    // Forces PostHog to flush via send_instantly and tags GA4 with beacon transport.
+    // Caller should still `await flushPendingEvents()` afterward to give Meta Pixel time.
+    flush?: boolean;
+}
+
 /**
  * Fire an event to Meta Pixel + GA4 simultaneously, with the same `event_id`.
  * Server-side counterparts (CAPI / Measurement Protocol) should reuse the
  * `event_id` returned here for dedup.
  */
-export function track(eventName: EventName, payload: EventPayload = {}): string {
+export function track(eventName: EventName, payload: EventPayload = {}, options: TrackOptions = {}): string {
     const eventId = uuid();
 
     if (typeof window === 'undefined') return eventId;
@@ -124,12 +131,13 @@ export function track(eventName: EventName, payload: EventPayload = {}): string 
         console.warn('[analytics] fbq error', err);
     }
 
-    // GA4
+    // GA4 — always use beacon transport so events survive pagehide/navigation
     try {
         if (window.gtag) {
             window.gtag('event', ga4Name(eventName), {
                 ...ga4Payload(eventName, payload),
                 event_id: eventId, // surfaced as custom dim if defined in GA4
+                transport_type: 'beacon',
             });
         }
     } catch (err) {
@@ -139,11 +147,15 @@ export function track(eventName: EventName, payload: EventPayload = {}): string 
     // PostHog — uses GA4-style names (snake_case) for consistency with funnels
     try {
         if (posthog.__loaded) {
-            posthog.capture(ga4Name(eventName), {
-                ...payload,
-                event_id: eventId,
-                // PostHog will auto-include $current_url, $referrer, etc.
-            });
+            posthog.capture(
+                ga4Name(eventName),
+                {
+                    ...payload,
+                    event_id: eventId,
+                    // PostHog will auto-include $current_url, $referrer, etc.
+                },
+                options.flush ? { send_instantly: true } : undefined,
+            );
         }
     } catch (err) {
         console.warn('[analytics] posthog error', err);
@@ -151,6 +163,12 @@ export function track(eventName: EventName, payload: EventPayload = {}): string 
 
     logToLocalStorage(eventName, payload, eventId);
     return eventId;
+}
+
+// Await before window.location.href = ... so Meta Pixel's async XHR has time to flush.
+// GA4 (beacon) and PostHog (send_instantly) don't need this, but fbq has no flush API.
+export function flushPendingEvents(ms = 300): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Convenience wrappers — keeps callsites readable
@@ -163,8 +181,8 @@ export const trackLead = (extra?: EventPayload) =>
 export const trackInitiateCheckout = (experienceId: string, value: number, lang: string, extra?: EventPayload) =>
     track('InitiateCheckout', { content_ids: [experienceId], value, currency: 'USD', lang, ...extra });
 
-export const trackAddPaymentInfo = (experienceId: string, value: number, extra?: EventPayload) =>
-    track('AddPaymentInfo', { content_ids: [experienceId], value, currency: 'USD', ...extra });
+export const trackAddPaymentInfo = (experienceId: string, value: number, extra?: EventPayload, options?: TrackOptions) =>
+    track('AddPaymentInfo', { content_ids: [experienceId], value, currency: 'USD', ...extra }, options);
 
 export const trackPurchase = (experienceId: string, value: number, transactionId: string, extra?: EventPayload) =>
     track('Purchase', { content_ids: [experienceId], value, currency: 'USD', transaction_id: transactionId, ...extra });
