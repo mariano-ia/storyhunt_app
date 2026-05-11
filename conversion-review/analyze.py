@@ -8,6 +8,7 @@ Usage:
 
 If state.json is omitted, defaults to ./state.json (created empty if missing).
 """
+import glob
 import json
 import os
 import ssl
@@ -37,13 +38,41 @@ def load_env():
     return env
 
 
+def load_deploy_log(max_entries=6):
+    """Read the last N docs/CHANGES-YYYY-MM-DD.md files at repo root, newest first.
+
+    Returned as a single markdown string so the LLM can correlate metric deltas
+    to specific deploys. Empty string if the docs/ directory or files are absent —
+    pipeline still works without it.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    docs_dir = os.path.join(here, "..", "docs")
+    if not os.path.isdir(docs_dir):
+        return ""
+    pattern = os.path.join(docs_dir, "CHANGES-*.md")
+    files = sorted(glob.glob(pattern), reverse=True)[:max_entries]
+    if not files:
+        return ""
+    sections = []
+    for path in files:
+        stem = os.path.splitext(os.path.basename(path))[0]  # e.g. CHANGES-2026-05-11
+        try:
+            with open(path, "r") as f:
+                body = f.read().strip()
+        except OSError:
+            continue
+        sections.append(f"### {stem}\n\n{body}")
+    return "\n\n---\n\n".join(sections)
+
+
 SYSTEM_PROMPT = """Sos un analista senior de conversion-rate-optimization (CRO) trabajando con el founder de StoryHunt — un walking tour por NYC a USD 9,99 que se vive por chat ("The New York walking tour that chats back"). El producto vive en storyhunt.city y el landing bajo análisis es /start. El founder es argentino — escribile en español rioplatense (vos / podés / sería bueno...), directo y opinionado, sin diplomacia vacía.
 
 Cada semana recibís:
 1. Funnel de PostHog para /start (pageviews → view_item → begin_checkout → add_payment_info → purchase)
 2. Breakdown diario, fuentes de tráfico, split de devices, engagement
 3. Comparación con los 7 días previos
-4. Historia reciente de hipótesis ya propuestas (para no repetirte, y para dar crédito si algo propuesto antes movió la aguja)
+4. Deploy log reciente (docs/CHANGES-YYYY-MM-DD.md, newest first) — qué se shippeó cada semana y el porqué. Úsalo para atribuir deltas a deploys concretos: si la métrica X saltó después del deploy del Y, decilo. Si una propuesta de una semana anterior aparece en un CHANGES posterior, considerala "implementada" y evaluá su impacto.
+5. Historia reciente de hipótesis ya propuestas (para no repetirte, y para dar crédito si algo propuesto antes movió la aguja)
 
 TU JOB: producir un review semanal compacto, basado en datos. Honesto, opinionado, específico. Cero lugares comunes de CRO ("optimizá los CTAs!"). Siempre fundamentá las propuestas en los números reales y conectalas a un elemento puntual de /start.
 
@@ -158,14 +187,25 @@ def main():
     history = state.get("history", [])[-4:]
 
     env = load_env()
+    deploy_log = load_deploy_log()
 
-    user_message = (
+    message_parts = [
         "Here is this week's PostHog data for /start:\n"
-        f"```json\n{json.dumps(metrics, indent=2, default=str)}\n```\n\n"
+        f"```json\n{json.dumps(metrics, indent=2, default=str)}\n```",
+    ]
+    if deploy_log:
+        message_parts.append(
+            "Recent deploys (newest first) — what was shipped, when, and the why. "
+            "Use this to attribute metric deltas to specific changes and to recognise "
+            "which prior proposals actually shipped:\n\n"
+            f"{deploy_log}"
+        )
+    message_parts.append(
         "Recent history of hypotheses already proposed (most recent last):\n"
-        f"```json\n{json.dumps(history, indent=2, default=str)}\n```\n\n"
-        "Produce the weekly review JSON now."
+        f"```json\n{json.dumps(history, indent=2, default=str)}\n```"
     )
+    message_parts.append("Produce the weekly review JSON now.")
+    user_message = "\n\n".join(message_parts)
 
     raw = call_anthropic(env, SYSTEM_PROMPT, user_message)
 
