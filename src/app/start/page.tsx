@@ -639,13 +639,16 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
 // text, then third bubble drops in. Stops static after ~2.4s. Decorative.
 
 function ChatPreview() {
-  const [phase, setPhase] = useState(0); // 0=typing both · 1=left text · 2=right text · 3=third bubble
+  // Phase ladder: 0=both bubbles typing · 1=narrator opens · 2=user replies ·
+  // 3=narrator follow-up · 4=narrator closer (the intrigue hook into the walk).
+  const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(1), 700);
     const t2 = setTimeout(() => setPhase(2), 1500);
     const t3 = setTimeout(() => setPhase(3), 2400);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    const t4 = setTimeout(() => setPhase(4), 4200);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
   }, []);
 
   return (
@@ -684,6 +687,12 @@ function ChatPreview() {
       {phase >= 3 && (
         <div key="b3" className="sh-chat-bubble sh-chat-bubble--left">
           1883 opening day. P.T. Barnum led them to prove it wouldn&apos;t collapse. You&apos;re standing on the same stones.
+        </div>
+      )}
+
+      {phase >= 4 && (
+        <div key="b4" className="sh-chat-bubble sh-chat-bubble--left">
+          That&apos;s the safe version. The real one waits on the other side.
         </div>
       )}
     </div>
