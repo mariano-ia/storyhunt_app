@@ -79,9 +79,11 @@ Step features:
 /dashboard/experiences/[id]/metrics → Métricas y analytics
 /dashboard/ai-stories               → AI Story Generator (guión → experiencia)
 /dashboard/contacts                 → Gestión de contactos (con export CSV)
-/play/[id]                          → Player público (con paywall para experiencias pagas)
+/play/[id]                          → Player público (paywall + NYC gate sintético en step 0)
 /play/t/[token]                     → Entrada por token (verifica y redirige a /play/[id])
-/[slug]                             → Player por slug (con paywall)
+/[slug]                             → REDIRECT a /play/[id] (resuelve slug → id y forwarda
+                                       query params). NO es un player paralelo — único
+                                       lugar donde corre la UI del player es /play/[id].
 /api/ai-stories/generate            → Convierte guión editorial → JSON estructurado
 /api/experiences/publish             → Pipeline: normalizar + traducir + publicar
 /api/experiences/[id]/preview       → Endpoint de evaluación LLM
@@ -91,6 +93,10 @@ Step features:
                                       Stripe Dashboard MUST point to https://storyhunt.city/api/stripe/webhook
                                       (NO www. — the www subdomain does not have Vercel rewrites)
 /api/access/verify                  → Verifica access token (fallback si webhook falla)
+/api/nyc-check                      → Clasifica reply del Step 0 NYC gate (yes/no/unclear)
+                                       usando gpt-4o-mini JSON mode (~$0.0001/call)
+/api/sessions/find                  → Devuelve sesión in_progress de (email, experiencia)
+                                       para resume; sin orderBy (sin índice compuesto)
 /api/contacts                       → Recibe formulario web (JSON y form-urlencoded)
 /api/cron/publish-instagram         → Vercel Cron: publica posts pendientes en Instagram
 /api/cron/post-experience-email     → Vercel Cron: envía review email + cupón 24h post-experiencia
@@ -121,11 +127,33 @@ Step features:
 - Sets both `status: 'published'` and `mode: 'production'`
 
 ### Paywall (play routes)
-- /play/[id] and /[slug] check if experience has `price > 0`
+- /play/[id] checks if experience has `price > 0` (/[slug] redirects here)
 - If paid, requires `?token=SH-XXXXX` query param with valid access token
 - Token verified via /api/access/verify
 - Test mode (`mode === 'test'`) bypasses paywall
 - Free experiences (price === 0 or no price) work without token
+
+### NYC presence gate (synthetic Step 0)
+- Every experience opens with a chat question "Are you in NYC right now?"
+  injected by the player BEFORE the experience's real step 1 runs.
+- Lives in code (`src/app/play/[id]/page.tsx`), not Firestore — no per-experience config.
+- Free-text classified by `/api/nyc-check` (OpenAI gpt-4o-mini, JSON mode).
+- 'yes' → enters experience. 'no' → confirm with buttons → closing card +
+  session marked `status: 'awaiting_arrival'`. 'unclear' → button confirm
+  using the experience's `starting_point` for a stronger filter.
+- Resume skip: if session already has `in_nyc: 'yes'`, gate skipped on reload.
+- Session fields `in_nyc` ('yes'|'no'|'unclear') + `in_nyc_reply` (raw text)
+  measure the funnel split.
+- Helper: `node scripts/reset-nyc-flag.js <email> <expId>` clears flag for QA.
+- Single source of truth: every player entry point (email link, slug, card,
+  direct) ends at /play/[id]. Never reintroduce a parallel player route.
+
+### Session resume (per-experience)
+- /play/[id] calls /api/sessions/find before apiCreateSession to reuse the
+  user's in_progress row instead of creating a new one. Prevents fake "step 0
+  abandoned" rows from refreshes and stops consuming token uses on reloads.
+- `user_sessions.email` is now populated correctly (was always empty before —
+  React closure bug). New flows save email; old rows remain empty.
 
 ### Deploy
 - Vercel: storyhunt-app.vercel.app
