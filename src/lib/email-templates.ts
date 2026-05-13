@@ -80,6 +80,10 @@ ${paragraphRow(isEn
     ? 'No guide. No group. No bus. Just you, your phone, and the city.'
     : 'Sin guía. Sin grupo. Sin bus. Solo vos, tu celular y la ciudad.'
 )}
+${paragraphRow(isEn
+    ? '<strong style="color:#fff;">One thing:</strong> StoryHunt is an in-person walk in New York City. You can buy now and save it — the 30-day clock only starts when you tap Start at the meeting point in NYC.'
+    : '<strong style="color:#fff;">Una cosa:</strong> StoryHunt es una caminata presencial en Nueva York. Podés comprar ahora y guardarla — el reloj de 30 días arranca solo cuando toques Empezar en el meeting point en NYC.'
+)}
 ${ctaRow('https://storyhunt.city', isEn ? 'EXPLORE_MISSIONS' : 'EXPLORAR_MISIONES')}
 `),
     };
@@ -127,8 +131,8 @@ ${headingRow(isEn ? 'Secrets hiding in plain sight.' : 'Secretos escondidos a la
 </td></tr>
 
 ${paragraphRow(isEn
-    ? 'These are real. And you can <strong style="color:#fff;">walk to them</strong>. StoryHunt turns the city into a mystery you decode on foot.'
-    : 'Esto es real. Y podés <strong style="color:#fff;">caminar hasta ellos</strong>. StoryHunt convierte la ciudad en un misterio que decodificás caminando.'
+    ? 'These are real. And you can <strong style="color:#fff;">walk to them</strong>. StoryHunt turns the city into a mystery you decode on foot — <strong style="color:#fff;">in person, in New York</strong>. Buy now, your 30-day clock only starts when you tap Start in NYC.'
+    : 'Esto es real. Y podés <strong style="color:#fff;">caminar hasta ellos</strong>. StoryHunt convierte la ciudad en un misterio que decodificás caminando — <strong style="color:#fff;">en persona, en Nueva York</strong>. Comprá ahora, el reloj de 30 días arranca solo cuando toques Empezar en NYC.'
 )}
 ${ctaRow('https://storyhunt.city', isEn ? 'DECODE_THE_CITY' : 'DECODIFICAR_LA_CIUDAD')}
 `),

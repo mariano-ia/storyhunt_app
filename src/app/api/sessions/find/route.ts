@@ -16,27 +16,41 @@ export async function POST(req: NextRequest) {
         }
 
         const db = getAdminDb();
+        // Three equality filters — no orderBy, so we don't need a composite index.
+        // We sort + take the latest client-side. With the new dedup logic in
+        // /play/[id] there should be at most ~1 in_progress per (email, exp)
+        // going forward; old duplicates from before the fix get filtered here.
         const snap = await db
             .collection('user_sessions')
             .where('experience_id', '==', experience_id)
             .where('email', '==', email)
             .where('status', '==', 'in_progress')
-            .orderBy('started_at', 'desc')
-            .limit(1)
             .get();
 
         if (snap.empty) {
             return NextResponse.json({ session: null });
         }
 
-        const doc = snap.docs[0];
-        const data = doc.data();
+        type SessionDoc = {
+            id: string;
+            data: Record<string, unknown>;
+        };
+        const candidates: SessionDoc[] = snap.docs
+            .map(d => ({ id: d.id, data: d.data() }))
+            .sort((a, b) => {
+                const ax = typeof a.data.started_at === 'string' ? a.data.started_at : '';
+                const bx = typeof b.data.started_at === 'string' ? b.data.started_at : '';
+                return bx.localeCompare(ax); // ISO string sort = chronological
+            });
+
+        const top = candidates[0];
         return NextResponse.json({
             session: {
-                id: doc.id,
-                current_step: data.current_step,
-                total_steps: data.total_steps,
-                started_at: data.started_at,
+                id: top.id,
+                current_step: top.data.current_step,
+                total_steps: top.data.total_steps,
+                started_at: top.data.started_at,
+                in_nyc: top.data.in_nyc,
             },
         });
     } catch (err: unknown) {

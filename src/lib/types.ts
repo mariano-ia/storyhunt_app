@@ -2,7 +2,8 @@
 
 export type ExperienceMode = 'test' | 'production';
 export type ExperienceStatus = 'active' | 'inactive' | 'coming_soon' | 'published';
-export type SessionStatus = 'in_progress' | 'completed' | 'abandoned';
+export type SessionStatus = 'in_progress' | 'completed' | 'abandoned' | 'awaiting_arrival';
+export type NycPresence = 'yes' | 'no' | 'unclear';
 
 export interface Experience {
     id: string;
@@ -103,6 +104,10 @@ export interface UserSession {
     started_at: string;
     completed_at?: string;
     finished_at?: string;
+    // Synthetic Step-0 NYC gate (added 2026-05-13). Captures the user's
+    // free-text declaration of whether they're physically in NYC right now.
+    in_nyc?: NycPresence;
+    in_nyc_reply?: string; // raw user text — useful for misclassification audits
 }
 
 export interface Interaction {

@@ -148,7 +148,6 @@ export default function PlayPage() {
 
     // Paywall states
     const [paywallStatus, setPaywallStatus] = useState<'none' | 'checking' | 'blocked' | 'invalid' | 'expired' | 'used'>('none');
-    const [buyerEmail, setBuyerEmail] = useState('');
     const [paywallMessage, setPaywallMessage] = useState('');
 
     // Status states
@@ -161,12 +160,26 @@ export default function PlayPage() {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [ratingPhase, setRatingPhase] = useState<'none' | 'asking' | 'done'>('none');
 
+    // Synthetic Step 0 — NYC presence gate. State machine:
+    // 'none'                   → gate inactive (already past, preview, or closed).
+    // 'asking'                 → waiting for user's free-text reply (turn 1).
+    // 'asking_unclear_confirm' → LLM said unclear → show "are you at [starting_point]?" + Yes / Save buttons.
+    // 'asking_no_confirm'      → LLM said no → show "you said no, sure?" + Confirm / I-am-here buttons.
+    // 'rejected'               → user confirmed they're not in NYC; closing card shown.
+    type NycPhase = 'none' | 'asking' | 'asking_unclear_confirm' | 'asking_no_confirm' | 'rejected';
+    const [nycCheckPhase, setNycCheckPhase] = useState<NycPhase>('none');
+
     const chatRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
     const sessionIdRef = useRef<string | null>(null);
     const failedAttemptsRef = useRef(0);
     const MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE = 3;
+    // Holds the deferred experience-start fn while the NYC gate is asking.
+    const deferredStartRef = useRef<(() => Promise<void>) | null>(null);
+    // Latest raw user reply to the NYC gate — preserved across confirmation turns
+    // so we can save it to the session when the user finally commits.
+    const nycLastReplyRef = useRef<string>('');
 
     // Keep ref in sync with state (so async callbacks can access latest)
     useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
@@ -199,6 +212,146 @@ export default function PlayPage() {
             { delay_seconds: 1.5 }
         );
         setRatingPhase('asking');
+    };
+
+    // ─── Synthetic Step 0 — NYC presence gate handlers ──────────────────────
+    // Two-turn pattern: free-text first, then button confirmation on the
+    // ambiguous ('unclear') or destructive ('no') branches. Yes is reversible,
+    // so it never asks for confirmation.
+
+    // Starts the experience after the user passes the gate.
+    const enterExperienceAfterGate = async () => {
+        setNycCheckPhase('none');
+        const start = deferredStartRef.current;
+        deferredStartRef.current = null;
+        if (start) await start();
+    };
+
+    // Marks the session as awaiting_arrival and shows the closing card.
+    const closeSessionAsAwaiting = () => {
+        if (sessionIdRef.current) {
+            apiUpdateSession(sessionIdRef.current, {
+                in_nyc: 'no',
+                in_nyc_reply: nycLastReplyRef.current,
+                status: 'awaiting_arrival',
+            });
+        }
+        setNycCheckPhase('rejected');
+    };
+
+    // Turn 1 — free-text reply. LLM classifies. Yes advances immediately,
+    // No moves to confirmation, Unclear moves to starting_point confirmation.
+    const handleNycCheckSend = async () => {
+        if (!input.trim() || sending) return;
+
+        const userText = input.trim();
+        nycLastReplyRef.current = userText;
+        const userMsg: PreviewMessage = { role: 'user', content: userText, timestamp: new Date().toISOString() };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setSending(true);
+
+        let classification: 'yes' | 'no' | 'unclear' = 'unclear';
+        let narratorReply = lang === 'en'
+            ? "I didn't catch that."
+            : "No te entendí.";
+
+        try {
+            const res = await fetch('/api/nyc-check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userMessage: userText, lang }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.in_nyc === 'yes' || data.in_nyc === 'no' || data.in_nyc === 'unclear') {
+                    classification = data.in_nyc;
+                }
+                if (typeof data.narrator_reply === 'string' && data.narrator_reply.trim()) {
+                    narratorReply = data.narrator_reply.trim();
+                }
+            }
+        } catch {
+            // Fail-open as unclear — handled below.
+        }
+
+        await pushMessageWithEffects(
+            { role: 'system', content: narratorReply, timestamp: new Date().toISOString() },
+            { delay_seconds: 1.0 }
+        );
+
+        if (classification === 'yes') {
+            if (sessionIdRef.current) {
+                apiUpdateSession(sessionIdRef.current, { in_nyc: 'yes', in_nyc_reply: userText });
+            }
+            setSending(false);
+            await enterExperienceAfterGate();
+            return;
+        }
+
+        if (classification === 'no') {
+            // Confirmation step — don't lock the session yet.
+            const confirmMsg = lang === 'en'
+                ? "Just to make sure — you're not in NYC right now. Should I save your link for when you get here?"
+                : "Para confirmar — no estás en Nueva York ahora. ¿Te guardo el link para cuando llegues?";
+            await pushMessageWithEffects(
+                { role: 'system', content: confirmMsg, timestamp: new Date().toISOString() },
+                { delay_seconds: 0.8 }
+            );
+            setNycCheckPhase('asking_no_confirm');
+            setSending(false);
+            return;
+        }
+
+        // unclear → escalate to starting_point button confirmation
+        const startingPoint = experience?.starting_point?.trim();
+        const unclearMsg = lang === 'en'
+            ? startingPoint
+                ? `Let me ask another way — are you at ${startingPoint} right now?`
+                : "Let me ask another way — are you in New York right now?"
+            : startingPoint
+                ? `Te pregunto distinto — ¿estás en ${startingPoint} ahora?`
+                : "Te pregunto distinto — ¿estás en Nueva York ahora?";
+        await pushMessageWithEffects(
+            { role: 'system', content: unclearMsg, timestamp: new Date().toISOString() },
+            { delay_seconds: 0.8 }
+        );
+        setNycCheckPhase('asking_unclear_confirm');
+        setSending(false);
+    };
+
+    // Inline button handlers for the confirmation turns.
+    const handleNycConfirmYes = async () => {
+        if (sending) return;
+        const label = lang === 'en' ? 'Yes' : 'Sí';
+        setMessages(prev => [...prev, { role: 'user', content: label, timestamp: new Date().toISOString() }]);
+        setSending(true);
+        const reply = lang === 'en' ? 'Good. Then we begin.' : 'Perfecto. Empezamos.';
+        await pushMessageWithEffects(
+            { role: 'system', content: reply, timestamp: new Date().toISOString() },
+            { delay_seconds: 0.6 }
+        );
+        if (sessionIdRef.current) {
+            apiUpdateSession(sessionIdRef.current, { in_nyc: 'yes', in_nyc_reply: nycLastReplyRef.current });
+        }
+        setSending(false);
+        await enterExperienceAfterGate();
+    };
+
+    const handleNycConfirmNo = async () => {
+        if (sending) return;
+        const label = lang === 'en' ? 'Save for later' : 'Guardar para mi viaje';
+        setMessages(prev => [...prev, { role: 'user', content: label, timestamp: new Date().toISOString() }]);
+        setSending(true);
+        const farewell = lang === 'en'
+            ? "Saved. Your link will be waiting in your inbox — see you in NYC."
+            : "Guardado. Tu link queda esperándote en tu mail — nos vemos en Nueva York.";
+        await pushMessageWithEffects(
+            { role: 'system', content: farewell, timestamp: new Date().toISOString() },
+            { delay_seconds: 0.6 }
+        );
+        closeSessionAsAwaiting();
+        setSending(false);
     };
 
     const handleRatingSend = async () => {
@@ -407,6 +560,9 @@ export default function PlayPage() {
             const firstSceneId = sortedScenes.length > 0 ? sortedScenes[0].id : null;
             setCurrentSceneId(firstSceneId);
 
+            // Captured from accessToken.email below for use by apiCreateSession.
+            let playerEmail = '';
+
             // ─── Paywall check: paid experiences require a valid token ─────
             const isPaid = typeof exp.price === 'number' && exp.price > 0;
             const isTestMode = exp.mode === 'test';
@@ -415,7 +571,9 @@ export default function PlayPage() {
             if (isPaid && !isTestMode && !isPreview) {
                 if (!tokenParam) {
                     setPaywallStatus('blocked');
-                    setPaywallMessage('This experience requires a ticket to access.');
+                    setPaywallMessage(lang === 'en'
+                        ? 'This experience needs a ticket — and you need to be in New York City to play. Save the link for when you arrive.'
+                        : 'Esta experiencia necesita un ticket — y tenés que estar en Nueva York para jugarla. Guardá el link para cuando llegues.');
                     setLoading(false);
                     return;
                 }
@@ -465,9 +623,9 @@ export default function PlayPage() {
                         return;
                     }
 
-                    // Valid — clear paywall and save buyer email for session tracking
+                    // Valid — clear paywall and capture buyer email for session tracking
                     setPaywallStatus('none');
-                    if (accessToken.email) setBuyerEmail(accessToken.email);
+                    if (accessToken.email) playerEmail = accessToken.email;
 
                     // Increment usage now (skips if resuming an in_progress session).
                     // Done here — not on /play/t — so email scanner pre-fetches don't consume uses.
@@ -486,14 +644,37 @@ export default function PlayPage() {
 
             setLoading(false);
 
-            // Create session (skip for previews)
+            // Create or resume session (skip for previews).
+            // Resume: if an in_progress session exists for this email + experience,
+            // reuse it instead of creating a new row. Prevents fake "step 0 abandons"
+            // from page reloads and stops over-counting in metrics.
+            let resumedInNyc: 'yes' | 'no' | 'unclear' | undefined;
             if (!isPreview && stps.length > 0) {
-                const sid = await apiCreateSession({
-                    experience_id: id,
-                    email: buyerEmail,
-                    lang,
-                    total_steps: stps.length,
-                });
+                let sid: string | null = null;
+                if (playerEmail) {
+                    try {
+                        const findRes = await fetch('/api/sessions/find', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ experience_id: id, email: playerEmail }),
+                        });
+                        if (findRes.ok) {
+                            const { session } = await findRes.json();
+                            if (session?.id) {
+                                sid = session.id;
+                                resumedInNyc = session.in_nyc;
+                            }
+                        }
+                    } catch { /* fall through to create */ }
+                }
+                if (!sid) {
+                    sid = await apiCreateSession({
+                        experience_id: id,
+                        email: playerEmail,
+                        lang,
+                        total_steps: stps.length,
+                    });
+                }
                 if (sid) setSessionId(sid);
             }
 
@@ -513,7 +694,29 @@ export default function PlayPage() {
                         await advanceNarrativeSteps(initialSceneSteps, 0, sortedScenes, firstSceneId, stps);
                     }
                 };
-                init();
+
+                // Skip NYC gate when: previewing (dashboard), test mode (editor),
+                // resuming from a specific step (?from=), or session was already
+                // gated and accepted (in_nyc === 'yes').
+                const skipNycGate = isPreview || isTestMode
+                    || (fromIdx !== null && fromIdx > 0)
+                    || resumedInNyc === 'yes';
+
+                if (skipNycGate) {
+                    init();
+                } else {
+                    deferredStartRef.current = init;
+                    // Push the synthetic NYC question. Hardcoded i18n — it's a
+                    // product-level gate, not part of the narrator script.
+                    const nycQuestion = lang === 'en'
+                        ? "Before we begin — one thing.\nThis is a real walk through New York City. Are you here right now?"
+                        : "Antes de empezar — una sola cosa.\nEsta es una caminata real por Nueva York. ¿Estás en la ciudad ahora mismo?";
+                    await pushMessageWithEffects(
+                        { role: 'system', content: nycQuestion, timestamp: new Date().toISOString() },
+                        { delay_seconds: 1.0 }
+                    );
+                    setNycCheckPhase('asking');
+                }
             }
         });
     }, [id]);
@@ -522,12 +725,21 @@ export default function PlayPage() {
 
     // Auto-focus input when the system finishes sending and it's an interactive step
     useEffect(() => {
-        if (!sending && !systemTyping && !completed && steps[stepIndex]?.requires_response) {
+        if (!sending && !systemTyping && !completed && (steps[stepIndex]?.requires_response || nycCheckPhase === 'asking')) {
             inputRef.current?.focus();
         }
-    }, [sending, systemTyping, completed, stepIndex, steps]);
+    }, [sending, systemTyping, completed, stepIndex, steps, nycCheckPhase]);
 
     const handleSend = async () => {
+        // Route to the synthetic Step 0 NYC gate during turn 1 (free text).
+        if (nycCheckPhase === 'asking') {
+            await handleNycCheckSend();
+            return;
+        }
+        // Confirmation turns + rejected = input is button-driven or locked.
+        if (nycCheckPhase === 'asking_unclear_confirm'
+            || nycCheckPhase === 'asking_no_confirm'
+            || nycCheckPhase === 'rejected') return;
         // If in rating phase, route to rating handler
         if (ratingPhase === 'asking') {
             await handleRatingSend();
@@ -713,7 +925,16 @@ export default function PlayPage() {
     const waitingForResponse = !completed && currentStep?.requires_response;
 
     const isRatingInput = ratingPhase === 'asking';
-    const isSystemDisable = isRatingInput ? sending : (sending || systemTyping || completed || !waitingForResponse);
+    const isNycInput = nycCheckPhase === 'asking';
+    const isNycConfirm = nycCheckPhase === 'asking_unclear_confirm' || nycCheckPhase === 'asking_no_confirm';
+    const isNycRejected = nycCheckPhase === 'rejected';
+    const isSystemDisable = isNycInput
+        ? sending
+        : (isNycConfirm || isNycRejected)
+            ? true
+            : isRatingInput
+                ? sending
+                : (sending || systemTyping || completed || !waitingForResponse);
 
     return (
         <div style={{
@@ -787,6 +1008,58 @@ export default function PlayPage() {
 
                 {systemTyping && <TypingIndicator narratorInitial={narratorInitial} narratorAvatar={experience?.narrator_avatar} />}
 
+                {/* Quick-reply buttons for the NYC gate confirmation turn.
+                    Rendered inline as the user's "answer" area until they tap one. */}
+                {isNycConfirm && !systemTyping && (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        marginTop: 4,
+                        marginBottom: 8,
+                    }}>
+                        <button
+                            onClick={handleNycConfirmYes}
+                            disabled={sending}
+                            style={{
+                                background: '#0B84FF',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: 18,
+                                padding: '8px 16px',
+                                fontSize: 15,
+                                fontWeight: 500,
+                                cursor: sending ? 'default' : 'pointer',
+                                opacity: sending ? 0.5 : 1,
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            {nycCheckPhase === 'asking_no_confirm'
+                                ? (lang === 'en' ? "Actually, I am" : 'En realidad, sí estoy')
+                                : (lang === 'en' ? 'Yes' : 'Sí')}
+                        </button>
+                        <button
+                            onClick={handleNycConfirmNo}
+                            disabled={sending}
+                            style={{
+                                background: '#FFFFFF',
+                                color: '#0B84FF',
+                                border: '1px solid #0B84FF',
+                                borderRadius: 18,
+                                padding: '8px 16px',
+                                fontSize: 15,
+                                fontWeight: 500,
+                                cursor: sending ? 'default' : 'pointer',
+                                opacity: sending ? 0.5 : 1,
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            {lang === 'en' ? 'Save for later' : 'Guardar para mi viaje'}
+                        </button>
+                    </div>
+                )}
+
                 {completed && ratingPhase === 'done' && (
                     <div style={{ textAlign: 'center', margin: '24px 0', fontSize: 13, color: '#8E8E93' }}>
                         {lang === 'en' ? 'Experience completed.' : 'Experiencia completada.'}
@@ -810,47 +1083,92 @@ export default function PlayPage() {
                 borderTop: '0.5px solid rgba(0,0,0,0.15)',
                 padding: '8px 16px calc(16px + env(safe-area-inset-bottom)) 16px',
             }}>
-                <div style={{
-                    maxWidth: 720, margin: '0 auto',
-                    display: 'flex', gap: 12, alignItems: 'flex-end',
-                }}>
+                {isNycRejected ? (
+                    /* Closing card — replaces the input area after the user
+                       confirmed they're not in NYC. Stays in chat aesthetic. */
                     <div style={{
-                        flex: 1,
-                        background: '#FFFFFF',
-                        border: '1px solid #E5E5EA',
-                        borderRadius: 20,
-                        padding: '6px 6px 6px 14px',
-                        display: 'flex', alignItems: 'center',
+                        maxWidth: 720, margin: '0 auto',
+                        padding: '4px 0 4px',
                     }}>
-                        <input
-                            ref={inputRef}
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                            placeholder={isRatingInput ? (lang === 'en' ? 'Share your thoughts...' : 'Contanos qué te pareció...') : isSystemDisable ? (completed ? (lang === 'en' ? 'Chat ended' : 'Chat terminado') : 'iMessage') : 'iMessage'}
-                            disabled={isSystemDisable}
-                            style={{
-                                flex: 1, border: 'none', background: 'transparent',
-                                outline: 'none', color: 'black', fontSize: 16,
-                                padding: '6px 0', fontFamily: 'inherit'
-                            }}
-                        />
-                        <button
-                            onClick={handleSend}
-                            disabled={!input.trim() || isSystemDisable}
-                            style={{
-                                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                                background: !input.trim() || isSystemDisable ? '#E5E5EA' : '#0B84FF',
-                                border: 'none', padding: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: !input.trim() || isSystemDisable ? '#C7C7CC' : 'white',
-                                transition: 'all 0.2s', cursor: !input.trim() || isSystemDisable ? 'default' : 'pointer'
-                            }}
-                        >
-                            <ArrowUp size={16} strokeWidth={3} />
-                        </button>
+                        <div style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #E5E5EA',
+                            borderRadius: 16,
+                            padding: '16px 18px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                        }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: '#000' }}>
+                                {lang === 'en' ? "We'll be waiting in NYC" : 'Te esperamos en Nueva York'}
+                            </div>
+                            <div style={{ fontSize: 13, color: '#3C3C43', lineHeight: 1.4 }}>
+                                {lang === 'en'
+                                    ? 'We saved your link in your inbox. Your 30-day clock only starts when you tap Start at the meeting point in NYC.'
+                                    : 'Guardamos tu link en tu mail. Tu reloj de 30 días arranca solo cuando toques Empezar en el meeting point en NYC.'}
+                            </div>
+                            <button
+                                onClick={() => { if (typeof window !== 'undefined') window.location.href = 'https://storyhunt.city'; }}
+                                style={{
+                                    alignSelf: 'flex-end',
+                                    marginTop: 8,
+                                    background: 'transparent',
+                                    color: '#0B84FF',
+                                    border: 'none',
+                                    fontSize: 14,
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    padding: '4px 6px',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                {lang === 'en' ? 'Close' : 'Cerrar'}
+                            </button>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div style={{
+                        maxWidth: 720, margin: '0 auto',
+                        display: 'flex', gap: 12, alignItems: 'flex-end',
+                    }}>
+                        <div style={{
+                            flex: 1,
+                            background: '#FFFFFF',
+                            border: '1px solid #E5E5EA',
+                            borderRadius: 20,
+                            padding: '6px 6px 6px 14px',
+                            display: 'flex', alignItems: 'center',
+                        }}>
+                            <input
+                                ref={inputRef}
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                                placeholder={isNycConfirm ? (lang === 'en' ? 'Tap a button above' : 'Tocá un botón arriba') : isNycInput ? (lang === 'en' ? 'Yes / No / Where are you?' : 'Sí / No / ¿Dónde estás?') : isRatingInput ? (lang === 'en' ? 'Share your thoughts...' : 'Contanos qué te pareció...') : isSystemDisable ? (completed ? (lang === 'en' ? 'Chat ended' : 'Chat terminado') : 'iMessage') : 'iMessage'}
+                                disabled={isSystemDisable}
+                                style={{
+                                    flex: 1, border: 'none', background: 'transparent',
+                                    outline: 'none', color: 'black', fontSize: 16,
+                                    padding: '6px 0', fontFamily: 'inherit'
+                                }}
+                            />
+                            <button
+                                onClick={handleSend}
+                                disabled={!input.trim() || isSystemDisable}
+                                style={{
+                                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                                    background: !input.trim() || isSystemDisable ? '#E5E5EA' : '#0B84FF',
+                                    border: 'none', padding: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: !input.trim() || isSystemDisable ? '#C7C7CC' : 'white',
+                                    transition: 'all 0.2s', cursor: !input.trim() || isSystemDisable ? 'default' : 'pointer'
+                                }}
+                            >
+                                <ArrowUp size={16} strokeWidth={3} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <style>{`
