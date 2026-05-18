@@ -9,15 +9,25 @@ const now = () => new Date().toISOString();
 
 // ─── Experiences ──────────────────────────────────────────────────────────────
 
+// Strips sensitive fields that should never reach the browser. The
+// `experiences` Firestore rule allows public read, so any field returned by
+// these helpers ends up in the client bundle. Server-side callers that need
+// the raw doc (LLM eval, publish pipeline) should use Admin SDK.
+function stripSensitive(exp: Record<string, unknown>): Experience {
+    const { llm_api_key, ...safe } = exp;
+    void llm_api_key;
+    return safe as unknown as Experience;
+}
+
 export async function getExperiences(): Promise<Experience[]> {
     const snap = await getDocs(collection(db, 'experiences'));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Experience));
+    return snap.docs.map(d => stripSensitive({ id: d.id, ...d.data() }));
 }
 
 export async function getExperience(id: string): Promise<Experience | null> {
     const snap = await getDoc(doc(db, 'experiences', id));
     if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() } as Experience;
+    return stripSensitive({ id: snap.id, ...snap.data() });
 }
 
 export async function getExperienceBySlug(slug: string): Promise<Experience | null> {
@@ -25,7 +35,7 @@ export async function getExperienceBySlug(slug: string): Promise<Experience | nu
     const snap = await getDocs(q);
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    return { id: doc.id, ...doc.data() } as Experience;
+    return stripSensitive({ id: doc.id, ...doc.data() });
 }
 
 export async function createExperience(data: ExperienceFormData): Promise<string> {

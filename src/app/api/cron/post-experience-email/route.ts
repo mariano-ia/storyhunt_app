@@ -23,23 +23,29 @@ export async function GET(request: Request) {
     const db = getAdminDb();
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    const threeDaysAgo = new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
-        // Find access tokens that were used (times_used > 0) and created 24-72h ago
+        // Find access tokens that were USED (times_used > 0) and first_used_at
+        // 24h-7d ago. Pre-2026-05-18 this filtered by created_at, which broke
+        // for buyers who bought ahead and only played later (typical OTA case).
         const tokensSnap = await db.collection('access_tokens')
             .where('times_used', '>', 0)
             .get();
 
         const eligible = tokensSnap.docs.filter(doc => {
             const data = doc.data();
-            // Must have been created 24-72h ago
-            const createdAt = data.created_at || '';
-            if (createdAt > oneDayAgo || createdAt < threeDaysAgo) return false;
+            // Prefer first_used_at; fall back to created_at for legacy tokens
+            // missing first_used_at (the field is set only on tokens issued
+            // after the access/use rewrite of 2026-05-18).
+            const firstUsedAt = data.first_used_at || data.created_at || '';
+            if (firstUsedAt > oneDayAgo || firstUsedAt < sevenDaysAgo) return false;
             // Must not have already received review email
             if (data.review_email_sent) return false;
             // Must have email
             if (!data.email) return false;
+            // Must not be refunded
+            if (data.status === 'refunded') return false;
             return true;
         });
 
@@ -76,17 +82,27 @@ export async function GET(request: Request) {
                     valid_until: '2027-12-31T23:59:59.000Z',
                     status: 'active',
                     stripe_coupon_id: 'nOh4AMZw',
-                    stripe_promo_id: 'promo_1TJJsBL7BKrNVx2i5sOrziQl',
+                    stripe_promo_id: 'promo_1TOf2eL7BKrNVx2iE9YPVYkp',
                     description: '40% off — post-experience review reward',
                     created_at: new Date().toISOString(),
                 });
             }
 
             const isEn = lang === 'en';
-            const success = await sendReviewEmail(email, experienceName, COUPON_CODE, isEn);
 
-            // Mark as sent
-            await doc.ref.update({ review_email_sent: true, review_email_date: new Date().toISOString() });
+            // Mark as sent BEFORE the actual send to avoid duplicate emails on
+            // a crash mid-send. Track attempts so we can investigate failures.
+            await doc.ref.update({
+                review_email_sent: true,
+                review_email_date: new Date().toISOString(),
+                review_email_attempts: (data.review_email_attempts || 0) + 1,
+            });
+
+            const success = await sendReviewEmail(email, experienceName, COUPON_CODE, isEn);
+            if (!success) {
+                // Record the failure so we can manually requeue if needed.
+                await doc.ref.update({ review_email_failed: true }).catch(() => { });
+            }
 
             results.push({ email, success });
         }
@@ -110,7 +126,12 @@ async function sendReviewEmail(email: string, experienceName: string, couponCode
     try {
         await resend.emails.send({
             from: 'StoryHunt <hello@storyhunt.city>',
+            replyTo: 'hello@storyhunt.city',
             to: email,
+            headers: {
+                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(email)}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
             subject: isEn
                 ? `How was "${experienceName}"? + 40% off your next hunt`
                 : `¿Cómo fue "${experienceName}"? + 40% off en tu próxima aventura`,

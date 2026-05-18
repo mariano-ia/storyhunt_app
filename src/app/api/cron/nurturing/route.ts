@@ -75,6 +75,7 @@ async function processE2Teaser(
         if (data.teaser_sent) continue;
         // Must not have converted (purchased)
         if (data.converted) continue;
+        if (data.unsubscribed) continue;
         if (!data.email) continue;
 
         const isEn = (data.lang || 'en') === 'en';
@@ -83,7 +84,12 @@ async function processE2Teaser(
         try {
             await resend!.emails.send({
                 from: 'StoryHunt <hello@storyhunt.city>',
+                replyTo: 'hello@storyhunt.city',
                 to: data.email,
+                headers: {
+                    'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                },
                 subject,
                 html,
             });
@@ -142,6 +148,7 @@ async function processE3SocialProof(
         if (data.social_proof_sent) continue;
         // Must not have converted
         if (data.converted) continue;
+        if (data.unsubscribed) continue;
         if (!data.email) continue;
 
         const isEn = (data.lang || 'en') === 'en';
@@ -150,7 +157,12 @@ async function processE3SocialProof(
         try {
             await resend!.emails.send({
                 from: 'StoryHunt <hello@storyhunt.city>',
+                replyTo: 'hello@storyhunt.city',
                 to: data.email,
+                headers: {
+                    'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                },
                 subject,
                 html,
             });
@@ -188,6 +200,7 @@ async function processE5MissionPending(
         // Must not have sent reminder already
         if (data.reminder_sent) continue;
         if (!data.email) continue;
+        if (data.status === 'refunded') continue;
 
         // Calculate days left on token
         const expiresAt = new Date(data.expires_at);
@@ -209,7 +222,12 @@ async function processE5MissionPending(
         try {
             await resend!.emails.send({
                 from: 'StoryHunt <hello@storyhunt.city>',
+                replyTo: 'hello@storyhunt.city',
                 to: data.email,
+                headers: {
+                    'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                },
                 subject,
                 html,
             });
@@ -266,7 +284,12 @@ async function processE7LastCall(
         try {
             await resend!.emails.send({
                 from: 'StoryHunt <hello@storyhunt.city>',
+                replyTo: 'hello@storyhunt.city',
                 to: data.email,
+                headers: {
+                    'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                },
                 subject,
                 html,
             });

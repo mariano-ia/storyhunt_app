@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyAuth } from '@/lib/firebase-admin';
 
 // Accept either env var name for backwards compatibility:
 // - META_ADS_TOKEN: the name used by meta-ads/ tooling + conversion-review cron
@@ -30,7 +31,11 @@ async function fetchMeta(path: string, params: Record<string, string> = {}): Pro
   return res.json();
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Auth-gated 2026-05-18 (was leaking Meta Ads spend + campaign names publicly).
+  const user = await verifyAuth(req);
+  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
   if (!META_TOKEN) {
     return NextResponse.json(
       { error: 'META_ADS_TOKEN (or legacy META_ADS_ACCESS_TOKEN) not configured' },

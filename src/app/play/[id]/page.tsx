@@ -11,6 +11,7 @@ async function apiCreateSession(data: {
     email?: string;
     lang?: 'es' | 'en';
     total_steps: number;
+    access_token?: string;
 }): Promise<string | null> {
     try {
         const res = await fetch('/api/sessions/create', {
@@ -134,7 +135,9 @@ export default function PlayPage() {
     const searchParams = useSearchParams();
     const fromStepParam = searchParams.get('from');
     const langParam = searchParams.get('lang') as 'es' | 'en' | null;
-    const lang = langParam || 'es';
+    // Default to English: NYC tourist traffic via TripAdvisor/OTA is English-first.
+    // Tokens issued in Spanish override this via ?lang=es in the email link.
+    const lang = langParam || 'en';
     const tokenParam = searchParams.get('token');
     const [experience, setExperience] = useState<Experience | null>(null);
     const [steps, setSteps] = useState<Step[]>([]);
@@ -320,10 +323,11 @@ export default function PlayPage() {
         setSending(false);
     };
 
-    // Inline button handlers for the confirmation turns.
+    // Inline button handlers — Sí/No on the NYC gate.
     const handleNycConfirmYes = async () => {
         if (sending) return;
         const label = lang === 'en' ? 'Yes' : 'Sí';
+        nycLastReplyRef.current = label;
         setMessages(prev => [...prev, { role: 'user', content: label, timestamp: new Date().toISOString() }]);
         setSending(true);
         const reply = lang === 'en' ? 'Good. Then we begin.' : 'Perfecto. Empezamos.';
@@ -332,7 +336,7 @@ export default function PlayPage() {
             { delay_seconds: 0.6 }
         );
         if (sessionIdRef.current) {
-            apiUpdateSession(sessionIdRef.current, { in_nyc: 'yes', in_nyc_reply: nycLastReplyRef.current });
+            apiUpdateSession(sessionIdRef.current, { in_nyc: 'yes', in_nyc_reply: label });
         }
         setSending(false);
         await enterExperienceAfterGate();
@@ -340,7 +344,8 @@ export default function PlayPage() {
 
     const handleNycConfirmNo = async () => {
         if (sending) return;
-        const label = lang === 'en' ? 'Save for later' : 'Guardar para mi viaje';
+        const label = lang === 'en' ? 'No' : 'No';
+        nycLastReplyRef.current = label;
         setMessages(prev => [...prev, { role: 'user', content: label, timestamp: new Date().toISOString() }]);
         setSending(true);
         const farewell = lang === 'en'
@@ -625,7 +630,25 @@ export default function PlayPage() {
 
                     // Valid — clear paywall and capture buyer email for session tracking
                     setPaywallStatus('none');
-                    if (accessToken.email) playerEmail = accessToken.email;
+                    if (accessToken.email) {
+                        playerEmail = accessToken.email;
+                    } else {
+                        // Edge case observed 2026-05-12: token returned without email
+                        // (suspected stale post-purchase cache). Refetch once before
+                        // creating an orphan session.
+                        console.warn(`[paywall] token ${accessToken.token} returned with empty email — refetching`);
+                        try {
+                            const r2 = await fetch('/api/access/verify', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ token: tokenParam, skip_activation: true }),
+                            });
+                            if (r2.ok) {
+                                const { access_token: at2 } = await r2.json();
+                                if (at2?.email) playerEmail = at2.email;
+                            }
+                        } catch { /* ignore */ }
+                    }
 
                     // Increment usage now (skips if resuming an in_progress session).
                     // Done here — not on /play/t — so email scanner pre-fetches don't consume uses.
@@ -651,12 +674,12 @@ export default function PlayPage() {
             let resumedInNyc: 'yes' | 'no' | 'unclear' | undefined;
             if (!isPreview && stps.length > 0) {
                 let sid: string | null = null;
-                if (playerEmail) {
+                if (playerEmail || tokenParam) {
                     try {
                         const findRes = await fetch('/api/sessions/find', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ experience_id: id, email: playerEmail }),
+                            body: JSON.stringify({ experience_id: id, email: playerEmail, access_token: tokenParam }),
                         });
                         if (findRes.ok) {
                             const { session } = await findRes.json();
@@ -673,6 +696,7 @@ export default function PlayPage() {
                         email: playerEmail,
                         lang,
                         total_steps: stps.length,
+                        access_token: tokenParam || undefined,
                     });
                 }
                 if (sid) setSessionId(sid);
@@ -696,11 +720,14 @@ export default function PlayPage() {
                 };
 
                 // Skip NYC gate when: previewing (dashboard), test mode (editor),
-                // resuming from a specific step (?from=), or session was already
-                // gated and accepted (in_nyc === 'yes').
+                // or session was already gated and accepted (in_nyc === 'yes').
+                // ?from= alone does NOT skip the gate (pre-2026-05-18 it did; an
+                // attacker with a token could craft /play/[id]?token=X&from=1 to
+                // bypass the gate). We only allow ?from= to skip if the resumed
+                // session has in_nyc === 'yes' — meaning the user already passed
+                // the gate in a prior session.
                 const skipNycGate = isPreview || isTestMode
-                    || (fromIdx !== null && fromIdx > 0)
-                    || resumedInNyc === 'yes';
+                    || (resumedInNyc === 'yes');
 
                 if (skipNycGate) {
                     init();
@@ -731,13 +758,9 @@ export default function PlayPage() {
     }, [sending, systemTyping, completed, stepIndex, steps, nycCheckPhase]);
 
     const handleSend = async () => {
-        // Route to the synthetic Step 0 NYC gate during turn 1 (free text).
-        if (nycCheckPhase === 'asking') {
-            await handleNycCheckSend();
-            return;
-        }
-        // Confirmation turns + rejected = input is button-driven or locked.
-        if (nycCheckPhase === 'asking_unclear_confirm'
+        // NYC gate is button-driven on every turn now — no free-text path.
+        if (nycCheckPhase === 'asking'
+            || nycCheckPhase === 'asking_unclear_confirm'
             || nycCheckPhase === 'asking_no_confirm'
             || nycCheckPhase === 'rejected') return;
         // If in rating phase, route to rating handler
@@ -880,45 +903,65 @@ export default function PlayPage() {
     if (paywallStatus === 'checking') return (
         <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', fontFamily: "'Fira Code', monospace" }}>
             <div style={{ textAlign: 'center', color: '#00ff41' }}>
-                <div style={{ fontSize: 18, marginBottom: 12 }}>Verifying access...</div>
-                <div style={{ fontSize: 13, opacity: 0.6 }}>This may take a few seconds</div>
+                <div style={{ fontSize: 18, marginBottom: 12 }}>
+                    {lang === 'en' ? 'Verifying access...' : 'Verificando acceso...'}
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.6 }}>
+                    {lang === 'en' ? 'This may take a few seconds' : 'Esto puede tardar unos segundos'}
+                </div>
             </div>
         </div>
     );
 
-    if (paywallStatus === 'blocked' || paywallStatus === 'invalid' || paywallStatus === 'expired' || paywallStatus === 'used') return (
-        <div style={{
-            height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#000', fontFamily: "'Fira Code', monospace",
-        }}>
-            <div style={{ textAlign: 'center', maxWidth: 420, padding: 32 }}>
-                <div style={{
-                    fontSize: 48, marginBottom: 20, opacity: 0.3,
-                    color: paywallStatus === 'expired' ? '#F59E0B' : paywallStatus === 'blocked' ? '#7C3AED' : '#EF4444',
-                }}>
-                    {paywallStatus === 'blocked' ? '$' : paywallStatus === 'expired' ? '!' : 'X'}
+    if (paywallStatus === 'blocked' || paywallStatus === 'invalid' || paywallStatus === 'expired' || paywallStatus === 'used') {
+        const t = (en: string, es: string) => lang === 'en' ? en : es;
+        const headline =
+            paywallStatus === 'blocked' ? t('Access required', 'Acceso requerido') :
+            paywallStatus === 'invalid' ? t('Invalid link', 'Link inválido') :
+            paywallStatus === 'expired' ? t('Link expired', 'Link expirado') :
+            t('Link already used', 'Link ya utilizado');
+        const blockedBody = t(
+            'This experience needs a ticket — and you need to be in New York City to play. Visit storyhunt.city to purchase access.',
+            'Esta experiencia necesita un ticket — y tenés que estar en Nueva York para jugarla. Comprala en storyhunt.city.',
+        );
+        return (
+            <div style={{
+                height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: '#000', fontFamily: "'Fira Code', monospace",
+            }}>
+                <div style={{ textAlign: 'center', maxWidth: 420, padding: 32 }}>
+                    <div style={{
+                        fontSize: 48, marginBottom: 20, opacity: 0.3,
+                        color: paywallStatus === 'expired' ? '#F59E0B' : paywallStatus === 'blocked' ? '#7C3AED' : '#EF4444',
+                    }}>
+                        {paywallStatus === 'blocked' ? '$' : paywallStatus === 'expired' ? '!' : 'X'}
+                    </div>
+                    <div style={{ fontSize: 16, color: '#fff', marginBottom: 12, fontWeight: 600 }}>
+                        {headline}
+                    </div>
+                    <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginBottom: 24 }}>
+                        {paywallStatus === 'blocked' ? blockedBody : paywallMessage}
+                    </div>
+                    <a href="https://storyhunt.city" style={{
+                        display: 'inline-block', padding: '10px 24px',
+                        background: '#7C3AED', color: '#fff', borderRadius: 8,
+                        textDecoration: 'none', fontSize: 14, fontWeight: 600,
+                        marginRight: 8,
+                    }}>
+                        {t('Get your ticket', 'Comprá tu ticket')}
+                    </a>
+                    <a href={`mailto:hello@storyhunt.city?subject=${encodeURIComponent('Help with my StoryHunt access')}`} style={{
+                        display: 'inline-block', padding: '10px 24px',
+                        background: 'transparent', color: '#94A3B8',
+                        border: '1px solid #94A3B8', borderRadius: 8,
+                        textDecoration: 'none', fontSize: 14, fontWeight: 500,
+                    }}>
+                        {t('Get help', 'Necesito ayuda')}
+                    </a>
                 </div>
-                <div style={{ fontSize: 16, color: '#fff', marginBottom: 12, fontWeight: 600 }}>
-                    {paywallStatus === 'blocked' && 'Access Required'}
-                    {paywallStatus === 'invalid' && 'Invalid Access'}
-                    {paywallStatus === 'expired' && 'Link Expired'}
-                    {paywallStatus === 'used' && 'Link Already Used'}
-                </div>
-                <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginBottom: 24 }}>
-                    {paywallStatus === 'blocked'
-                        ? 'This experience requires a ticket. Visit storyhunt.city to purchase access.'
-                        : paywallMessage}
-                </div>
-                <a href="https://storyhunt.city" style={{
-                    display: 'inline-block', padding: '10px 24px',
-                    background: '#7C3AED', color: '#fff', borderRadius: 8,
-                    textDecoration: 'none', fontSize: 14, fontWeight: 600,
-                }}>
-                    Get your ticket
-                </a>
             </div>
-        </div>
-    );
+        );
+    }
 
     const narratorInitial = experience?.name?.[0]?.toUpperCase() ?? 'N';
     const currentStep = steps[stepIndex];
@@ -928,13 +971,12 @@ export default function PlayPage() {
     const isNycInput = nycCheckPhase === 'asking';
     const isNycConfirm = nycCheckPhase === 'asking_unclear_confirm' || nycCheckPhase === 'asking_no_confirm';
     const isNycRejected = nycCheckPhase === 'rejected';
-    const isSystemDisable = isNycInput
-        ? sending
-        : (isNycConfirm || isNycRejected)
-            ? true
-            : isRatingInput
-                ? sending
-                : (sending || systemTyping || completed || !waitingForResponse);
+    const isNycButtons = isNycInput || isNycConfirm;
+    const isSystemDisable = (isNycButtons || isNycRejected)
+        ? true
+        : isRatingInput
+            ? sending
+            : (sending || systemTyping || completed || !waitingForResponse);
 
     return (
         <div style={{
@@ -981,6 +1023,20 @@ export default function PlayPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <a
+                        href={`mailto:hello@storyhunt.city?subject=${encodeURIComponent(`Help — ${experience?.name || 'StoryHunt'} ${sessionId ? '(session ' + sessionId.slice(0, 8) + ')' : ''}`)}`}
+                        title={lang === 'en' ? 'Need help?' : '¿Necesitás ayuda?'}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 32, height: 32, borderRadius: 16,
+                            background: 'transparent',
+                            color: '#0B84FF',
+                            textDecoration: 'none',
+                            fontSize: 16, fontWeight: 600,
+                        }}
+                    >?</a>
                 </div>
             </div>
 
@@ -995,7 +1051,7 @@ export default function PlayPage() {
                 }}
             >
                 <div style={{ fontSize: 11, color: '#8E8E93', textAlign: 'center', margin: '8px 0 24px', fontWeight: 500 }}>
-                    Hoy {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                    {lang === 'en' ? 'Today' : 'Hoy'} {new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}
                 </div>
 
                 {messages.map((msg, i) => {
@@ -1008,9 +1064,8 @@ export default function PlayPage() {
 
                 {systemTyping && <TypingIndicator narratorInitial={narratorInitial} narratorAvatar={experience?.narrator_avatar} />}
 
-                {/* Quick-reply buttons for the NYC gate confirmation turn.
-                    Rendered inline as the user's "answer" area until they tap one. */}
-                {isNycConfirm && !systemTyping && (
+                {/* Quick-reply buttons for the NYC gate (every turn — button-driven). */}
+                {isNycButtons && !systemTyping && (
                     <div style={{
                         display: 'flex',
                         justifyContent: 'flex-end',
@@ -1035,9 +1090,7 @@ export default function PlayPage() {
                                 fontFamily: 'inherit',
                             }}
                         >
-                            {nycCheckPhase === 'asking_no_confirm'
-                                ? (lang === 'en' ? "Actually, I am" : 'En realidad, sí estoy')
-                                : (lang === 'en' ? 'Yes' : 'Sí')}
+                            {lang === 'en' ? 'Yes' : 'Sí'}
                         </button>
                         <button
                             onClick={handleNycConfirmNo}
@@ -1055,7 +1108,7 @@ export default function PlayPage() {
                                 fontFamily: 'inherit',
                             }}
                         >
-                            {lang === 'en' ? 'Save for later' : 'Guardar para mi viaje'}
+                            {lang === 'en' ? 'No' : 'No'}
                         </button>
                     </div>
                 )}
@@ -1144,7 +1197,7 @@ export default function PlayPage() {
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                                placeholder={isNycConfirm ? (lang === 'en' ? 'Tap a button above' : 'Tocá un botón arriba') : isNycInput ? (lang === 'en' ? 'Yes / No / Where are you?' : 'Sí / No / ¿Dónde estás?') : isRatingInput ? (lang === 'en' ? 'Share your thoughts...' : 'Contanos qué te pareció...') : isSystemDisable ? (completed ? (lang === 'en' ? 'Chat ended' : 'Chat terminado') : 'iMessage') : 'iMessage'}
+                                placeholder={isNycButtons ? (lang === 'en' ? 'Tap a button above' : 'Tocá un botón arriba') : isRatingInput ? (lang === 'en' ? 'Share your thoughts...' : 'Contanos qué te pareció...') : isSystemDisable ? (completed ? (lang === 'en' ? 'Chat ended' : 'Chat terminado') : 'iMessage') : 'iMessage'}
                                 disabled={isSystemDisable}
                                 style={{
                                     flex: 1, border: 'none', background: 'transparent',

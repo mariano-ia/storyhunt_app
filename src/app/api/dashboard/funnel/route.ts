@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, verifyAuth } from '@/lib/firebase-admin';
 
 // ─── GET /api/dashboard/funnel ────────────────────────────────────────────
 // Returns aggregated funnel data from Firestore `events` + `sales` collections.
 // Query: ?days=7|30|0 (0 = all-time)
+// Auth-gated 2026-05-18 (was publicly exposing revenue + emails).
 
 type EventDoc = {
     event_name: string;
@@ -23,6 +24,9 @@ type SaleDoc = {
 const FUNNEL_STEPS = ['Lead', 'InitiateCheckout', 'AddPaymentInfo', 'Purchase'] as const;
 
 export async function GET(req: NextRequest) {
+    const user = await verifyAuth(req);
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
     try {
         const days = parseInt(req.nextUrl.searchParams.get('days') || '7', 10);
         const cutoff = days > 0

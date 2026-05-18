@@ -78,7 +78,8 @@ export default function TokenPlayPage() {
     const { token } = useParams() as { token: string };
     const router = useRouter();
     const searchParams = useSearchParams();
-    const initialLang: 'es' | 'en' = searchParams.get('lang') === 'en' ? 'en' : 'es';
+    // Default to English (tourist traffic). Token-stored lang overrides shortly after.
+    const initialLang: 'es' | 'en' = searchParams.get('lang') === 'es' ? 'es' : 'en';
     const isPostPurchase = searchParams.get('success') === '1';
 
     const [lang, setLang] = useState<'es' | 'en'>(initialLang);

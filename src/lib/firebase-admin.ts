@@ -86,6 +86,7 @@ export async function adminCreateSession(data: {
     email?: string;
     lang?: 'es' | 'en';
     total_steps: number;
+    access_token?: string;
 }): Promise<string> {
     const ref = await getAdminDb().collection('user_sessions').add({
         experience_id: data.experience_id,
@@ -95,6 +96,7 @@ export async function adminCreateSession(data: {
         total_steps: data.total_steps,
         status: 'in_progress',
         started_at: new Date().toISOString(),
+        ...(data.access_token ? { access_token: data.access_token } : {}),
     });
     return ref.id;
 }
@@ -106,6 +108,14 @@ export async function adminUpdateSession(sessionId: string, data: Record<string,
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
+// verifyAuth validates the bearer token AND verifies the caller is in the
+// `admins` collection. Without the allowlist check, any Firebase user (and
+// since email/password sign-up is enabled by default, anyone on the internet
+// can self-mint one) would have admin privileges — the bug discovered in the
+// 2026-05-18 audit. The admin allowlist is the authoritative gate.
+//
+// Admin docs are keyed by lowercase email with shape { email, status, ... }.
+// A doc with status === 'invited' is also considered active (post-invite flow).
 export async function verifyAuth(request: Request): Promise<{ uid: string; email?: string } | null> {
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) return null;
@@ -115,8 +125,29 @@ export async function verifyAuth(request: Request): Promise<{ uid: string; email
         const app = getAdminApp();
         const auth = getAuth(app);
         const decoded = await auth.verifyIdToken(token);
-        return { uid: decoded.uid, email: decoded.email };
+        const email = decoded.email?.toLowerCase();
+        if (!email) return null;
+
+        const allowed = await isAdmin(email);
+        if (!allowed) {
+            console.warn(`[verifyAuth] Reject non-admin user: ${email}`);
+            return null;
+        }
+        return { uid: decoded.uid, email };
     } catch {
         return null;
     }
+}
+
+export async function isAdmin(email: string): Promise<boolean> {
+    if (!email) return false;
+    const snap = await getAdminDb()
+        .collection('admins')
+        .where('email', '==', email.toLowerCase())
+        .limit(1)
+        .get();
+    if (snap.empty) return false;
+    const status = snap.docs[0].data().status;
+    // Treat both 'active' and 'invited' as admin (invitee accepted via password reset).
+    return status === 'active' || status === 'invited';
 }

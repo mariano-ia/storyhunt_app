@@ -20,11 +20,16 @@ async function sendWelcomeEmail(contactEmail: string, lang: 'es' | 'en') {
         const { subject, html } = welcomeEmail(lang === 'en');
         await resend.emails.send({
             from: 'StoryHunt <hello@storyhunt.city>',
+            replyTo: 'hello@storyhunt.city',
             to: contactEmail,
+            headers: {
+                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(contactEmail)}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
             subject,
             html,
         });
-        console.log(`[contacts] Welcome email sent to ${contactEmail} (${lang})`);
+        console.log(`[contacts] Welcome email sent (${lang})`);
     } catch (err) {
         console.error(`[contacts] Failed to send welcome email to ${contactEmail}:`, err);
     }

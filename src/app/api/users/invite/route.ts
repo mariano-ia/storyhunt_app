@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { verifyAuth } from '@/lib/firebase-admin';
+import { verifyAuth, getAdminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!;
 const now = () => new Date().toISOString();
+
+// ─── POST /api/users/invite ──────────────────────────────────────────────────
+// Invites a new admin. Migrated to Admin SDK 2026-05-18: the prior version
+// used client SDK against `admins` which (a) couldn't authenticate server-side
+// and (b) tripped the new closed-rule on admins. Admin SDK bypasses rules.
+//
+// Caller must be in the admins allowlist (enforced by verifyAuth).
 
 export async function POST(req: NextRequest) {
     const user = await verifyAuth(req);
@@ -16,10 +22,17 @@ export async function POST(req: NextRequest) {
         if (!email || !email.includes('@')) {
             return NextResponse.json({ error: 'Email inválido' }, { status: 400 });
         }
+        const normalized = email.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+            return NextResponse.json({ error: 'Email inválido' }, { status: 400 });
+        }
 
-        const existing = await getDocs(
-            query(collection(db, 'admins'), where('email', '==', email.toLowerCase()))
-        );
+        const db = getAdminDb();
+        const existing = await db
+            .collection('admins')
+            .where('email', '==', normalized)
+            .limit(1)
+            .get();
         if (!existing.empty) {
             return NextResponse.json({ error: 'Este email ya fue invitado.' }, { status: 409 });
         }
@@ -30,7 +43,7 @@ export async function POST(req: NextRequest) {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password: tempPassword, returnSecureToken: false }),
+                body: JSON.stringify({ email: normalized, password: tempPassword, returnSecureToken: false }),
             }
         );
 
@@ -47,13 +60,14 @@ export async function POST(req: NextRequest) {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
+                body: JSON.stringify({ requestType: 'PASSWORD_RESET', email: normalized }),
             }
         );
 
-        await addDoc(collection(db, 'admins'), {
-            email: email.toLowerCase(),
+        await db.collection('admins').add({
+            email: normalized,
             invited_at: now(),
+            invited_by: user.email,
             status: 'invited',
         });
 
@@ -71,7 +85,7 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
     try {
-        const snap = await getDocs(collection(db, 'admins'));
+        const snap = await getAdminDb().collection('admins').get();
         const admins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return NextResponse.json({ admins });
     } catch (err: unknown) {
@@ -79,3 +93,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: message }, { status: 500 });
     }
 }
+
+// Suppress unused import warning for FieldValue (kept for potential future use).
+void FieldValue;

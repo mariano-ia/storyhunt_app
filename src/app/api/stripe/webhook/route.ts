@@ -4,6 +4,40 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { Resend } from 'resend';
 import type Stripe from 'stripe';
 import { trackServer } from '@/lib/analytics-server';
+import { FieldValue } from 'firebase-admin/firestore';
+import crypto from 'crypto';
+
+// ─── Token generation ─────────────────────────────────────────────────────────
+// Crockford base32 alphabet (no I/L/O/U) — 32 chars × 8 positions = 40 bits
+// of entropy from crypto.randomBytes. Replaces Math.random()-backed 30-bit
+// tokens that were brute-forceable via /api/access/verify pre-2026-05-18.
+const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateAccessToken(): string {
+    const bytes = crypto.randomBytes(8);
+    let token = 'SH-';
+    for (let i = 0; i < 8; i++) {
+        token += TOKEN_ALPHABET[bytes[i] % TOKEN_ALPHABET.length];
+    }
+    return token;
+}
+
+// ─── Webhook event dedup ──────────────────────────────────────────────────────
+// Stripe retries failed webhooks for up to 3 days. Without an idempotency
+// check this would create duplicate tokens, sales, emails and double-increment
+// coupons. Pattern: `stripe_events/{event.id}` via .create() — throws if it
+// exists, which we treat as "already processed, exit cleanly".
+async function isFirstTimeEvent(eventId: string): Promise<boolean> {
+    try {
+        await getAdminDb().collection('stripe_events').doc(eventId).create({
+            received_at: FieldValue.serverTimestamp(),
+        });
+        return true;
+    } catch (err) {
+        // already exists → duplicate event
+        void err;
+        return false;
+    }
+}
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -16,7 +50,12 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
     try {
         await resend.emails.send({
             from: 'StoryHunt <hello@storyhunt.city>',
+            replyTo: 'hello@storyhunt.city',
             to: email,
+            headers: {
+                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(email)}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
             subject: isEn
                 ? `Your access to "${experienceName}" is ready`
                 : `Tu acceso a "${experienceName}" está listo`,
@@ -133,7 +172,43 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    if (event.type === 'checkout.session.completed') {
+    // Idempotency gate: if Stripe retried this exact event, exit cleanly with 200.
+    if (!(await isFirstTimeEvent(event.id))) {
+        console.log(`[stripe/webhook] Duplicate event ${event.id} (${event.type}) — skip`);
+        return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    // ─── Refunds + disputes: revoke the associated access token ─────────────
+    if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {
+        const charge = event.data.object as Stripe.Charge;
+        const sessionId = (charge.metadata && charge.metadata.checkout_session) || null;
+        // The reliable join is via payment_intent → checkout session → access_token.
+        try {
+            let stripeSessionId: string | null = sessionId;
+            if (!stripeSessionId && charge.payment_intent) {
+                const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent.id;
+                const sessions = await getStripe().checkout.sessions.list({ payment_intent: piId, limit: 1 });
+                stripeSessionId = sessions.data[0]?.id || null;
+            }
+            if (stripeSessionId) {
+                const db = getAdminDb();
+                const tokens = await db.collection('access_tokens').where('stripe_session_id', '==', stripeSessionId).get();
+                for (const t of tokens.docs) {
+                    await t.ref.update({ status: 'refunded', refunded_at: new Date().toISOString() });
+                }
+                const sales = await db.collection('sales').where('stripe_session_id', '==', stripeSessionId).get();
+                for (const s of sales.docs) {
+                    await s.ref.update({ status: 'refunded', refunded_at: new Date().toISOString() });
+                }
+                console.log(`[stripe/webhook] Revoked tokens for session ${stripeSessionId} due to ${event.type}`);
+            }
+        } catch (err) {
+            console.error('[stripe/webhook] Refund/dispute handling error:', err);
+        }
+        return NextResponse.json({ received: true });
+    }
+
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         const session = event.data.object as Stripe.Checkout.Session;
         const metadata = session.metadata || {};
 
@@ -173,18 +248,29 @@ export async function POST(req: NextRequest) {
 
         if (!experienceId) {
             console.error('[stripe/webhook] No experience_id in metadata');
-            return NextResponse.json({ error: 'Missing experience_id' }, { status: 400 });
+            // Return 200 — Stripe shouldn't retry a malformed metadata event.
+            return NextResponse.json({ received: true, skipped: 'missing_experience_id' });
         }
 
         try {
             const db = getAdminDb();
 
-            // 1. Create access token (lazy activation: 365d ceiling, 30d clock starts on first /play/t/[token] visit)
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let token = 'SH-';
-            for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
+            // Belt-and-suspenders: even though the stripe_events dedup catches
+            // retries, also short-circuit if a sale row already exists for this
+            // Stripe session — handles the case where a previous run created
+            // the sale but the stripe_events.create() write was lost.
+            const existing = await db.collection('sales').where('stripe_session_id', '==', session.id).limit(1).get();
+            if (!existing.empty) {
+                console.log(`[stripe/webhook] Sale already exists for session ${session.id} — skip`);
+                return NextResponse.json({ received: true, duplicate: true });
+            }
+
+            // 1. Create access token (lazy activation: 365d ceiling, 30d clock starts on first /play/t/[token] visit).
+            //    Token uses crypto-secure 40-bit entropy (was 30-bit + Math.random pre-2026-05-18).
+            const token = generateAccessToken();
 
             const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+            const nowIso = new Date().toISOString();
             const tokenRef = await db.collection('access_tokens').add({
                 token,
                 experience_id: experienceId,
@@ -196,50 +282,78 @@ export async function POST(req: NextRequest) {
                 expires_at: expiresAt,
                 activated_at: null,
                 stripe_session_id: session.id,
-                created_at: new Date().toISOString(),
+                created_at: nowIso,
             });
 
-            // 2. Record sale
+            // 2. Record sale (now with attribution fields populated from metadata).
             await db.collection('sales').add({
                 experience_id: experienceId,
                 experience_name: experienceName,
                 email,
                 amount: session.amount_total ?? 0,
                 currency: session.currency ?? 'usd',
-                coupon_code: couponCode || null,
+                coupon_code: couponCode ? couponCode.toUpperCase() : null,
                 discount_applied: session.total_details?.amount_discount ?? 0,
                 stripe_session_id: session.id,
                 access_token_id: tokenRef.id,
-                created_at: new Date().toISOString(),
+                source: metadata.source || metadata.utm_source || 'direct',
+                utm_source: metadata.utm_source || null,
+                utm_medium: metadata.utm_medium || null,
+                utm_campaign: metadata.utm_campaign || null,
+                referrer: metadata.referrer || null,
+                created_at: nowIso,
             });
 
-            // 3. Increment coupon redemption if used
-            if (couponCode) {
-                const couponsSnap = await db.collection('discount_coupons').where('code', '==', couponCode.toUpperCase()).get();
-                if (!couponsSnap.empty) {
-                    const couponDoc = couponsSnap.docs[0];
-                    const couponData = couponDoc.data();
-                    const newCount = (couponData.times_redeemed || 0) + 1;
-                    await couponDoc.ref.update({
-                        times_redeemed: newCount,
-                        status: newCount >= (couponData.max_redemptions || 999) ? 'expired' : couponData.status,
-                    });
+            // 3. Mark the corresponding contact as converted (so nurturing cron
+            //    stops sending E2/E3/E5/E7 to paying customers).
+            if (email) {
+                try {
+                    const contacts = await db.collection('contacts').where('email', '==', email.toLowerCase()).get();
+                    for (const c of contacts.docs) {
+                        await c.ref.update({ converted: true, converted_at: nowIso });
+                    }
+                } catch (err) {
+                    console.error('[stripe/webhook] Failed to mark contact converted:', err);
                 }
             }
 
-            // 4. Send access email to customer (with starting point if available)
+            // 4. Increment coupon redemption (atomic).
+            if (couponCode) {
+                try {
+                    const couponsSnap = await db.collection('discount_coupons').where('code', '==', couponCode.toUpperCase()).get();
+                    if (!couponsSnap.empty) {
+                        const couponDoc = couponsSnap.docs[0];
+                        const couponData = couponDoc.data();
+                        const maxRed = couponData.max_redemptions || 999;
+                        await couponDoc.ref.update({
+                            times_redeemed: FieldValue.increment(1),
+                        });
+                        // Re-read for max-redemptions check (race-safe via increment above)
+                        const fresh = await couponDoc.ref.get();
+                        const newCount = fresh.data()?.times_redeemed || 0;
+                        if (newCount >= maxRed) {
+                            await couponDoc.ref.update({ status: 'expired' });
+                        }
+                    }
+                } catch (err) {
+                    console.error('[stripe/webhook] Coupon increment failed:', err);
+                }
+            }
+
+            // 5. Send access email to customer.
             if (email) {
                 let startingPoint: string | undefined;
                 try {
                     const expDoc = await db.collection('experiences').doc(experienceId).get();
                     startingPoint = expDoc.data()?.starting_point;
                 } catch { /* non-critical */ }
-                await sendAccessEmail(email, token, experienceName, lang, startingPoint);
+                sendAccessEmail(email, token, experienceName, lang, startingPoint).catch(err =>
+                    console.error('[stripe/webhook] sendAccessEmail failed:', err)
+                );
             }
 
-            // 5. Fire Purchase event server-side (Meta CAPI + GA4 MP + Firestore log).
-            // event_id = Stripe session.id so the client-side fire on /play/t/[token]
-            // dedupes against this. Non-blocking — errors logged but don't fail webhook.
+            // 6. Fire Purchase event server-side (Meta CAPI + GA4 MP + Firestore log).
+            //    Now passes IP + UA from session metadata for CAPI match quality.
             trackServer('Purchase', {
                 event_id: session.id,
                 value: (session.amount_total ?? 0) / 100,
@@ -250,16 +364,28 @@ export async function POST(req: NextRequest) {
                 coupon: couponCode || undefined,
                 lang,
                 transaction_id: session.id,
-            }, 'https://storyhunt.city/play/t/' + session.id).catch(err =>
+                client_ip_address: metadata.client_ip || undefined,
+                client_user_agent: metadata.client_ua || undefined,
+                fbp: metadata.fbp || undefined,
+                fbc: metadata.fbc || undefined,
+            }, 'https://storyhunt.city/start').catch(err =>
                 console.error('[stripe/webhook] trackServer Purchase failed:', err)
             );
 
-            console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${email} → token ${token}`);
+            console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${(email || '').replace(/(.{2}).*@/, '$1***@')} → token ${token.slice(0, 5)}***`);
 
         } catch (err) {
-            console.error('[stripe/webhook] Error processing payment:', err);
-            return NextResponse.json({ error: 'Error processing payment' }, { status: 500 });
+            // Always return 200 after the dedup gate has passed — if we 500, Stripe
+            // will retry, and our dedup will skip future retries leaving a partial
+            // write irrecoverable. Log loudly so monitoring picks it up.
+            console.error('[stripe/webhook] 🚨 Error processing payment:', err);
+            return NextResponse.json({ received: true, error: 'processing_failed' });
         }
+    }
+
+    // Other events: log + ack.
+    if (event.type !== 'checkout.session.completed' && event.type !== 'checkout.session.async_payment_succeeded') {
+        console.log(`[stripe/webhook] Unhandled event ${event.type}`);
     }
 
     return NextResponse.json({ received: true });

@@ -5,6 +5,16 @@ import React from 'react';
 
 const TOKEN_REGEX = /(\*\*.*?\*\*|\[.*?\]\(.*?\)|https?:\/\/[^\s)]+)/g;
 
+// Reject href values that could lead to XSS (javascript:, data:, vbscript:).
+// We accept http(s), mailto, tel, and same-origin paths only.
+function isSafeUrl(url: string): boolean {
+    const u = url.trim().toLowerCase();
+    if (u.startsWith('http://') || u.startsWith('https://')) return true;
+    if (u.startsWith('mailto:') || u.startsWith('tel:')) return true;
+    if (u.startsWith('/')) return true;
+    return false;
+}
+
 function renderTokens(text: string, keyPrefix: string): React.ReactNode[] {
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
@@ -23,9 +33,9 @@ function renderTokens(text: string, keyPrefix: string): React.ReactNode[] {
             // Bold: **text**
             parts.push(<strong key={`${keyPrefix}-b-${match.index}`}>{token.slice(2, -2)}</strong>);
         } else if (token.startsWith('[')) {
-            // Markdown link: [text](url)
+            // Markdown link: [text](url) — only render as anchor if URL scheme is safe.
             const linkMatch = token.match(/^\[(.*?)\]\((.*?)\)$/);
-            if (linkMatch) {
+            if (linkMatch && isSafeUrl(linkMatch[2])) {
                 parts.push(
                     <a key={`${keyPrefix}-a-${match.index}`} href={linkMatch[2]} target="_blank" rel="noopener noreferrer"
                         style={{ color: '#0B84FF', textDecoration: 'underline', wordBreak: 'break-all' }}>
@@ -33,6 +43,7 @@ function renderTokens(text: string, keyPrefix: string): React.ReactNode[] {
                     </a>
                 );
             } else {
+                // Unsafe URL or malformed — render as plain text.
                 parts.push(token);
             }
         } else if (token.startsWith('http')) {

@@ -68,13 +68,48 @@ async function getLocalizedProduct(
 // Body: { experience_id: string; lang: 'es' | 'en'; coupon_code?: string; email?: string }
 
 export async function POST(req: NextRequest) {
+    // Emergency kill switch — set KILL_SWITCH_PAYMENTS=true in Vercel env to
+    // immediately stop accepting checkouts (e.g. mid-incident). Returns 503 so
+    // the StoryHuntWeb cards can surface a friendly "temporarily unavailable".
+    if (process.env.KILL_SWITCH_PAYMENTS === 'true') {
+        return NextResponse.json(
+            { error: 'Checkout temporarily unavailable. Please try again later.' },
+            { status: 503 },
+        );
+    }
+
     try {
-        const { experience_id, lang, coupon_code, email } = await req.json() as {
+        const {
+            experience_id, lang, coupon_code, email,
+            // Attribution + tracking — populated by the StoryHuntWeb client
+            // before redirecting to Stripe. Forwarded to webhook via metadata
+            // so the server-side Purchase CAPI event can dedupe against the
+            // client-side Pixel fire.
+            utm_source, utm_medium, utm_campaign, referrer, fbp, fbc, ga_client_id,
+        } = await req.json() as {
             experience_id: string;
             lang: 'es' | 'en';
             coupon_code?: string;
             email?: string;
+            utm_source?: string;
+            utm_medium?: string;
+            utm_campaign?: string;
+            referrer?: string;
+            fbp?: string;
+            fbc?: string;
+            ga_client_id?: string;
         };
+
+        // Hard limit input lengths (defense against body-size abuse).
+        if (experience_id && experience_id.length > 64) {
+            return NextResponse.json({ error: 'experience_id too long' }, { status: 400 });
+        }
+        if (coupon_code && coupon_code.length > 64) {
+            return NextResponse.json({ error: 'coupon_code too long' }, { status: 400 });
+        }
+        if (email && email.length > 254) {
+            return NextResponse.json({ error: 'email too long' }, { status: 400 });
+        }
 
         if (!experience_id || !lang) {
             return NextResponse.json({ error: 'experience_id y lang son requeridos' }, { status: 400 });
@@ -129,6 +164,18 @@ export async function POST(req: NextRequest) {
                 experience_id,
                 lang,
                 experience_name: experience.name,
+                // Attribution + Meta CAPI match-quality fields. All optional;
+                // Stripe rejects undefined values, so coerce to empty string
+                // and let the webhook ignore empties.
+                utm_source: utm_source || '',
+                utm_medium: utm_medium || '',
+                utm_campaign: utm_campaign || '',
+                referrer: referrer || '',
+                fbp: fbp || '',
+                fbc: fbc || '',
+                ga_client_id: ga_client_id || '',
+                client_ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '',
+                client_ua: req.headers.get('user-agent') || '',
             },
             success_url: `${req.nextUrl.origin}/play/t/{CHECKOUT_SESSION_ID}?success=1&lang=${lang}`,
             cancel_url: `${req.nextUrl.origin}/${experience.slug || `play/${experience_id}`}?cancelled=1`,

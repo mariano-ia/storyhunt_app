@@ -1,9 +1,30 @@
 rules_version = '2';
 
+// ─── StoryHunt Firestore Rules ────────────────────────────────────────────────
+// Locked down 2026-05-18 after PoC confirmed 59 customer emails dumped via
+// public Firestore REST.
+//
+// Defense-in-depth model:
+//   1. Sensitive PII / revenue collections → fully closed (Admin SDK only via API).
+//   2. Dashboard CRUD collections (experiences/scenes/steps/contacts/discount_coupons
+//      writes) → require authenticated Firebase user. Pair this with
+//      DISABLING email/password sign-up in the Firebase Console (Auth →
+//      Sign-in method → Email/Password). Otherwise any visitor can self-mint
+//      a Firebase user.
+//   3. API routes additionally enforce an admin allowlist via verifyAuth().
+//      That is the authoritative gate for write operations — the rules are
+//      the second line of defense.
+//
+// Note: experiences are publicly readable so the player works without auth.
+// The /api/public/experiences and /api/experiences/[id] routes are
+// responsible for stripping fields like llm_api_key before serving them
+// publicly. Direct client SDK reads still see those fields — see audit.
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Experiences: public read (needed for player), auth write
+    // Experiences — public read for the player; auth required for write
+    // (dashboard CRUD). Subcollections (scenes/steps) same.
     match /experiences/{experienceId} {
       allow read: if true;
       allow write: if request.auth != null;
@@ -14,47 +35,70 @@ service cloud.firestore {
       }
     }
 
-    // Contacts: anyone can create (web form), only auth users can read/update
+    // Contacts — auth read + auth update (dashboard status changes); creation
+    // is server-only via /api/contacts (Admin SDK).
     match /contacts/{document=**} {
-      allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update, delete: if request.auth != null;
+      allow create: if false;
     }
 
-    // Admins: auth only
+    // Admins allowlist — fully closed. /api/users/invite (Admin SDK) is
+    // the only writer; verifyAuth() reads via Admin SDK.
     match /admins/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
 
-    // Discount coupons: public read (checkout validates codes), auth write
+    // Discount coupons — auth required for read+write (dashboard manages).
+    // Server checkout validates codes via Admin SDK (bypasses rules).
     match /discount_coupons/{document=**} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
 
-    // Access tokens: public read/write (server creates post-payment, player verifies)
+    // Access tokens — fully closed. PII (email + token). Every access goes
+    // through /api/access/verify, /api/access/use, /api/stripe/webhook —
+    // all Admin SDK.
     match /access_tokens/{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
-    // Sales: public write (server creates post-payment), auth read (dashboard)
+    // Sales — auth read for dashboard reports; no client writes.
     match /sales/{document=**} {
       allow read: if request.auth != null;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Interactions: public write (server logs LLM costs), auth read (dashboard)
+    // Interactions (LLM cost log) — auth read for dashboard; no client writes.
     match /interactions/{document=**} {
       allow read: if request.auth != null;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Sessions: public write (player creates/updates), auth read (dashboard)
+    // User sessions — auth read for dashboard; no client writes. Player
+    // updates via /api/sessions/{create,update,find}.
     match /user_sessions/{document=**} {
       allow read: if request.auth != null;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Deny everything else
+    // Server analytics events log — closed. Dashboard reads via
+    // /api/dashboard/funnel (Admin SDK).
+    match /events/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Stripe webhook dedup log — closed.
+    match /stripe_events/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Cron runs log — closed.
+    match /cron_runs/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Default-deny everything else.
     match /{document=**} {
       allow read, write: if false;
     }

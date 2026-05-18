@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Search, CheckCircle, XCircle, Clock, Star, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
+import { Users, Search, CheckCircle, XCircle, Clock, Star, ThumbsUp, ThumbsDown, Minus, MapPin, MapPinOff, HelpCircle } from 'lucide-react';
 import { getSessions, getExperiences } from '@/lib/firestore';
 import type { UserSession, Experience } from '@/lib/types';
 
@@ -38,6 +38,19 @@ export default function SessionsPage() {
         if (r === 'positive') return <ThumbsUp size={13} style={{ color: 'var(--success)' }} />;
         if (r === 'negative') return <ThumbsDown size={13} style={{ color: 'var(--danger)' }} />;
         if (r === 'neutral') return <Minus size={13} style={{ color: 'var(--warning)' }} />;
+        return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>;
+    };
+
+    const nycCell = (val?: 'yes' | 'no' | 'unclear', reply?: string) => {
+        const tooltip = reply ? `Respuesta: "${reply}"` : undefined;
+        const wrap = (icon: React.ReactNode, label: string, color: string) => (
+            <span title={tooltip} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color, fontSize: 12, fontWeight: 500 }}>
+                {icon} {label}
+            </span>
+        );
+        if (val === 'yes') return wrap(<MapPin size={12} />, 'NYC', 'var(--success)');
+        if (val === 'no') return wrap(<MapPinOff size={12} />, 'No', 'var(--danger)');
+        if (val === 'unclear') return wrap(<HelpCircle size={12} />, 'Unclear', 'var(--warning)');
         return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>;
     };
 
@@ -114,10 +127,10 @@ export default function SessionsPage() {
             {loading ? (
                 <div className="table-wrapper">
                     <table>
-                        <thead><tr><th>Email</th><th>Experiencia</th><th>Progreso</th><th>Estado</th><th>Rating</th><th>Inicio</th></tr></thead>
+                        <thead><tr><th>Email</th><th>Experiencia</th><th>Progreso</th><th>Estado</th><th>NYC?</th><th>Rating</th><th>Feedback</th><th>Inicio</th></tr></thead>
                         <tbody>
                             {[1, 2, 3, 4].map(i => (
-                                <tr key={i}>{[1, 2, 3, 4, 5, 6].map(j => <td key={j}><div className="skeleton" style={{ height: 14, borderRadius: 4, width: j === 2 ? 120 : 80 }} /></td>)}</tr>
+                                <tr key={i}>{[1, 2, 3, 4, 5, 6, 7, 8].map(j => <td key={j}><div className="skeleton" style={{ height: 14, borderRadius: 4, width: j === 2 ? 120 : 80 }} /></td>)}</tr>
                             ))}
                         </tbody>
                     </table>
@@ -141,6 +154,7 @@ export default function SessionsPage() {
                                 <th>Experiencia</th>
                                 <th>Progreso</th>
                                 <th>Estado</th>
+                                <th>NYC?</th>
                                 <th>Rating</th>
                                 <th>Feedback</th>
                                 <th>Inicio</th>
@@ -164,6 +178,9 @@ export default function SessionsPage() {
                                         <span className={`badge badge-${sess.status}`}>
                                             {statusIcon(sess.status)} {statusLabel(sess.status)}
                                         </span>
+                                    </td>
+                                    <td style={{ whiteSpace: 'nowrap' }}>
+                                        {nycCell(sess.in_nyc, sess.in_nyc_reply)}
                                     </td>
                                     <td style={{ textAlign: 'center' }}>
                                         {ratingIcon(sess.rating)}

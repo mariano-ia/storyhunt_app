@@ -108,6 +108,10 @@ export interface UserSession {
     // free-text declaration of whether they're physically in NYC right now.
     in_nyc?: NycPresence;
     in_nyc_reply?: string; // raw user text — useful for misclassification audits
+
+    // SH-xxx token used to enter the experience. Stored even if email capture
+    // failed so we can recover identity by joining sales/access_tokens.
+    access_token?: string;
 }
 
 export interface Interaction {

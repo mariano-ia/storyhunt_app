@@ -7,25 +7,52 @@ import { getAdminDb } from '@/lib/firebase-admin';
 
 export async function POST(req: NextRequest) {
     try {
-        const { experience_id, email } = await req.json() as {
+        const { experience_id, email, access_token } = await req.json() as {
             experience_id?: string;
             email?: string;
+            access_token?: string;
         };
-        if (!experience_id || !email) {
-            return NextResponse.json({ error: 'experience_id and email required' }, { status: 400 });
+        if (!experience_id) {
+            return NextResponse.json({ error: 'experience_id required' }, { status: 400 });
+        }
+        if (!email && !access_token) {
+            return NextResponse.json({ error: 'email or access_token required' }, { status: 400 });
         }
 
         const db = getAdminDb();
+
         // Three equality filters — no orderBy, so we don't need a composite index.
         // We sort + take the latest client-side. With the new dedup logic in
         // /play/[id] there should be at most ~1 in_progress per (email, exp)
         // going forward; old duplicates from before the fix get filtered here.
-        const snap = await db
-            .collection('user_sessions')
-            .where('experience_id', '==', experience_id)
-            .where('email', '==', email)
-            .where('status', '==', 'in_progress')
-            .get();
+        //
+        // 2026-05-18: also accept access_token as a fallback when email is
+        // missing (orphan sessions from the post-purchase race condition).
+        let snap;
+        if (email) {
+            snap = await db
+                .collection('user_sessions')
+                .where('experience_id', '==', experience_id)
+                .where('email', '==', email)
+                .where('status', '==', 'in_progress')
+                .get();
+            // Fallback: if no email match found, try access_token.
+            if (snap.empty && access_token) {
+                snap = await db
+                    .collection('user_sessions')
+                    .where('experience_id', '==', experience_id)
+                    .where('access_token', '==', access_token)
+                    .where('status', '==', 'in_progress')
+                    .get();
+            }
+        } else {
+            snap = await db
+                .collection('user_sessions')
+                .where('experience_id', '==', experience_id)
+                .where('access_token', '==', access_token!)
+                .where('status', '==', 'in_progress')
+                .get();
+        }
 
         if (snap.empty) {
             return NextResponse.json({ session: null });

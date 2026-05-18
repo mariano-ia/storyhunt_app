@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { Resend } from 'resend';
+import crypto from 'crypto';
 import type { AccessToken, DiscountCoupon } from '@/lib/types';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -15,7 +17,12 @@ async function sendAccessEmail(email: string, token: string, experienceName: str
     try {
         await resend.emails.send({
             from: 'StoryHunt <hello@storyhunt.city>',
+            replyTo: 'hello@storyhunt.city',
             to: email,
+            headers: {
+                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(email)}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
             subject: isEn
                 ? `Your access to "${experienceName}" is ready`
                 : `Tu acceso a "${experienceName}" está listo`,
@@ -119,8 +126,9 @@ ${startingPoint ? `
 
 function generateToken(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.randomBytes(8);
     let token = 'SH-';
-    for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 8; i++) token += chars[bytes[i] % chars.length];
     return token;
 }
 
@@ -230,7 +238,7 @@ export async function POST(req: NextRequest) {
             created_at: nowIso,
         });
 
-        // Increment coupon if used
+        // Increment coupon if used (atomic via FieldValue.increment).
         if (couponCode) {
             const couponSnap = await db
                 .collection('discount_coupons')
@@ -239,11 +247,26 @@ export async function POST(req: NextRequest) {
                 .get();
             if (!couponSnap.empty) {
                 const coupon = { id: couponSnap.docs[0].id, ...couponSnap.docs[0].data() } as DiscountCoupon;
-                const newCount = coupon.times_redeemed + 1;
                 await db.collection('discount_coupons').doc(coupon.id).update({
-                    times_redeemed: newCount,
-                    status: newCount >= coupon.max_redemptions ? 'expired' : coupon.status,
+                    times_redeemed: FieldValue.increment(1),
                 });
+                const fresh = await db.collection('discount_coupons').doc(coupon.id).get();
+                const newCount = (fresh.data()?.times_redeemed as number) || 0;
+                if (newCount >= coupon.max_redemptions) {
+                    await db.collection('discount_coupons').doc(coupon.id).update({ status: 'expired' });
+                }
+            }
+        }
+
+        // Mark matching contact as converted so nurturing stops.
+        if (email) {
+            try {
+                const cs = await db.collection('contacts').where('email', '==', email.toLowerCase()).get();
+                for (const c of cs.docs) {
+                    await c.ref.update({ converted: true, converted_at: nowIso });
+                }
+            } catch (err) {
+                console.error('[access/verify] mark contact converted failed:', err);
             }
         }
 
@@ -257,7 +280,7 @@ export async function POST(req: NextRequest) {
             await sendAccessEmail(email, tokenData.token, experienceName, lang, startingPoint);
         }
 
-        console.log(`[access/verify] Created token for session ${checkoutId}: ${accessToken.token}`);
+        console.log(`[access/verify] Created token for session ${checkoutId}: ${accessToken.token.slice(0, 5)}***`);
         return NextResponse.json({ access_token: accessToken });
 
     } catch (err: unknown) {
