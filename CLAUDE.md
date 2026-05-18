@@ -29,14 +29,26 @@ Experience
               status (inactive/coming_soon/published)
 
 Access Tokens (post-payment):
-  - token: "SH-XXXXXX", experience_id, lang (es/en), email
-  - max_uses: 20, expires in 30 days
+  - token: "SH-XXXXXXXX" (8 chars from a 32-char alphabet, generated via
+    crypto.randomBytes — 40 bits of entropy)
+  - experience_id, lang (es/en), email
+  - max_uses: 20, lazy activation (30d clock starts on first /play/t/[token] visit)
   - Created by Stripe webhook or /api/access/verify fallback
   - Increment happens on /play/[id] (after paywall passes), NOT on /play/t/[token] —
     this avoids email scanners (Gmail, Outlook Safe Links, etc.) consuming uses on pre-fetch
+  - times_used uses FieldValue.increment(1) (atomic)
+  - status: 'active' | 'used' | 'refunded' (set on charge.refunded/dispute webhooks)
 
 Sales:
   - Tracks purchases per experience (used for card sorting on web)
+  - Attribution fields: source, utm_source, utm_medium, utm_campaign, referrer
+    (populated from checkout metadata forwarded by the client)
+
+stripe_events (dedup log — added 2026-05-18):
+  - Doc id = Stripe event.id. .create() throws on duplicate → idempotent webhook.
+
+cron_runs (cron execution log — added 2026-05-18):
+  - Every cron writes a row: cron, started_at, finished_at, ok, counts.
 
 Step types:
   - interactive: espera respuesta del usuario, evalúa con LLM
@@ -97,11 +109,13 @@ Step features:
                                        usando gpt-4o-mini JSON mode (~$0.0001/call)
 /api/sessions/find                  → Devuelve sesión in_progress de (email, experiencia)
                                        para resume; sin orderBy (sin índice compuesto)
-/api/contacts                       → Recibe formulario web (JSON y form-urlencoded)
+/api/contacts                       → Recibe formulario web (JSON y form-urlencoded) + envía welcome email
 /api/cron/publish-instagram         → Vercel Cron: publica posts pendientes en Instagram
 /api/cron/post-experience-email     → Vercel Cron: envía review email + cupón 24h post-experiencia
 /api/cron/nurturing                 → Vercel Cron: nurturing cycle (E2 teaser, E3 social proof, E5 reminder, E7 last call)
-/api/contacts                       → Recibe formulario web (JSON y form-urlencoded) + envía welcome email
+/api/cron/abandon-stale-sessions    → Vercel Cron: flips in_progress sessions older than 12h to abandoned
+/api/unsubscribe                    → POST/GET: marks contact as unsubscribed (CAN-SPAM compliance)
+/unsubscribe                        → Landing page para confirmar unsubscribe (List-Unsubscribe target)
 ```
 
 ### Transactional Emails (Resend) — Nurturing Cycle
@@ -163,9 +177,40 @@ Step features:
 ### Vercel Crons (vercel.json)
 - `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy
 - `/api/cron/post-experience-email` — Daily 10 AM NYC — review email + THANKYOU40 coupon
-- `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7)
+  (filtra por `first_used_at`, no `created_at` — tourists que compran ahead reciben el mail)
+- `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7).
+  Respeta `converted: true` (no spam a buyers) y `unsubscribed: true`.
+- `/api/cron/campaign-report` — Daily 9 AM NYC — Meta Ads report
+- `/api/cron/abandon-stale-sessions` — Daily 15:00 NYC — flips in_progress >12h to abandoned
 - Lee social-calendar.json del repo StoryHuntWeb en GitHub
 - Env vars requeridas: INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
+
+### Security model (post-lockdown 2026-05-18)
+- **Firestore rules locked**: `access_tokens`, `admins`, `discount_coupons`,
+  `events`, `stripe_events`, `cron_runs` are server-only (Admin SDK).
+  `sales`, `user_sessions`, `interactions`, `contacts` are auth-read only;
+  client writes denied. Player still reads `experiences` publicly.
+- **Admin allowlist**: `verifyAuth()` rejects any caller not in the `admins`
+  collection. Bootstrap script: `node scripts/add-admin.js <email>`.
+- **Stripe webhook idempotency**: `stripe_events/{event.id}.create()` blocks
+  duplicate processing. Always returns 200 after signature verify.
+- **Tokens**: SH-XXXXXXXX, 40 bits via `crypto.randomBytes`.
+- **`llm_api_key` stripped client-side**: `lib/firestore.ts::stripSensitive()`
+  removes it from `getExperience(s)` returns. Server reads via Admin SDK keep
+  the raw doc.
+- **`KILL_SWITCH_PAYMENTS=true` env** returns 503 on `/api/checkout` without
+  needing a redeploy.
+- **Rules deploy**: `node scripts/deploy-firestore-rules.js` (uses the SA from
+  .env.local + Firebase Rules REST API).
+
+### QA cadence
+- **Post-deploy smoke**: GitHub Action `.github/workflows/post-deploy-smoke.yml`
+  runs `scripts/post-deploy-smoke.sh` 90s after every push to main.
+  32 assertions. Required GH secret: `CRON_SECRET`.
+- **Weekly full audit**: Claude `/storyhunt-qa` skill — runs phases 1-5 (or
+  1-7 with depth (c) for end-to-end). Schedule: Monday 9 AM NYC (aligns with
+  conversion-review cron).
+- See `docs/WEEKLY-QA.md` for the full cadence + manual commands cheatsheet.
 
 ### Local LaunchAgent: conversion-review (carpeta `conversion-review/`)
 - Lunes 9 AM NYC — pulls 7d PostHog → Anthropic Opus 4.7 → email Resend

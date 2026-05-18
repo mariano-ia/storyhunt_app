@@ -1,0 +1,42 @@
+name: Post-deploy smoke
+
+# Runs every time main is updated. Vercel auto-deploys main; we wait long
+# enough for that to finish, then hit the deployed surfaces and assert.
+# Exit code = number of failed checks (0 = clean).
+#
+# Required repo secret:
+#   CRON_SECRET — used to call /api/debug/reconcile against prod.
+#
+# Optional repo variables (set in Settings → Actions → Variables):
+#   ABM_URL  — default https://storyhunt-app.vercel.app
+#   WEB_URL  — default https://storyhunt.city
+#
+# Output: GitHub Actions tab shows the smoke run; on failure a workflow status
+# badge in the README + email to the repo owner (default GH behavior).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    # Lets you re-run the smoke manually from the Actions tab without pushing.
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for Vercel to finish deploying
+        # 90s is enough for a Next.js build on Vercel hobby in 90% of cases.
+        # If it isn't ready, the first /api/public/experiences check would fail
+        # and we'd see it. Tune higher if your build gets slower.
+        run: sleep 90
+
+      - name: Run smoke
+        env:
+          ABM_URL: ${{ vars.ABM_URL || 'https://storyhunt-app.vercel.app' }}
+          WEB_URL: ${{ vars.WEB_URL || 'https://storyhunt.city' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: bash scripts/post-deploy-smoke.sh
