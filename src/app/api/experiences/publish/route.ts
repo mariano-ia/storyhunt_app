@@ -78,80 +78,11 @@ export async function POST(req: NextRequest) {
         let processedSteps = 0;
         for (const step of steps) {
             const msgResult = await processText(step.message_to_send);
-            const answerResult = step.expected_answer ? await processText(step.expected_answer) : { normalized: '', english: '' };
-
-            const updates: Record<string, any> = {
+            await adminUpdateStep(experience_id, step.id, {
                 message_to_send: msgResult.normalized,
                 message_to_send_en: msgResult.english,
-            };
-
-            if (step.expected_answer) {
-                updates.expected_answer = answerResult.normalized;
-                updates.expected_answer_en = answerResult.english;
-            }
-
-            await adminUpdateStep(experience_id, step.id, updates);
+            });
             processedSteps++;
-        }
-
-        // ─── Expected-answer quality check ───────────────────────────────────────
-        interface AnswerWarning {
-            index: number;
-            rating: string;
-            reason: string;
-            message_preview: string;
-            expected_answer_preview: string;
-        }
-        let expected_answer_warnings: AnswerWarning[] = [];
-
-        const interactiveSteps = steps
-            .map((s, i) => ({ index: i, step: s }))
-            .filter(({ step }) => step.step_type === 'interactive' || step.requires_response);
-
-        if (interactiveSteps.length > 0) {
-            const qaPayload = interactiveSteps.map(({ index, step }) => ({
-                index,
-                message: step.message_to_send,
-                expected_answer: step.expected_answer,
-            }));
-
-            const QA_SYSTEM_PROMPT = `You are a QA reviewer for interactive narrative experiences. Analyze each step's expected_answer and rate how likely it is to block a user unfairly.
-
-For each step, rate:
-- GREEN: answer is flexible, accepts approximations, or any response is valid
-- YELLOW: answer requires specific knowledge but has some flexibility
-- RED: answer requires an exact word, specific number, or precise vocabulary that could frustrate users
-
-Respond as JSON array: [{"index": 0, "rating": "green|yellow|red", "reason": "brief explanation"}]
-Only include YELLOW and RED items. If all are GREEN, return [].`;
-
-            try {
-                const qaResult = await callLLM(apiKey, QA_SYSTEM_PROMPT, JSON.stringify(qaPayload), {
-                    temperature: 0.2,
-                    maxTokens: 2000,
-                    jsonMode: true,
-                });
-                totalTokens += qaResult.tokens;
-                totalCost += qaResult.cost;
-
-                const parsed = JSON.parse(qaResult.text);
-                const items: { index: number; rating: string; reason: string }[] = Array.isArray(parsed) ? parsed : parsed.items ?? parsed.warnings ?? [];
-
-                expected_answer_warnings = items
-                    .filter((w) => w.rating === 'yellow' || w.rating === 'red')
-                    .map((w) => {
-                        const orig = interactiveSteps.find((s) => s.index === w.index);
-                        return {
-                            index: w.index,
-                            rating: w.rating,
-                            reason: w.reason,
-                            message_preview: (orig?.step.message_to_send ?? '').slice(0, 80),
-                            expected_answer_preview: (orig?.step.expected_answer ?? '').slice(0, 80),
-                        };
-                    });
-            } catch (qaErr) {
-                console.warn('[publish] QA check failed (non-blocking):', qaErr);
-            }
         }
 
         // ─── Set published status ────────────────────────────────────────────────
@@ -176,7 +107,6 @@ Only include YELLOW and RED items. If all are GREEN, return [].`;
             steps_processed: processedSteps,
             tokens: totalTokens,
             cost: totalCost,
-            ...(expected_answer_warnings.length > 0 ? { expected_answer_warnings } : {}),
         });
 
     } catch (err: unknown) {

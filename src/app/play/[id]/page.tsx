@@ -176,8 +176,6 @@ export default function PlayPage() {
     const inputRef = useRef<HTMLInputElement>(null);
     const initialized = useRef(false);
     const sessionIdRef = useRef<string | null>(null);
-    const failedAttemptsRef = useRef(0);
-    const MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE = 3;
     // Holds the deferred experience-start fn while the NYC gate is asking.
     const deferredStartRef = useRef<(() => Promise<void>) | null>(null);
     // Latest raw user reply to the NYC gate — preserved across confirmation turns
@@ -783,19 +781,8 @@ export default function PlayPage() {
             });
             const data = await res.json();
 
-            let isCorrect = data.evaluation === 'correct';
-
-            // Track failed attempts — auto-advance after MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE
-            if (!isCorrect) {
-                failedAttemptsRef.current += 1;
-                if (failedAttemptsRef.current >= MAX_ATTEMPTS_BEFORE_AUTO_ADVANCE) {
-                    isCorrect = true; // force advance
-                    failedAttemptsRef.current = 0;
-                }
-            } else {
-                failedAttemptsRef.current = 0;
-            }
-
+            // The API always advances (connector-only mode). The user walks
+            // through regardless of what they answer.
             const nextIdx = data.nextStepIndex;
             const nextStepObj = (steps && nextIdx < steps.length) ? steps[nextIdx] : undefined;
 
@@ -803,22 +790,21 @@ export default function PlayPage() {
                 role: 'system',
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
-                evaluation: isCorrect ? 'correct' : data.evaluation,
-                // Inherit media from the next step if we successfully advanced
-                media_type: isCorrect && nextStepObj ? nextStepObj.media_type : undefined,
-                media_url: isCorrect && nextStepObj ? nextStepObj.media_url : undefined
+                evaluation: 'correct',
+                // Inherit media from the next step if available
+                media_type: nextStepObj ? nextStepObj.media_type : undefined,
+                media_url: nextStepObj ? nextStepObj.media_url : undefined
             };
 
             await pushMessageWithEffects(systemMsg, {
                 delay_seconds: 1.0,
-                // Only use interrupted typing on correct evaluation if the next step has it
-                interrupted_typing: isCorrect && nextStepObj ? nextStepObj.interrupted_typing : false
+                interrupted_typing: nextStepObj ? nextStepObj.interrupted_typing : false
             });
 
             if (data.completed) {
                 setStepIndex(steps.length);
                 handleExperienceComplete();
-            } else if (isCorrect) {
+            } else {
                 const currentStep = steps[stepIndex];
                 // Check if current step has a next_step_id override
                 if (currentStep?.next_step_id) {

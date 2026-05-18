@@ -143,9 +143,6 @@ export default function AIStoriesPage() {
             step_type: 'narrative',
             message_to_send: '',
             requires_response: false,
-            expected_answer: '',
-            hints: [],
-            wrong_answer_message: '',
             delay_seconds: 2,
         };
         const updated = { ...generated };
@@ -478,7 +475,7 @@ export default function AIStoriesPage() {
                                                                     </p>
                                                                     {step.requires_response && (
                                                                         <span style={{ fontSize: 11, color: 'var(--brand-primary-light, var(--brand-primary))', opacity: 0.8 }}>
-                                                                            Espera: {step.expected_answer}
+                                                                            Espera respuesta del usuario
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -525,23 +522,6 @@ export default function AIStoriesPage() {
                                                                             style={{ minHeight: 60, fontSize: 13 }}
                                                                         />
                                                                     </div>
-                                                                    {step.requires_response && (
-                                                                        <div>
-                                                                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>
-                                                                                Intención esperada
-                                                                            </label>
-                                                                            <input
-                                                                                className="form-input"
-                                                                                value={step.expected_answer}
-                                                                                onChange={e => updateStep(sceneIdx, stepIdx, { expected_answer: e.target.value })}
-                                                                                placeholder="Ej: que el usuario confirme, que mencione el lugar, cualquier respuesta"
-                                                                                style={{ fontSize: 13 }}
-                                                                            />
-                                                                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>
-                                                                                El narrador guía al usuario automáticamente si la respuesta no cumple esta intención.
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
                                                                     <div style={{ display: 'flex', gap: 12 }}>
                                                                         <div style={{ flex: 1 }}>
                                                                             <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Delay (seg)</label>

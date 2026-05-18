@@ -59,9 +59,11 @@ export interface Step {
     step_type?: 'interactive' | 'narrative' | 'typing' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
-    expected_answer: string;
-    hints: string[];
-    wrong_answer_message: string;
+    // Deprecated 2026-05-18 — the player is a walkthrough, no eval/gating.
+    // Kept optional for backwards compat with existing Firestore docs.
+    expected_answer?: string;
+    hints?: string[];
+    wrong_answer_message?: string;
     context?: string;
     delay_seconds?: number;
 
@@ -76,7 +78,6 @@ export interface Step {
 
     // Translations (generated on publish)
     message_to_send_en?: string;
-    expected_answer_en?: string;
 }
 
 // ─── Preview Chat ─────────────────────────────────────────────────────────────
@@ -166,9 +167,6 @@ export interface AIGeneratedStep {
     step_type: 'interactive' | 'narrative' | 'typing' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
-    expected_answer: string;
-    hints: string[];
-    wrong_answer_message: string;
     delay_seconds?: number;
     glitch_effect?: boolean;
     interrupted_typing?: boolean;

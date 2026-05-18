@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getExperience, getSteps, getScenes } from '@/lib/firestore';
 import { adminSaveInteraction as saveInteraction } from '@/lib/firebase-admin';
 
-// ─── Preview Evaluation Endpoint ──────────────────────────────────────────────
+// ─── Player Connector Endpoint ────────────────────────────────────────────────
 // POST /api/experiences/[id]/preview
-// Body: { userMessage: string; stepIndex: number }
+// Body: { userMessage: string; stepIndex: number; stepId?: string; lang?: 'es' | 'en' }
+//
+// The product is a walkthrough — the user always advances, regardless of what
+// they answer. The LLM's only job is to produce a SHORT in-character connector
+// (2-8 words) between the user's reply and the next narrative beat that the
+// player displays right after. No gating, no retries, no anticipation of
+// downstream content.
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -46,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return NextResponse.json({ rating });
         }
 
-        // ─── Normal game evaluation ──────────────────────────────────────────────
+        // ─── Connector mode (single LLM call, always advance) ────────────────────
         const [experience, rawSteps, scenes] = await Promise.all([getExperience(id), getSteps(id), getScenes(id)]);
 
         if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });
@@ -66,7 +72,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         let currentStep = stepId ? steps.find(s => s.id === stepId) : undefined;
         let stepIndex = currentStep ? steps.indexOf(currentStep) : rawStepIndex;
 
-        // Fallback: if no stepId or not found, use index with narrative skip
         if (!currentStep) {
             stepIndex = rawStepIndex;
             while (stepIndex < steps.length && !(steps[stepIndex]?.requires_response ?? true)) {
@@ -79,145 +84,75 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return NextResponse.json({ evaluation: 'correct', nextStepIndex: steps.length, completed: true, response: '¡Llegaste al final de la experiencia!' });
         }
 
-        const totalSteps = steps.length;
-        const stepNumber = stepIndex + 1;
-
         // ─── Detect LLM provider from key prefix ──────────────────────────────────
         const expKey = (experience.llm_api_key ?? '').trim();
         const apiKey = expKey || process.env.OPENAI_API_KEY || '';
-        // Key source logged without exposing prefix
         if (!apiKey) console.warn('[preview] No API key available (experience nor env)');
         const isOpenAI = apiKey.startsWith('sk-');
         const sessionId = `preview-${id}`;
 
-        // ─── Compute effective context: use own context, fallback to most recent non-empty ──
-        let effectiveContext = '';
-        for (let i = 0; i <= stepIndex; i++) {
-            const c = steps[i]?.context?.trim();
-            if (c) effectiveContext = c;  // last non-empty wins
-        }
-
-        // ─── Build a context-aware system prompt ───────────────────────────────────
+        // ─── Language-aware narrator + step prompt fields ─────────────────────────
         const narratorPersonality = lang === 'en' && (experience as any).narrator_personality_en
             ? (experience as any).narrator_personality_en
             : experience.narrator_personality;
         const stepMessage = lang === 'en' && (currentStep as any).message_to_send_en
             ? (currentStep as any).message_to_send_en
             : currentStep.message_to_send;
-        const stepExpectedAnswer = lang === 'en' && (currentStep as any).expected_answer_en
-            ? (currentStep as any).expected_answer_en
-            : currentStep.expected_answer;
-        const langInstruction = lang === 'en' ? '- IMPORTANT: Respond in English.' : '- Hablá en español, con el tono y vocabulario de tu personalidad.';
+        const langInstruction = lang === 'en'
+            ? 'Respond in English.'
+            : 'Hablá en español, con el tono y vocabulario de tu personalidad.';
 
-        const buildSystemPrompt = (task: string) => `
+        const nextIndex = stepIndex + 1;
+        const isLast = nextIndex >= steps.length;
+
+        // ─── Build the connector prompt ───────────────────────────────────────────
+        const task = isLast
+            ? 'El jugador acaba de cerrar la última interacción de la experiencia. Despedite en personaje en máximo 2 oraciones. NO agregues datos, fechas ni historia nueva — solo cerrá con tu voz.'
+            : 'Generá un conector MUY corto en personaje, entre 2 y 8 palabras, una sola oración breve. Tu respuesta es un puente verbal entre lo que el jugador dijo y el próximo mensaje que el sistema mostrará INMEDIATAMENTE después. Nada más.';
+
+        const systemPrompt = `
 ${narratorPersonality}
 
 ---
 
-CONTEXTO DEL JUEGO (invisible para el jugador):
-- El jugador está en el PASO ${stepNumber} de ${totalSteps}.
-- Mensaje que le enviaste al jugador en este paso: "${stepMessage}"
-${currentStep.requires_response
-                ? `- La respuesta esperada es (semánticamente): "${stepExpectedAnswer}"
-- Pistas disponibles si el jugador está trabado: ${currentStep.hints.length ? currentStep.hints.join(' | ') : '(sin pistas)'}
-- Mensaje de reintento configurado: "${currentStep.wrong_answer_message || '(no configurado, inventá uno en personaje)'}"
-${effectiveContext ? `- Contexto adicional del creador de la experiencia: "${effectiveContext}"` : ''}`
-                : '- Este es un paso narrativo, el jugador NO necesita responder nada.'}
+CONTEXTO (invisible para el jugador):
+- Le acabás de preguntar: "${stepMessage}"
+- El jugador respondió. El sistema YA decidió avanzar al siguiente paso. No estás evaluando, no estás corrigiendo, no estás guiando. Solo enlazás.
 
-REGLAS:
-- Nunca salgas del personaje.
-- Nunca des la respuesta correcta directamente.
-- Podés parafrasear el mensaje del paso sin repetirlo textualmente.
-${langInstruction}
-- Respuestas cortas: 1-3 oraciones máximo.
-${effectiveContext ? `- Usá el contexto adicional para guiar al jugador si está trabado, sin saltearse los pasos definidos.` : ''}
+REGLAS ABSOLUTAS (estas mandan sobre cualquier instinto del personaje):
+- ${langInstruction}
+- Tu respuesta debe tener entre 2 y 8 palabras. UNA sola oración breve. Nunca más.
+- PROHIBIDO hacerle una pregunta al jugador. Ya respondió. El producto avanza.
+- PROHIBIDO pedirle que vuelva, repita, reformule, aclare o piense de nuevo. El sistema avanza igual.
+- PROHIBIDO agregar información, datos, fechas, historia, contexto del lugar o cualquier dato narrativo. El próximo mensaje del sistema ya trae eso.
+- PROHIBIDO anticipar, resumir, parafrasear ni presentar el paso siguiente.
 
-TAREA ACTUAL: ${task}
+ESTILO:
+- Variá la elección — no repitas siempre la misma muletilla. El narrador suena natural cuando alterna.
+- Banco de referencia (no son los únicos válidos — usalos como guía de estilo, longitud y registro; mezclá, adaptá al personaje):
+  · Afirmativos: "Exacto.", "Ahí está.", "Eso mismo.", "Bien visto.", "Sabía que lo notarías.", "Justo eso.", "Tal cual.", "Lo viste."
+  · Neutros / continuación: "Mhm.", "Anotado.", "Sigamos.", "Bueno.", "Bien.", "Avancemos.", "Vamos."
+  · Si la respuesta es off-topic: tirá uno neutro de continuación, sin regañar.
+
+TAREA: ${task}
 `.trim();
 
-        // Helper: call LLM + save interaction cost to Firestore
-        const llmAndSave = async (systemPrompt: string, userMsg: string) => {
-            const result = await callLLM(apiKey, isOpenAI, systemPrompt, userMsg);
-            saveInteraction({
-                session_id: sessionId,
-                experience_id: id,
-                user_message: userMsg,
-                system_response: result.text,
-                tokens_consumed: result.tokens,
-                estimated_cost: result.cost,
-            });
-            return result.text;
-        };
-
-        // ─── Evaluate if the answer satisfies the expected intent ──────────────────
-        const evalSystemPrompt = [
-            'Sos un evaluador de respuestas para un juego interactivo.',
-            'Tu tarea: decidir si la respuesta del jugador satisface el criterio de evaluación.',
-            '',
-            'IMPORTANTE: El criterio de evaluación puede ser:',
-            '  a) Una respuesta literal (ej: "Grand Central Terminal") — el jugador debe decir algo equivalente.',
-            '  b) Una DESCRIPCIÓN de qué tipo de respuesta es válida (ej: "que el usuario confirme", "que diga un lugar de NYC").',
-            '     En este caso, evaluá si la respuesta del jugador CUMPLE con lo descrito, no la compares literalmente con el texto del criterio.',
-            '',
-            'Criterios de CORRECTO:',
-            '  - Expresa la misma intención o idea central que el criterio.',
-            '  - Una respuesta más corta o informal que capture la esencia es válida (ej: "sí" ≈ "sí, claro").',
-            '  - Sinónimos, variantes ortográficas y equivalentes semánticos cuentan.',
-            '  - Una respuesta afirmativa simple ("sí", "si", "yes", "claro", "dale", "ok") equivale a una confirmación.',
-            'Criterios de INCORRECTO:',
-            '  - La respuesta es claramente equivocada, contradictoria o completamente fuera de tema.',
-            '  - El jugador no respondió la pregunta en absoluto.',
-            'Respondé ÚNICAMENTE con la palabra SÍ o NO, sin ningún otro texto.',
-        ].join('\n');
-
-        const evalUserPrompt = [
-            `Pregunta/instrucción que recibió el jugador: "${currentStep.message_to_send}"`,
-            `Criterio de evaluación: "${currentStep.expected_answer}"`,
-            `Respuesta real del jugador: "${userMessage}"`,
-            '¿La respuesta del jugador es correcta según el criterio?',
-        ].join('\n');
-
-        const evalResult = await callLLM(apiKey, isOpenAI, evalSystemPrompt, evalUserPrompt);
+        const result = await callLLM(apiKey, isOpenAI, systemPrompt, userMessage);
         saveInteraction({
             session_id: sessionId,
             experience_id: id,
-            user_message: evalUserPrompt,
-            system_response: evalResult.text,
-            tokens_consumed: evalResult.tokens,
-            estimated_cost: evalResult.cost,
+            user_message: userMessage,
+            system_response: result.text,
+            tokens_consumed: result.tokens,
+            estimated_cost: result.cost,
         });
 
-        const upper = evalResult.text.trim().toUpperCase();
-        const isCorrect = upper.startsWith('SÍ') || upper.startsWith('SI') || upper.startsWith('YES');
-
-        // ─── Correct answer ───────────────────────────────────────────────────────
-        if (isCorrect) {
-            const nextIndex = stepIndex + 1;
-            const isLast = nextIndex >= steps.length;
-
-            if (isLast) {
-                const response = await llmAndSave(
-                    buildSystemPrompt('¡El jugador completó TODA la experiencia! Enviá un mensaje de cierre épico y felicitación en personaje.'),
-                    '¡Lo logré!',
-                );
-                return NextResponse.json({ evaluation: 'correct', nextStepIndex: nextIndex, response, completed: true });
-            }
-
-            const nextStep = steps[nextIndex];
-            const confirmTask = nextStep.requires_response
-                ? `El jugador respondió correctamente. Celebrá brevemente en personaje (1 oración) y luego presentá el siguiente mensaje al jugador: "${nextStep.message_to_send}". Podés adaptarlo a tu tono sin cambiar el contenido esencial.`
-                : `El jugador respondió correctamente. Confirmá brevemente en personaje con una sola oración de celebración. NO añadas más información ni anticipes el siguiente paso; el sistema lo hará automáticamente.`;
-
-            const response = await llmAndSave(buildSystemPrompt(confirmTask), userMessage);
-            return NextResponse.json({ evaluation: 'correct', nextStepIndex: nextIndex, response });
-        }
-
-        // ─── Incorrect answer ─────────────────────────────────────────────────────
-        const response = await llmAndSave(
-            buildSystemPrompt(`El jugador respondió incorrectamente con: "${userMessage}". Usá el mensaje de reintento y las pistas disponibles para guiarlo sin revelar la respuesta. Si hay contexto adicional, usalo para orientarlo mejor sin saltearse pasos.`),
-            userMessage,
-        );
-        return NextResponse.json({ evaluation: 'incorrect', nextStepIndex: stepIndex, response });
+        return NextResponse.json({
+            evaluation: 'correct',
+            nextStepIndex: nextIndex,
+            response: result.text,
+            completed: isLast,
+        });
 
     } catch (err: any) {
         console.error('[preview]', err);

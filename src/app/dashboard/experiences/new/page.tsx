@@ -59,27 +59,6 @@ function Step1({ data, onChange }: { data: Partial<ExperienceFormData>; onChange
 }
 
 // ─── Step 2: Pasos / Steps ────────────────────────────────────────
-function HintsList({ hints, onChange }: { hints: string[]; onChange: (h: string[]) => void }) {
-    const add = () => onChange([...hints, '']);
-    const remove = (i: number) => onChange(hints.filter((_, idx) => idx !== i));
-    const update = (i: number, val: string) => onChange(hints.map((h, idx) => idx === i ? val : h));
-    return (
-        <div>
-            <div className="hints-list">
-                {hints.map((h, i) => (
-                    <div className="hint-row" key={i}>
-                        <input className="form-input" placeholder={`Pista ${i + 1}`} value={h} onChange={e => update(i, e.target.value)} />
-                        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => remove(i)} type="button"><Trash2 size={14} /></button>
-                    </div>
-                ))}
-            </div>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={add} style={{ marginTop: 8, color: 'var(--text-brand)' }}>
-                <Plus size={14} /> Agregar pista
-            </button>
-        </div>
-    );
-}
-
 function StepEditor({ step, index, total, onChange, onDelete, onMoveUp, onMoveDown }: {
     step: StepFormData; index: number; total: number;
     onChange: (s: StepFormData) => void; onDelete: () => void;
@@ -177,24 +156,6 @@ function StepEditor({ step, index, total, onChange, onDelete, onMoveUp, onMoveDo
                         </div>
                     )}
 
-                    {/* These fields only matter for interactive steps */}
-                    {step.requires_response && (
-                        <>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">Respuesta esperada <span className="required">*</span></label>
-                                <input className="form-input" placeholder="Respuesta correcta que el LLM evaluará semánticamente" value={step.expected_answer} onChange={e => onChange({ ...step, expected_answer: e.target.value })} />
-                                <span className="form-hint">No hace falta que sea exacta — el LLM detecta equivalencias semánticas.</span>
-                            </div>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">Mensaje si respuesta incorrecta</label>
-                                <input className="form-input" placeholder="Ej: ¡Casi! Seguí buscando..." value={step.wrong_answer_message} onChange={e => onChange({ ...step, wrong_answer_message: e.target.value })} />
-                            </div>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">Pistas de ayuda</label>
-                                <HintsList hints={step.hints} onChange={hints => onChange({ ...step, hints })} />
-                            </div>
-                        </>
-                    )}
                 </div>
             )}
         </div>
@@ -207,9 +168,6 @@ function Step2({ steps, onChange }: { steps: StepFormData[]; onChange: (s: StepF
         message_to_send: '',
         requires_response: true,
         step_type: 'interactive',
-        expected_answer: '',
-        hints: [],
-        wrong_answer_message: '',
         interrupted_typing: false,
     }]);
 
@@ -316,8 +274,7 @@ export default function NewExperiencePage() {
     const [error, setError] = useState('');
 
     const isStep1Valid = formData.name && formData.slug && formData.description && formData.narrator_personality && formData.activation_keyword;
-    // Narrative steps (requires_response=false) don't need expected_answer
-    const isStep2Valid = steps.length > 0 && steps.every(s => (s.step_type === 'typing' || s.message_to_send) && (!s.requires_response || s.expected_answer));
+    const isStep2Valid = steps.length > 0 && steps.every(s => s.step_type === 'typing' || s.message_to_send);
     const isStep3Valid = formData.llm_api_key;
 
     const canProceed = [isStep1Valid, isStep2Valid, isStep3Valid][currentStep];

@@ -544,8 +544,7 @@ export default function ExperiencePreview() {
                     {currentStep.requires_response ? (
                         <>
                             <Zap size={14} style={{ color: '#0B84FF' }} />
-                            <span>Esperando: <strong style={{ color: 'black', fontWeight: 500 }}>{currentStep.expected_answer}</strong></span>
-                            {currentStep.hints.length > 0 && <span>· {currentStep.hints.length} pista(s)</span>}
+                            <span>Esperando respuesta del jugador…</span>
                         </>
                     ) : (
                         <>

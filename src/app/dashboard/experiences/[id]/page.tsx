@@ -149,9 +149,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
         order: step.order,
         message_to_send: step.message_to_send,
         requires_response: step.requires_response ?? true,
-        expected_answer: step.expected_answer,
-        hints: step.hints,
-        wrong_answer_message: step.wrong_answer_message,
         context: step.context || '',
         delay_seconds: step.delay_seconds ?? 1.2,
         media_url: step.media_url || '',
@@ -282,23 +279,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                             onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
                             onFocus={e => { const t = e.target; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
                         />}
-                    {form.requires_response && form.step_type === 'interactive' && (
-                        <input
-                            value={form.expected_answer}
-                            onChange={e => {
-                                const newForm = { ...form, expected_answer: e.target.value };
-                                setForm(newForm);
-                                triggerAutoSave(newForm);
-                            }}
-                            placeholder="Intencion esperada..."
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                                width: '100%', border: 'none', background: 'transparent',
-                                fontSize: 11, color: borderColor, opacity: 0.8, outline: 'none',
-                                padding: 0, marginTop: 4,
-                            }}
-                        />
-                    )}
                 </div>
 
                 {/* Action bar */}
@@ -439,14 +419,6 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                     </div>
                 )}
 
-                {/* Interactive: expected answer */}
-                {form.requires_response && (
-                    <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label" style={{ fontSize: 12 }}>Intención esperada</label>
-                        <input className="form-input" style={{ fontSize: 13 }} placeholder="Ej: que confirme, que mencione el lugar, cualquier respuesta" value={form.expected_answer} onChange={e => handleFormChange({ ...form, expected_answer: e.target.value })} />
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>El narrador guía al usuario si la respuesta no cumple esta intención.</span>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -537,25 +509,12 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 </div>
             </div>
 
-            {d.requires_response && (
-                <>
-                    <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Respuesta esperada <span className="required">*</span></label>
-                        <input className="form-input" value={d.expected_answer} onChange={e => set({ expected_answer: e.target.value })} />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Mensaje si respuesta incorrecta</label>
-                        <input className="form-input" value={d.wrong_answer_message} onChange={e => set({ wrong_answer_message: e.target.value })} />
-                    </div>
-                </>
-            )}
-
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary btn-sm" onClick={onCancel}>Cancelar</button>
                 <button
                     className="btn btn-primary btn-sm"
                     onClick={onSave}
-                    disabled={(d.step_type !== 'typing' && !d.message_to_send) || (d.requires_response && !d.expected_answer)}
+                    disabled={d.step_type !== 'typing' && !d.message_to_send}
                 >
                     <Check size={13} /> Guardar paso
                 </button>
@@ -683,12 +642,12 @@ export default function ExperienceDetailPage() {
         const newId = await createStep(id, {
             scene_id: sceneId, order: atOrder,
             step_type: 'narrative', message_to_send: '', requires_response: false,
-            expected_answer: '', hints: [], wrong_answer_message: '', delay_seconds: 1.2,
+            delay_seconds: 1.2,
         });
         setSteps(prev => [...prev, {
             id: newId, experience_id: id, scene_id: sceneId, order: atOrder,
             step_type: 'narrative', message_to_send: '', requires_response: false,
-            expected_answer: '', hints: [], wrong_answer_message: '', delay_seconds: 1.2,
+            delay_seconds: 1.2,
         } as Step]);
     };
 
@@ -732,7 +691,7 @@ export default function ExperienceDetailPage() {
 
     const newStepDefault = (sceneId: string): { sceneId: string; data: StepFormData } => ({
         sceneId,
-        data: { order: 0, message_to_send: '', requires_response: true, step_type: 'interactive', expected_answer: '', hints: [], wrong_answer_message: '', context: '', delay_seconds: 1.2, interrupted_typing: false, glitch_effect: false },
+        data: { order: 0, message_to_send: '', requires_response: true, step_type: 'interactive', context: '', delay_seconds: 1.2, interrupted_typing: false, glitch_effect: false },
     });
 
     const handleDeleteStep = async () => {

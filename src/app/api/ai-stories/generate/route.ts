@@ -15,26 +15,22 @@ Tu tarea: recibir un guión editorial en texto libre y convertirlo en una estruc
 Una experiencia tiene:
 - name: nombre de la experiencia
 - description: descripción corta para el panel admin (1-2 oraciones)
-- narrator_personality: prompt de personalidad para el LLM que va a interpretar al narrador. Debe ser detallado (3-5 oraciones): quién es, cómo habla, su tono, vocabulario, actitud. Incluí instrucciones sobre cómo manejar respuestas incorrectas o fuera de tema (el narrador debe guiar al usuario sin romper personaje).
+- narrator_personality: prompt de personalidad para el LLM que va a interpretar al narrador. Debe ser detallado (3-5 oraciones): quién es, cómo habla, su tono, vocabulario, actitud.
 - slug: URL amigable (lowercase, solo letras, números y guiones)
 - activation_keyword: palabra clave en MAYÚSCULAS para activar la experiencia (ej: "MISTERIO")
-- context: contexto global de la experiencia. Información que el narrador debe tener presente SIEMPRE para guiar al usuario correctamente. Ej: "Esta experiencia es presencial en Midtown Manhattan. El usuario debe estar físicamente ahí." o "El usuario está jugando un juego de misterio ambientado en los años 20."
+- context: contexto global de la experiencia. Información que el narrador debe tener presente SIEMPRE. Ej: "Esta experiencia es presencial en Midtown Manhattan. El usuario debe estar físicamente ahí."
 - scenes: array de escenas, cada una con steps
 
 ## Tipos de steps
 
+El producto es un walkthrough: el usuario SIEMPRE avanza, sin gating por correctness. Los steps interactivos sirven solo para que el usuario interactúe y no se aburra — no se evalúa lo que responde.
+
 1. **narrative**: El narrador envía un mensaje. No espera respuesta del usuario.
    - requires_response: false
-   - expected_answer: "" (vacío)
 
-2. **interactive**: El narrador envía un mensaje y ESPERA una respuesta del usuario. El sistema evaluará semánticamente si la respuesta cumple la intención esperada.
+2. **interactive**: El narrador envía un mensaje y espera CUALQUIER respuesta del usuario para avanzar.
    - requires_response: true
-   - expected_answer: descripción de la INTENCIÓN que debe cumplir la respuesta del usuario. No es una respuesta literal, es un criterio semántico. Ejemplos:
-     - "que el usuario confirme que está en el lugar" (cualquier confirmación vale)
-     - "que mencione Grand Central Terminal" (debe nombrar el lugar)
-     - "que el usuario reaccione al mensaje" (cualquier respuesta vale para avanzar)
-     - "que diga que quiere continuar" (confirmación de avance)
-   - El narrador LLM se encargará automáticamente de guiar al usuario si la respuesta es incorrecta, usando su personalidad y el contexto. NO necesitás definir pistas ni mensajes de error.
+   - El sistema genera automáticamente un conector corto en personaje y avanza al siguiente paso, sin importar qué haya contestado el usuario. No definas respuestas esperadas, pistas, ni mensajes de error — no se usan.
 
 3. **typing**: Efecto visual de "escribiendo..." sin mensaje real. Simula que el narrador está tipeando.
    - message_to_send: "" (vacío)
@@ -59,8 +55,6 @@ Una experiencia tiene:
 - Ordená las escenas empezando en order: 1.
 - El slug debe derivarse del nombre de la experiencia.
 - La activation_keyword debe ser una sola palabra relevante en MAYÚSCULAS.
-- hints: siempre [] (vacío). El narrador genera pistas dinámicamente.
-- wrong_answer_message: siempre "" (vacío). El narrador guía al usuario en personaje.
 
 ## Formato de salida
 
@@ -82,9 +76,6 @@ Respondé ÚNICAMENTE con un JSON válido, sin markdown, sin explicaciones. El J
           "step_type": "narrative",
           "message_to_send": "...",
           "requires_response": false,
-          "expected_answer": "",
-          "hints": [],
-          "wrong_answer_message": "",
           "delay_seconds": 2
         }
       ]
