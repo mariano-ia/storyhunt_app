@@ -49,11 +49,6 @@ function Step1({ data, onChange }: { data: Partial<ExperienceFormData>; onChange
                 <input className="form-input" placeholder="https://ejemplo.com/foto.jpg" value={data.narrator_avatar || ''} onChange={e => onChange({ ...data, narrator_avatar: e.target.value })} id="exp-avatar" />
                 <span className="form-hint">URL de la imagen que se mostrará en el chat (avatar redondo).</span>
             </div>
-            <div className="form-group">
-                <label className="form-label">Palabra clave de activación <span className="required">*</span></label>
-                <input className="form-input" placeholder="Ej: DETECTIVE, INICIO, JUGAR" value={data.activation_keyword || ''} onChange={e => onChange({ ...data, activation_keyword: e.target.value.toUpperCase() })} id="exp-keyword" />
-                <span className="form-hint">El usuario debe enviar esta palabra para iniciar la experiencia.</span>
-            </div>
         </div>
     );
 }
@@ -273,7 +268,7 @@ export default function NewExperiencePage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const isStep1Valid = formData.name && formData.slug && formData.description && formData.narrator_personality && formData.activation_keyword;
+    const isStep1Valid = formData.name && formData.slug && formData.description && formData.narrator_personality;
     const isStep2Valid = steps.length > 0 && steps.every(s => s.step_type === 'typing' || s.message_to_send);
     const isStep3Valid = formData.llm_api_key;
 

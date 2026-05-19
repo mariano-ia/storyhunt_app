@@ -20,9 +20,7 @@ function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, nar
 
     const EVAL_COLORS: Record<string, string> = {
         correct: '#34D399',
-        incorrect: '#EF4444',
         narrative: '#A78BFA',
-        off_topic: '#F59E0B',
     };
     const evalColor = msg.evaluation ? EVAL_COLORS[msg.evaluation] : undefined;
 
@@ -68,9 +66,7 @@ function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, nar
             </div>
             {msg.evaluation && isLastSequence && (
                 <span style={{ fontSize: 11, fontWeight: 600, color: evalColor, marginTop: 4, marginLeft: isSystem ? 40 : 0, marginRight: isSystem ? 0 : 4 }}>
-                    {msg.evaluation === 'correct' ? '✓ Correcto' :
-                        msg.evaluation === 'incorrect' ? '✗ Incorrecto' :
-                            msg.evaluation === 'narrative' ? '📖 Narrativo' : '↗ Fuera de contexto'}
+                    {msg.evaluation === 'correct' ? '✓ Correcto' : '📖 Narrativo'}
                 </span>
             )}
         </div>

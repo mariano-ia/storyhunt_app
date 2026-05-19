@@ -291,7 +291,6 @@ export async function createExperienceFromAI(
         llm_api_key: llmApiKey,
         slug: generated.slug,
         mode: 'test',
-        activation_keyword: generated.activation_keyword,
         status: 'inactive',
     });
 

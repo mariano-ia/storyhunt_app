@@ -17,7 +17,6 @@ Una experiencia tiene:
 - description: descripción corta para el panel admin (1-2 oraciones)
 - narrator_personality: prompt de personalidad para el LLM que va a interpretar al narrador. Debe ser detallado (3-5 oraciones): quién es, cómo habla, su tono, vocabulario, actitud.
 - slug: URL amigable (lowercase, solo letras, números y guiones)
-- activation_keyword: palabra clave en MAYÚSCULAS para activar la experiencia (ej: "MISTERIO")
 - context: contexto global de la experiencia. Información que el narrador debe tener presente SIEMPRE. Ej: "Esta experiencia es presencial en Midtown Manhattan. El usuario debe estar físicamente ahí."
 - scenes: array de escenas, cada una con steps
 
@@ -54,7 +53,6 @@ El producto es un walkthrough: el usuario SIEMPRE avanza, sin gating por correct
 - Ordená los steps dentro de cada escena empezando en order: 1.
 - Ordená las escenas empezando en order: 1.
 - El slug debe derivarse del nombre de la experiencia.
-- La activation_keyword debe ser una sola palabra relevante en MAYÚSCULAS.
 
 ## Formato de salida
 
@@ -65,7 +63,6 @@ Respondé ÚNICAMENTE con un JSON válido, sin markdown, sin explicaciones. El J
   "description": "...",
   "narrator_personality": "...",
   "slug": "...",
-  "activation_keyword": "...",
   "context": "...",
   "scenes": [
     {

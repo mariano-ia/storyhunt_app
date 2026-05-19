@@ -14,7 +14,9 @@ export interface Experience {
     llm_api_key: string;
     slug?: string;                // URL slug for the public page
     mode: ExperienceMode;
-    activation_keyword: string;
+    // Deprecated 2026-05-19 — entry is via slug/token, no keyword trigger.
+    // Kept optional for backwards compat with existing Firestore docs.
+    activation_keyword?: string;
     status: ExperienceStatus;
     created_at: string;           // ISO date string
     updated_at: string;
@@ -86,7 +88,7 @@ export interface PreviewMessage {
     role: 'system' | 'user';
     content: string;
     timestamp: string;
-    evaluation?: 'correct' | 'incorrect' | 'narrative' | 'off_topic';
+    evaluation?: 'correct' | 'narrative';
     media_url?: string;
     media_type?: 'image' | 'video' | 'audio';
     glitch_effect?: boolean;
@@ -178,7 +180,6 @@ export interface AIGeneratedExperience {
     description: string;
     narrator_personality: string;
     slug: string;
-    activation_keyword: string;
     context?: string;
     scenes: AIGeneratedScene[];
 }
