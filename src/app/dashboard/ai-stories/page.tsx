@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
     Sparkles, Send, Loader2, ChevronDown, ChevronRight,
     MessageSquare, HelpCircle, GitFork, MoreHorizontal, PenLine,
-    AlertCircle, Check, RotateCcw, Zap, Plus, Play, Image, Monitor,
+    AlertCircle, Check, RotateCcw, Zap, Plus, Play, Image, Monitor, Clock,
 } from 'lucide-react';
 import { createExperienceFromAI } from '@/lib/firestore';
 import { authFetch } from '@/lib/api';
@@ -15,6 +15,7 @@ const STEP_TYPE_CONFIG: Record<string, { label: string; color: string; icon: typ
     narrative: { label: 'Narrativo', color: 'var(--info)', icon: MessageSquare },
     interactive: { label: 'Interactivo', color: 'var(--brand-primary)', icon: HelpCircle },
     typing: { label: 'Escribiendo...', color: 'var(--text-muted)', icon: MoreHorizontal },
+    pause: { label: 'Pausa', color: 'var(--text-muted)', icon: Clock },
     error_screen: { label: 'Pantalla Error', color: 'var(--danger)', icon: Monitor },
 };
 
@@ -471,7 +472,7 @@ export default function AIStoriesPage() {
                                                                             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
                                                                         }),
                                                                     }}>
-                                                                        {step.message_to_send || (step.step_type === 'typing' ? '(efecto escribiendo...)' : '(sin mensaje)')}
+                                                                        {step.message_to_send || (step.step_type === 'typing' ? '(efecto escribiendo...)' : step.step_type === 'pause' ? `(pausa silenciosa · ${step.delay_seconds ?? 2}s)` : '(sin mensaje)')}
                                                                     </p>
                                                                     {step.requires_response && (
                                                                         <span style={{ fontSize: 11, color: 'var(--brand-primary-light, var(--brand-primary))', opacity: 0.8 }}>

@@ -37,7 +37,12 @@ El producto es un walkthrough: el usuario SIEMPRE avanza, sin gating por correct
    - interrupted_typing: true (siempre)
    - delay_seconds: 1-3
 
-4. **error_screen**: Pantalla negra estilo terminal que interrumpe el chat. Muestra texto con efecto glitch verde sobre fondo negro. Se usa para momentos de quiebre dramático, errores del "sistema", interferencias o revelaciones impactantes.
+4. **pause**: Espera silenciosa sin mensaje ni indicador. Usalo para dejar respirar la narrativa entre momentos densos, dar tiempo de caminar a un punto de interés, o crear suspenso antes de un mensaje importante.
+   - message_to_send: "" (vacío)
+   - requires_response: false
+   - delay_seconds: duración de la pausa en segundos (3-15 típico; usar 30-60 si el usuario debe trasladarse físicamente a otro punto)
+
+5. **error_screen**: Pantalla negra estilo terminal que interrumpe el chat. Muestra texto con efecto glitch verde sobre fondo negro. Se usa para momentos de quiebre dramático, errores del "sistema", interferencias o revelaciones impactantes.
    - message_to_send: el texto que se muestra en la pantalla de error (ej: "ERROR: CONEXIÓN INTERRUMPIDA", "SISTEMA COMPROMETIDO")
    - requires_response: false
    - delay_seconds: duración en segundos que se muestra la pantalla (3-6 recomendado)

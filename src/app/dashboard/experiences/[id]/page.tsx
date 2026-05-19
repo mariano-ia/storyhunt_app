@@ -118,12 +118,14 @@ const STEP_COLORS: Record<string, string> = {
     interactive: 'var(--brand-primary)',
     narrative: 'var(--info)',
     typing: 'var(--text-muted)',
+    pause: 'var(--text-muted)',
     error_screen: 'var(--danger)',
 };
 const STEP_LABELS: Record<string, string> = {
     interactive: 'Interactivo',
     narrative: 'Narrativo',
     typing: 'Escribiendo...',
+    pause: 'Pausa',
     error_screen: 'Pantalla Error',
 };
 
@@ -180,12 +182,13 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
     };
 
     const handleTypeChange = (val: StepFormData['step_type']) => {
+        const isMessageless = val === 'typing' || val === 'pause';
         const newForm = {
             ...form,
             step_type: val,
             requires_response: val === 'interactive',
             interrupted_typing: val === 'typing',
-            message_to_send: val === 'typing' ? '' : form.message_to_send,
+            message_to_send: isMessageless ? '' : form.message_to_send,
         };
         setForm(newForm);
         triggerAutoSave(newForm);
@@ -248,6 +251,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                         >
                             <option value="interactive">Interactivo</option>
                             <option value="narrative">Narrativo</option>
+                            <option value="pause">Pausa</option>
                             <option value="error_screen">Pantalla Error</option>
                         </select>
                     </div>
@@ -260,6 +264,8 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                     onClick={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}>
                     {form.step_type === 'typing'
                         ? <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Efecto de escritura</span>
+                        : form.step_type === 'pause'
+                        ? <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Pausa silenciosa · {form.delay_seconds ?? 2}s</span>
                         : <textarea
                             value={form.message_to_send}
                             onChange={e => {
@@ -363,7 +369,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
 
             <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* Message */}
-                {form.step_type !== 'typing' && (
+                {form.step_type !== 'typing' && form.step_type !== 'pause' && (
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label" style={{ fontSize: 12 }}>
                             {form.step_type === 'error_screen' ? 'Texto de la pantalla' : 'Mensaje'}
@@ -373,7 +379,7 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                 )}
 
                 {/* Multimedia */}
-                {form.step_type !== 'typing' && form.step_type !== 'error_screen' && (
+                {form.step_type !== 'typing' && form.step_type !== 'pause' && form.step_type !== 'error_screen' && (
                     <div style={{ display: 'grid', gridTemplateColumns: form.media_type ? '1fr 1fr' : '1fr', gap: 12 }}>
                         <div className="form-group" style={{ margin: 0 }}>
                             <label className="form-label" style={{ fontSize: 12 }}>Multimedia</label>
@@ -444,28 +450,30 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                     value={d.step_type || 'interactive'}
                     onChange={e => {
                         const val = e.target.value as StepFormData['step_type'];
+                        const isMessageless = val === 'typing' || val === 'pause';
                         set({
                             step_type: val,
                             requires_response: val === 'interactive',
                             interrupted_typing: val === 'typing',
-                            message_to_send: val === 'typing' ? '' : d.message_to_send,
+                            message_to_send: isMessageless ? '' : d.message_to_send,
                         });
                     }}
                 >
                     <option value="interactive">Interactivo (espera respuesta)</option>
                     <option value="narrative">Narrativo (avanza automaticamente)</option>
+                    <option value="pause">Pausa (espera silenciosa)</option>
                     <option value="error_screen">Pantalla de Error (terminal glitch)</option>
                 </select>
             </div>
 
-            {d.step_type !== 'typing' && (
+            {d.step_type !== 'typing' && d.step_type !== 'pause' && (
                 <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Mensaje a enviar <span className="required">*</span></label>
                     <textarea className="form-textarea" style={{ minHeight: 80 }} value={d.message_to_send} onChange={e => set({ message_to_send: e.target.value })} />
                 </div>
             )}
 
-            {d.step_type !== 'typing' && (
+            {d.step_type !== 'typing' && d.step_type !== 'pause' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Multimedia (Opcional)</label>
@@ -485,7 +493,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 </div>
             )}
 
-            {d.step_type !== 'typing' && (
+            {d.step_type !== 'typing' && d.step_type !== 'pause' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <input type="checkbox" checked={d.interrupted_typing || false} onChange={e => set({ interrupted_typing: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--brand-primary)' }} />
@@ -514,7 +522,7 @@ function NewStepForm({ data, onChange, onSave, onCancel, scenes }: {
                 <button
                     className="btn btn-primary btn-sm"
                     onClick={onSave}
-                    disabled={d.step_type !== 'typing' && !d.message_to_send}
+                    disabled={d.step_type !== 'typing' && d.step_type !== 'pause' && !d.message_to_send}
                 >
                     <Check size={13} /> Guardar paso
                 </button>

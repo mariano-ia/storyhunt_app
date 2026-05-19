@@ -58,7 +58,7 @@ export interface Step {
     experience_id: string;
     scene_id?: string;          // which scene this step belongs to
     order: number;
-    step_type?: 'interactive' | 'narrative' | 'typing' | 'error_screen';
+    step_type?: 'interactive' | 'narrative' | 'typing' | 'pause' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
     // Deprecated 2026-05-18 — the player is a walkthrough, no eval/gating.
@@ -166,7 +166,7 @@ export interface AIGeneratedScene {
 }
 
 export interface AIGeneratedStep {
-    step_type: 'interactive' | 'narrative' | 'typing' | 'error_screen';
+    step_type: 'interactive' | 'narrative' | 'typing' | 'pause' | 'error_screen';
     message_to_send: string;
     requires_response: boolean;
     delay_seconds?: number;

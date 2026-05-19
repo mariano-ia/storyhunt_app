@@ -518,6 +518,11 @@ export default function PlayPage() {
             setErrorScreen({ text: '', active: false });
             const resolved = resolveNextAdvance(next, sceneSteps, fromIndex, allScenes, sceneId, allSteps);
             if (resolved) { if (resolved.sceneId !== sceneId) setCurrentSceneId(resolved.sceneId); await advanceNarrativeSteps(resolved.sceneSteps, resolved.nextIndex, allScenes, resolved.sceneId, allSteps); }
+        } else if (next.step_type === 'pause') {
+            const duration = (next.delay_seconds ?? 2) * 1000;
+            await new Promise(resolve => setTimeout(resolve, duration));
+            const resolved = resolveNextAdvance(next, sceneSteps, fromIndex, allScenes, sceneId, allSteps);
+            if (resolved) { if (resolved.sceneId !== sceneId) setCurrentSceneId(resolved.sceneId); await advanceNarrativeSteps(resolved.sceneSteps, resolved.nextIndex, allScenes, resolved.sceneId, allSteps); }
         } else if (next.step_type === 'typing') {
             await pushMessageWithEffects(null, { ...next, interrupted_typing: true });
             const resolved = resolveNextAdvance(next, sceneSteps, fromIndex, allScenes, sceneId, allSteps);
