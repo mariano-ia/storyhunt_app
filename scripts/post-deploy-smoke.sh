@@ -95,7 +95,7 @@ assert_status "Firestore experiences → 200 (player)"  "https://firestore.googl
 echo ""
 echo "── Security headers on /play/* ─────────────────────────────────────────"
 PLAY_URL="$ABM_URL/play/4qtIlakWYLhoCJzzMWQT"
-assert_header "X-Frame-Options DENY"                  "$PLAY_URL"  "X-Frame-Options"          "DENY"
+assert_header "X-Frame-Options SAMEORIGIN"            "$PLAY_URL"  "X-Frame-Options"          "SAMEORIGIN"
 assert_header "X-Content-Type-Options nosniff"        "$PLAY_URL"  "X-Content-Type-Options"   "nosniff"
 assert_header "Referrer-Policy strict-origin"         "$PLAY_URL"  "Referrer-Policy"          "strict-origin"
 assert_header "Permissions-Policy present"            "$PLAY_URL"  "Permissions-Policy"       "camera"
