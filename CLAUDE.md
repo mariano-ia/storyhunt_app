@@ -120,13 +120,8 @@ Step features:
                                       Stripe Dashboard MUST point to https://storyhunt.city/api/stripe/webhook
                                       (NO www. — the www subdomain does not have Vercel rewrites)
 /api/bokun/webhook                  → Webhook Bokun OTA (Viator/TripAdvisor/GYG)
-                                      Configurado en Bokun → Settings → Connections → Integrated systems →
-                                      "HTTP Booking notification" con URL https://storyhunt.city/api/bokun/webhook
-                                      y Query parameters `token=<BOKUN_WEBHOOK_SECRET>` (Bokun NO firma HMAC,
-                                      auth es shared-token via ?token query param).
-                                      Eventos: Notify on booking confirmed + cancelled.
-                                      Flow: dedup bokun_events/{event:bookingId} → mapea bokun_product_id →
-                                      provisionAccess(). BOOKING_CANCELLED flippea token/sale a 'refunded'.
+                                      Auth: ?token query param == BOKUN_WEBHOOK_SECRET (Bokun NO firma HMAC).
+                                      Full runbook + troubleshooting: docs/BOKUN-INTEGRATION.md
 /api/access/verify                  → Verifica access token (fallback si webhook falla)
 /api/nyc-check                      → Clasifica reply del Step 0 NYC gate (yes/no/unclear)
                                        usando gpt-4o-mini JSON mode (~$0.0001/call)
