@@ -1,25 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Resend } from 'resend';
 import type Stripe from 'stripe';
-import { trackServer } from '@/lib/analytics-server';
 import { FieldValue } from 'firebase-admin/firestore';
-import crypto from 'crypto';
-
-// ─── Token generation ─────────────────────────────────────────────────────────
-// Crockford base32 alphabet (no I/L/O/U) — 32 chars × 8 positions = 40 bits
-// of entropy from crypto.randomBytes. Replaces Math.random()-backed 30-bit
-// tokens that were brute-forceable via /api/access/verify pre-2026-05-18.
-const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function generateAccessToken(): string {
-    const bytes = crypto.randomBytes(8);
-    let token = 'SH-';
-    for (let i = 0; i < 8; i++) {
-        token += TOKEN_ALPHABET[bytes[i] % TOKEN_ALPHABET.length];
-    }
-    return token;
-}
+import { provisionAccess, markAccessRefunded } from '@/lib/fulfillment';
 
 // ─── Webhook event dedup ──────────────────────────────────────────────────────
 // Stripe retries failed webhooks for up to 3 days. Without an idempotency
@@ -33,127 +17,12 @@ async function isFirstTimeEvent(eventId: string): Promise<boolean> {
         });
         return true;
     } catch (err) {
-        // already exists → duplicate event
         void err;
         return false;
     }
 }
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-async function sendAccessEmail(email: string, token: string, experienceName: string, lang: 'es' | 'en', startingPoint?: string) {
-    if (!resend) return;
-
-    const playUrl = `https://storyhunt.city/play/t/${token}`;
-    const isEn = lang === 'en';
-
-    try {
-        await resend.emails.send({
-            from: 'StoryHunt <hello@storyhunt.city>',
-            replyTo: 'hello@storyhunt.city',
-            to: email,
-            headers: {
-                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(email)}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-            },
-            subject: isEn
-                ? `Your access to "${experienceName}" is ready`
-                : `Tu acceso a "${experienceName}" está listo`,
-            html: `
-<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#050505;font-family:'Courier New',monospace;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#050505;padding:40px 20px;">
-<tr><td align="center">
-<table width="560" cellpadding="0" cellspacing="0" style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;overflow:hidden;">
-
-<!-- Header -->
-<tr><td style="padding:32px 40px 24px;border-bottom:1px solid #1a1a1a;">
-    <span style="font-size:20px;font-weight:700;color:#fff;letter-spacing:0.1em;">STORY</span><span style="font-size:20px;font-weight:700;color:#ff0033;letter-spacing:0.1em;">HUNT</span>
-</td></tr>
-
-<!-- Status -->
-<tr><td style="padding:24px 40px 0;">
-    <span style="font-size:12px;color:#00d2ff;letter-spacing:0.15em;">ACCESS_GRANTED // MISSION_READY</span>
-</td></tr>
-
-<!-- Main -->
-<tr><td style="padding:20px 40px;">
-    <h1 style="font-size:28px;color:#fff;margin:0 0 16px;line-height:1.3;font-family:'Courier New',monospace;">
-        ${isEn ? 'Your hunt is ready.' : 'Tu aventura está lista.'}
-    </h1>
-    <p style="font-size:16px;color:#888;line-height:1.6;margin:0 0 24px;">
-        ${isEn
-            ? `You now have access to <strong style="color:#fff;">${experienceName}</strong>. Open the link below on your phone when you're ready to start walking.`
-            : `Ya tenés acceso a <strong style="color:#fff;">${experienceName}</strong>. Abrí el link de abajo desde tu teléfono cuando estés listo para salir a caminar.`
-        }
-    </p>
-</td></tr>
-
-<!-- Starting point -->
-${startingPoint ? `
-<tr><td style="padding:0 40px 16px;">
-    <div style="background:rgba(255,0,51,0.08);border:1px solid rgba(255,0,51,0.25);border-radius:8px;padding:12px 16px;">
-        <div style="font-size:11px;color:#ff0033;letter-spacing:0.15em;margin-bottom:4px;">${isEn ? 'MEET_POINT' : 'PUNTO_DE_INICIO'}</div>
-        <div style="font-size:16px;color:#fff;font-weight:600;">${startingPoint}</div>
-        <div style="font-size:12px;color:#666;margin-top:4px;">${isEn ? 'Be there before you tap START' : 'Estando ahí, tocá COMENZAR'}</div>
-    </div>
-</td></tr>
-` : ''}
-
-<!-- CTA Button -->
-<tr><td style="padding:0 40px 24px;">
-    <a href="${playUrl}" style="display:inline-block;background:#ff0033;color:#fff;padding:16px 32px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
-        ${isEn ? 'START_THE_HUNT' : 'COMENZAR_LA_AVENTURA'}
-    </a>
-</td></tr>
-
-<!-- Instructions -->
-<tr><td style="padding:0 40px 16px;">
-    <p style="font-size:13px;color:#666;line-height:1.6;margin:0;">
-        ${isEn
-            ? '• Open the link on your phone<br>• Go to the starting location<br>• Follow the chat clues<br>• You can close and come back anytime — use this same link to continue where you left off'
-            : '• Abrí el link desde tu celular<br>• Andá al punto de inicio<br>• Seguí las pistas del chat<br>• Podés cerrar y volver cuando quieras — usá este mismo link para continuar donde lo dejaste'
-        }
-    </p>
-</td></tr>
-
-<!-- Buy-ahead reassurance -->
-<tr><td style="padding:0 40px 32px;">
-    <div style="background:rgba(0,210,255,0.06);border:1px solid rgba(0,210,255,0.2);border-radius:8px;padding:12px 16px;">
-        <div style="font-size:11px;color:#00d2ff;letter-spacing:0.15em;margin-bottom:6px;">${isEn ? 'COMING_TO_NYC_SOON?' : '¿VIAJÁS_PRONTO_A_NYC?'}</div>
-        <div style="font-size:13px;color:#aaa;line-height:1.6;">
-            ${isEn
-                ? 'Save this link for your trip. Your <strong style="color:#fff;">30-day clock starts the first time you open it on your phone</strong> — not before.'
-                : 'Guardá este link para tu viaje. <strong style="color:#fff;">Los 30 días arrancan recién cuando abras el link por primera vez en tu celular</strong> — no antes.'
-            }
-        </div>
-    </div>
-</td></tr>
-
-<!-- Footer -->
-<tr><td style="padding:20px 40px;border-top:1px solid #1a1a1a;">
-    <p style="font-size:11px;color:#444;margin:0;letter-spacing:0.05em;">
-        STORYHUNT // DECODE_THE_CITY<br>
-        <a href="https://storyhunt.city" style="color:#444;text-decoration:none;">storyhunt.city</a>
-        &nbsp;·&nbsp;
-        <a href="https://www.instagram.com/storyhunt.city/" style="color:#444;text-decoration:none;">@storyhunt.city</a>
-    </p>
-</td></tr>
-
-</table>
-</td></tr>
-</table>
-</body></html>`,
-        });
-        console.log(`[stripe/webhook] Access email sent to ${email}`);
-    } catch (err) {
-        console.error('[stripe/webhook] Failed to send access email:', err);
-    }
-}
-
 // ─── POST /api/stripe/webhook ────────────────────────────────────────────────
-// Processes Stripe webhook events (checkout.session.completed).
 
 export async function POST(req: NextRequest) {
     const body = await req.text();
@@ -182,7 +51,6 @@ export async function POST(req: NextRequest) {
     if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {
         const charge = event.data.object as Stripe.Charge;
         const sessionId = (charge.metadata && charge.metadata.checkout_session) || null;
-        // The reliable join is via payment_intent → checkout session → access_token.
         try {
             let stripeSessionId: string | null = sessionId;
             if (!stripeSessionId && charge.payment_intent) {
@@ -191,15 +59,7 @@ export async function POST(req: NextRequest) {
                 stripeSessionId = sessions.data[0]?.id || null;
             }
             if (stripeSessionId) {
-                const db = getAdminDb();
-                const tokens = await db.collection('access_tokens').where('stripe_session_id', '==', stripeSessionId).get();
-                for (const t of tokens.docs) {
-                    await t.ref.update({ status: 'refunded', refunded_at: new Date().toISOString() });
-                }
-                const sales = await db.collection('sales').where('stripe_session_id', '==', stripeSessionId).get();
-                for (const s of sales.docs) {
-                    await s.ref.update({ status: 'refunded', refunded_at: new Date().toISOString() });
-                }
+                await markAccessRefunded({ stripe_session_id: stripeSessionId });
                 console.log(`[stripe/webhook] Revoked tokens for session ${stripeSessionId} due to ${event.type}`);
             }
         } catch (err) {
@@ -248,132 +108,41 @@ export async function POST(req: NextRequest) {
 
         if (!experienceId) {
             console.error('[stripe/webhook] No experience_id in metadata');
-            // Return 200 — Stripe shouldn't retry a malformed metadata event.
             return NextResponse.json({ received: true, skipped: 'missing_experience_id' });
         }
 
         try {
-            const db = getAdminDb();
-
             // Belt-and-suspenders: even though the stripe_events dedup catches
             // retries, also short-circuit if a sale row already exists for this
             // Stripe session — handles the case where a previous run created
             // the sale but the stripe_events.create() write was lost.
+            const db = getAdminDb();
             const existing = await db.collection('sales').where('stripe_session_id', '==', session.id).limit(1).get();
             if (!existing.empty) {
                 console.log(`[stripe/webhook] Sale already exists for session ${session.id} — skip`);
                 return NextResponse.json({ received: true, duplicate: true });
             }
 
-            // 1. Create access token (lazy activation: 365d ceiling, 30d clock starts on first /play/t/[token] visit).
-            //    Token uses crypto-secure 40-bit entropy (was 30-bit + Math.random pre-2026-05-18).
-            const token = generateAccessToken();
-
-            const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-            const nowIso = new Date().toISOString();
-            const tokenRef = await db.collection('access_tokens').add({
-                token,
-                experience_id: experienceId,
-                lang,
+            await provisionAccess({
                 email,
-                max_uses: 20,
-                times_used: 0,
-                status: 'active',
-                expires_at: expiresAt,
-                activated_at: null,
-                stripe_session_id: session.id,
-                created_at: nowIso,
-            });
-
-            // 2. Record sale (now with attribution fields populated from metadata).
-            await db.collection('sales').add({
                 experience_id: experienceId,
                 experience_name: experienceName,
-                email,
+                lang,
+                source: (metadata.source as 'direct') || 'direct',
+                stripe_session_id: session.id,
                 amount: session.amount_total ?? 0,
                 currency: session.currency ?? 'usd',
-                coupon_code: couponCode ? couponCode.toUpperCase() : null,
+                coupon_code: couponCode || null,
                 discount_applied: session.total_details?.amount_discount ?? 0,
-                stripe_session_id: session.id,
-                access_token_id: tokenRef.id,
-                source: metadata.source || metadata.utm_source || 'direct',
                 utm_source: metadata.utm_source || null,
                 utm_medium: metadata.utm_medium || null,
                 utm_campaign: metadata.utm_campaign || null,
                 referrer: metadata.referrer || null,
-                created_at: nowIso,
+                client_ip: metadata.client_ip,
+                client_ua: metadata.client_ua,
+                fbp: metadata.fbp,
+                fbc: metadata.fbc,
             });
-
-            // 3. Mark the corresponding contact as converted (so nurturing cron
-            //    stops sending E2/E3/E5/E7 to paying customers).
-            if (email) {
-                try {
-                    const contacts = await db.collection('contacts').where('email', '==', email.toLowerCase()).get();
-                    for (const c of contacts.docs) {
-                        await c.ref.update({ converted: true, converted_at: nowIso });
-                    }
-                } catch (err) {
-                    console.error('[stripe/webhook] Failed to mark contact converted:', err);
-                }
-            }
-
-            // 4. Increment coupon redemption (atomic).
-            if (couponCode) {
-                try {
-                    const couponsSnap = await db.collection('discount_coupons').where('code', '==', couponCode.toUpperCase()).get();
-                    if (!couponsSnap.empty) {
-                        const couponDoc = couponsSnap.docs[0];
-                        const couponData = couponDoc.data();
-                        const maxRed = couponData.max_redemptions || 999;
-                        await couponDoc.ref.update({
-                            times_redeemed: FieldValue.increment(1),
-                        });
-                        // Re-read for max-redemptions check (race-safe via increment above)
-                        const fresh = await couponDoc.ref.get();
-                        const newCount = fresh.data()?.times_redeemed || 0;
-                        if (newCount >= maxRed) {
-                            await couponDoc.ref.update({ status: 'expired' });
-                        }
-                    }
-                } catch (err) {
-                    console.error('[stripe/webhook] Coupon increment failed:', err);
-                }
-            }
-
-            // 5. Send access email to customer.
-            if (email) {
-                let startingPoint: string | undefined;
-                try {
-                    const expDoc = await db.collection('experiences').doc(experienceId).get();
-                    startingPoint = expDoc.data()?.starting_point;
-                } catch { /* non-critical */ }
-                sendAccessEmail(email, token, experienceName, lang, startingPoint).catch(err =>
-                    console.error('[stripe/webhook] sendAccessEmail failed:', err)
-                );
-            }
-
-            // 6. Fire Purchase event server-side (Meta CAPI + GA4 MP + Firestore log).
-            //    Now passes IP + UA from session metadata for CAPI match quality.
-            trackServer('Purchase', {
-                event_id: session.id,
-                value: (session.amount_total ?? 0) / 100,
-                currency: (session.currency || 'usd').toUpperCase(),
-                content_ids: [experienceId],
-                content_name: experienceName,
-                email: email || undefined,
-                coupon: couponCode || undefined,
-                lang,
-                transaction_id: session.id,
-                client_ip_address: metadata.client_ip || undefined,
-                client_user_agent: metadata.client_ua || undefined,
-                fbp: metadata.fbp || undefined,
-                fbc: metadata.fbc || undefined,
-            }, 'https://storyhunt.city/start').catch(err =>
-                console.error('[stripe/webhook] trackServer Purchase failed:', err)
-            );
-
-            console.log(`[stripe/webhook] Sale recorded: ${experienceName} → ${(email || '').replace(/(.{2}).*@/, '$1***@')} → token ${token.slice(0, 5)}***`);
-
         } catch (err) {
             // Always return 200 after the dedup gate has passed — if we 500, Stripe
             // will retry, and our dedup will skip future retries leaving a partial
@@ -383,7 +152,6 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // Other events: log + ack.
     if (event.type !== 'checkout.session.completed' && event.type !== 'checkout.session.async_payment_succeeded') {
         console.log(`[stripe/webhook] Unhandled event ${event.type}`);
     }

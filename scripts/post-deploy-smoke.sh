@@ -76,6 +76,8 @@ echo "── ABM public endpoints ───────────────�
 assert_status "/api/public/experiences"               "$ABM_URL/api/public/experiences"  200
 assert_status "/api/access/verify (bad token = 404)"  "$ABM_URL/api/access/verify"       404  -X POST  -H "Content-Type: application/json"  -d '{"token":"SH-DOESNTEXIST99"}'
 assert_status "/api/checkout (valid request)"         "$ABM_URL/api/checkout"            200  -X POST  -H "Content-Type: application/json"  -d '{"experience_id":"4qtIlakWYLhoCJzzMWQT","lang":"en"}'
+assert_status "/api/bokun/webhook rejects missing token" "$ABM_URL/api/bokun/webhook"     401  -X POST  -H "Content-Type: application/json"  -d '{}'
+assert_status "/api/bokun/webhook rejects bad token"     "$ABM_URL/api/bokun/webhook?token=wrong"  401  -X POST  -H "Content-Type: application/json"  -d '{}'
 
 echo ""
 echo "── ABM lockdown — these MUST require auth (regression guard) ───────────"
@@ -85,7 +87,7 @@ assert_status "/api/sessions rejects anon"            "$ABM_URL/api/sessions"   
 
 echo ""
 echo "── Firestore rules — PII collections must reject anonymous reads ───────"
-for COL in access_tokens discount_coupons events stripe_events sales user_sessions interactions admins; do
+for COL in access_tokens discount_coupons events stripe_events bokun_events sales user_sessions interactions admins; do
     assert_status "Firestore $COL → 403"               "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/(default)/documents/$COL?pageSize=1"  403
 done
 assert_status "Firestore experiences → 200 (player)"  "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/(default)/documents/experiences?pageSize=1"  200

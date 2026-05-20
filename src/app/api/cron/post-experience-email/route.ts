@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Resend } from 'resend';
+import { reviewWithTAEmail } from '@/lib/email-templates';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const CRON_SECRET = process.env.CRON_SECRET || '';
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ message: 'No eligible users for review email', checked: tokensSnap.size });
         }
 
-        const results: { email: string; success: boolean }[] = [];
+        const results: { email: string; success: boolean; mode: 'ta' | 'coupon_only' }[] = [];
 
         for (const doc of eligible) {
             const data = doc.data();
@@ -61,14 +62,20 @@ export async function GET(request: Request) {
             const lang = (data.lang || 'es') as 'es' | 'en';
             const experienceId = data.experience_id;
 
-            // Look up experience name
+            // Look up experience name + TA review URL. If the experience has a
+            // TripAdvisor listing approved (review_links.tripadvisor set), we
+            // send the TA-mode email (TA CTA + coupon). Otherwise fall back to
+            // the legacy coupon-only template.
             let experienceName = 'StoryHunt Experience';
+            let taReviewUrl: string | null = null;
             try {
                 const expDoc = await db.collection('experiences').doc(experienceId).get();
                 if (expDoc.exists) {
-                    experienceName = expDoc.data()?.name || experienceName;
+                    const expData = expDoc.data() || {};
+                    experienceName = expData.name || experienceName;
+                    taReviewUrl = expData.review_links?.tripadvisor || null;
                 }
-            } catch { /* use default */ }
+            } catch { /* use defaults */ }
 
             // Ensure THANKYOU40 coupon exists in Firestore (create once, reuse forever)
             const existingCoupon = await db.collection('discount_coupons').where('code', '==', COUPON_CODE).get();
@@ -98,13 +105,15 @@ export async function GET(request: Request) {
                 review_email_attempts: (data.review_email_attempts || 0) + 1,
             });
 
-            const success = await sendReviewEmail(email, experienceName, COUPON_CODE, isEn);
+            const success = taReviewUrl
+                ? await sendReviewWithTAEmail(email, experienceName, taReviewUrl, COUPON_CODE, isEn)
+                : await sendReviewEmail(email, experienceName, COUPON_CODE, isEn);
             if (!success) {
                 // Record the failure so we can manually requeue if needed.
                 await doc.ref.update({ review_email_failed: true }).catch(() => { });
             }
 
-            results.push({ email, success });
+            results.push({ email, success, mode: taReviewUrl ? 'ta' : 'coupon_only' });
         }
 
         return NextResponse.json({
@@ -119,6 +128,35 @@ export async function GET(request: Request) {
     }
 }
 
+
+async function sendReviewWithTAEmail(
+    email: string,
+    experienceName: string,
+    taReviewUrl: string,
+    couponCode: string,
+    isEn: boolean,
+): Promise<boolean> {
+    if (!resend) return false;
+    try {
+        const { subject, html } = reviewWithTAEmail(experienceName, taReviewUrl, couponCode, isEn);
+        await resend.emails.send({
+            from: 'StoryHunt <hello@storyhunt.city>',
+            replyTo: 'hello@storyhunt.city',
+            to: email,
+            headers: {
+                'List-Unsubscribe': `<mailto:hello@storyhunt.city?subject=unsubscribe>, <https://storyhunt.city/unsubscribe?email=${encodeURIComponent(email)}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
+            subject,
+            html,
+        });
+        console.log(`[post-experience-email] TA review email sent to ${email} (coupon ${couponCode})`);
+        return true;
+    } catch (err) {
+        console.error(`[post-experience-email] TA review email failed for ${email}:`, err);
+        return false;
+    }
+}
 
 async function sendReviewEmail(email: string, experienceName: string, couponCode: string, isEn: boolean): Promise<boolean> {
     if (!resend) return false;

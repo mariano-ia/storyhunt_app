@@ -207,6 +207,69 @@ ${ctaRow(playUrl, isEn ? 'START_THE_HUNT' : 'COMENZAR_LA_AVENTURA')}
     };
 }
 
+// ─── E6 (TA mode): Review request + THANKYOU40 ──────────────────────────────
+// Para experiencias aprobadas en TripAdvisor. CTA primario = review TA,
+// secundario = THANKYOU40 para próxima compra directa. Sirve a buyers Stripe
+// directos Y a buyers OTA-Bokun por igual.
+
+export function reviewWithTAEmail(
+    experienceName: string,
+    taReviewUrl: string,
+    couponCode: string,
+    isEn: boolean,
+): { subject: string; html: string } {
+    return {
+        subject: isEn
+            ? `How was "${experienceName}"? Drop a TripAdvisor review + 40% off`
+            : `¿Cómo fue "${experienceName}"? Dejá una review en TripAdvisor + 40% off`,
+        html: emailShell(`
+${statusRow('MISSION_COMPLETE // DEBRIEF_REQUESTED')}
+${headingRow(isEn ? 'How was your hunt?' : '¿Cómo fue tu aventura?')}
+${paragraphRow(isEn
+    ? `You just finished <strong style="color:#fff;">${experienceName}</strong>. Two quick things before you go.`
+    : `Recién terminaste <strong style="color:#fff;">${experienceName}</strong>. Dos cosas rápidas antes de irte.`
+)}
+
+<tr><td style="padding:0 40px 16px;">
+    <div style="background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:20px;">
+        <span style="font-size:11px;color:#00d2ff;letter-spacing:0.15em;">${isEn ? 'STEP_01 // LEAVE_A_REVIEW' : 'PASO_01 // DEJÁ_UNA_REVIEW'}</span>
+        <p style="font-size:15px;color:#ccc;line-height:1.6;margin:8px 0 14px;">
+            ${isEn
+                ? 'Drop a review on TripAdvisor &mdash; takes 60 seconds and helps other travelers find us.'
+                : 'Dejá una review en TripAdvisor &mdash; te lleva 60 segundos y ayuda a otros viajeros a encontrarnos.'
+            }
+        </p>
+        <a href="${taReviewUrl}" style="display:inline-block;background:#00d2ff;color:#000;padding:14px 28px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
+            ${isEn ? 'WRITE_TRIPADVISOR_REVIEW' : 'ESCRIBIR_REVIEW_EN_TA'}
+        </a>
+    </div>
+</td></tr>
+
+<tr><td style="padding:0 40px 24px;">
+    <div style="background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:20px;text-align:center;">
+        <span style="font-size:11px;color:#ff0033;letter-spacing:0.15em;">${isEn ? 'STEP_02 // YOUR_NEXT_HUNT' : 'PASO_02 // TU_PRÓXIMA_HUNT'}</span>
+        <p style="font-size:14px;color:#aaa;line-height:1.5;margin:8px 0 12px;">
+            ${isEn
+                ? 'A different neighborhood, a new mystery. <strong style="color:#fff;">40% off</strong> with the code below.'
+                : 'Otro barrio, otro misterio. <strong style="color:#fff;">40% off</strong> con el código de abajo.'
+            }
+        </p>
+        <span style="font-size:28px;color:#ff0033;font-weight:700;letter-spacing:0.15em;display:inline-block;margin:4px 0 12px;">${couponCode}</span><br>
+        <a href="https://storyhunt.city" style="display:inline-block;background:#ff0033;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.08em;border-radius:4px;font-family:'Courier New',monospace;">
+            ${isEn ? 'BROWSE_EXPERIENCES' : 'VER_EXPERIENCIAS'}
+        </a>
+    </div>
+</td></tr>
+
+${paragraphRow(isEn
+    ? '<span style="font-size:12px;color:#555;">Thanks for hunting with us.</span>'
+    : '<span style="font-size:12px;color:#555;">Gracias por jugar con nosotros.</span>',
+    '0 40px 24px'
+)}
+`),
+    };
+}
+
 // ─── E7: Last Call (coupon reminder) ────────────────────────────────────────
 
 export function lastCallEmail(couponCode: string, isEn: boolean): { subject: string; html: string } {

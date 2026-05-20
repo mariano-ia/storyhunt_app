@@ -1045,6 +1045,52 @@ export default function ExperienceDetailPage() {
                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         )}
                     </div>
+
+                    {/* OTA Distribution (Bokun + review links) */}
+                    <div style={{ marginTop: 24, padding: '20px', background: 'var(--bg-elevated)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Distribucion OTA</div>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                            Mapeo a Bokun + links de review por OTA. Cuando un usuario compra via Bokun (Viator/TripAdvisor/GetYourGuide), generamos un token automaticamente. Si la experiencia tiene TripAdvisor URL, el email post-experiencia pide review en TA + cupon (en vez de solo cupon).
+                        </p>
+                        <div className="form-group">
+                            <label className="form-label">Bokun Product ID</label>
+                            <input className="form-input" placeholder="Ej: 12345"
+                                value={(formData as any).bokun_product_id || ''}
+                                onChange={e => setFormData({ ...formData, bokun_product_id: e.target.value } as any)} />
+                            <span className="form-hint">ID del producto en Bokun. El webhook usa este ID para mapear booking &rarr; experiencia.</span>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">TripAdvisor — Review URL</label>
+                            <input className="form-input" placeholder="https://www.tripadvisor.com/UserReviewEdit-..."
+                                value={(formData as any).review_links?.tripadvisor || ''}
+                                onChange={e => setFormData({
+                                    ...formData,
+                                    review_links: { ...(formData as any).review_links, tripadvisor: e.target.value },
+                                } as any)} />
+                            <span className="form-hint">URL directa para que el usuario deje review en TA. Llenar solo cuando el listing este aprobado en TripAdvisor.</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                            <div className="form-group">
+                                <label className="form-label">Viator — Review URL</label>
+                                <input className="form-input" placeholder="https://www.viator.com/..."
+                                    value={(formData as any).review_links?.viator || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        review_links: { ...(formData as any).review_links, viator: e.target.value },
+                                    } as any)} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">GetYourGuide — Review URL</label>
+                                <input className="form-input" placeholder="https://www.getyourguide.com/..."
+                                    value={(formData as any).review_links?.gyg || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        review_links: { ...(formData as any).review_links, gyg: e.target.value },
+                                    } as any)} />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Publish button */}
                     <div style={{ marginTop: 24, padding: '20px', background: 'var(--bg-elevated)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Publicar experiencia</div>

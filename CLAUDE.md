@@ -33,19 +33,34 @@ Access Tokens (post-payment):
     crypto.randomBytes — 40 bits of entropy)
   - experience_id, lang (es/en), email
   - max_uses: 20, lazy activation (30d clock starts on first /play/t/[token] visit)
-  - Created by Stripe webhook or /api/access/verify fallback
+  - Created by Stripe webhook, Bokun webhook, or /api/access/verify fallback.
+    All three go through src/lib/fulfillment.ts::provisionAccess() — single source
+    of truth for token + sale + access email + Purchase event.
+  - source: 'direct' | 'bokun_viator' | 'bokun_tripadvisor' | 'bokun_gyg' | 'bokun_direct'
+  - Bokun tokens carry bokun_booking_id (Stripe tokens carry stripe_session_id)
   - Increment happens on /play/[id] (after paywall passes), NOT on /play/t/[token] —
     this avoids email scanners (Gmail, Outlook Safe Links, etc.) consuming uses on pre-fetch
   - times_used uses FieldValue.increment(1) (atomic)
-  - status: 'active' | 'used' | 'refunded' (set on charge.refunded/dispute webhooks)
+  - status: 'active' | 'used' | 'refunded' (refunded set on Stripe charge.refunded/dispute
+    OR Bokun BOOKING_CANCELLED — both call markAccessRefunded())
 
 Sales:
   - Tracks purchases per experience (used for card sorting on web)
   - Attribution fields: source, utm_source, utm_medium, utm_campaign, referrer
-    (populated from checkout metadata forwarded by the client)
+    (populated from checkout metadata forwarded by the client, or Bokun payload signals)
+  - Bokun sales carry bokun_booking_id; Stripe sales carry stripe_session_id
+
+Experiences (OTA distribution fields):
+  - bokun_product_id: maps webhook payload to experience_id
+  - review_links.{tripadvisor,viator,gyg}: per-OTA direct review URLs.
+    review_links.tripadvisor presence drives E6 template choice (TA-mode vs cupón-only).
 
 stripe_events (dedup log — added 2026-05-18):
   - Doc id = Stripe event.id. .create() throws on duplicate → idempotent webhook.
+
+bokun_events (dedup log — added 2026-05-20):
+  - Doc id = `<eventType>:<bookingId>`. .create() throws on duplicate.
+  - Mirror of stripe_events for Bokun OTA distribution.
 
 cron_runs (cron execution log — added 2026-05-18):
   - Every cron writes a row: cron, started_at, finished_at, ok, counts.
@@ -104,6 +119,14 @@ Step features:
 /api/stripe/webhook                 → Webhook Stripe (crea access token + sale)
                                       Stripe Dashboard MUST point to https://storyhunt.city/api/stripe/webhook
                                       (NO www. — the www subdomain does not have Vercel rewrites)
+/api/bokun/webhook                  → Webhook Bokun OTA (Viator/TripAdvisor/GYG)
+                                      Configurado en Bokun → Settings → Connections → Integrated systems →
+                                      "HTTP Booking notification" con URL https://storyhunt.city/api/bokun/webhook
+                                      y Query parameters `token=<BOKUN_WEBHOOK_SECRET>` (Bokun NO firma HMAC,
+                                      auth es shared-token via ?token query param).
+                                      Eventos: Notify on booking confirmed + cancelled.
+                                      Flow: dedup bokun_events/{event:bookingId} → mapea bokun_product_id →
+                                      provisionAccess(). BOOKING_CANCELLED flippea token/sale a 'refunded'.
 /api/access/verify                  → Verifica access token (fallback si webhook falla)
 /api/nyc-check                      → Clasifica reply del Step 0 NYC gate (yes/no/unclear)
                                        usando gpt-4o-mini JSON mode (~$0.0001/call)
@@ -125,7 +148,10 @@ Step features:
 - **E3 Social Proof** (+7 days): hunter count + satisfaction %, only if not converted
 - **E4 Access Link** (post-purchase): access email sent from Stripe webhook (already existed)
 - **E5 Mission Pending** (+7 days post-purchase): reminder for unused tokens
-- **E6 Review + Coupon** (+24h post-play): review request + THANKYOU40 40% off (already existed)
+- **E6 Review + Coupon** (+24h post-play): review request + THANKYOU40 40% off.
+  Branchea por experience.review_links.tripadvisor: si está set → CTA TA review + cupón (TA mode),
+  sino → solo cupón (legacy). Aplica a buyers Stripe Y Bokun por igual; la decisión la determina
+  la experiencia, no el source.
 - **E7 Last Call** (+14 days post-review): final coupon reminder, then silence
 - Max 7 emails per person. Purchase at any point skips pre-purchase nurturing.
 - Templates in `src/lib/email-templates.ts`
@@ -172,7 +198,7 @@ Step features:
 ### Deploy
 - Vercel: storyhunt-app.vercel.app
 - Auto-deploy desde GitHub main branch
-- Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
+- Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BOKUN_WEBHOOK_SECRET, RESEND_API_KEY, INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
 
 ### Vercel Crons (vercel.json)
 - `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy

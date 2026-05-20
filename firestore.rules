@@ -93,6 +93,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Bokun webhook dedup log — closed.
+    match /bokun_events/{document=**} {
+      allow read, write: if false;
+    }
+
     // Cron runs log — closed.
     match /cron_runs/{document=**} {
       allow read, write: if false;

@@ -37,6 +37,14 @@ export interface Experience {
     web_tagline_en?: string;
     web_description_en?: string;
     published_at?: string;        // ISO date of last publish
+
+    // ─── OTA Distribution (Bokun) ───────────────────────────────
+    bokun_product_id?: string;    // Bokun product ID — webhook lookup key
+    review_links?: {
+        tripadvisor?: string;     // Direct URL para que el usuario deje review en TA
+        viator?: string;
+        gyg?: string;
+    };
 }
 
 // ─── Scenes ──────────────────────────────────────────────────────────────────
@@ -232,12 +240,16 @@ export interface AccessToken {
     email: string;                          // email del comprador
     max_uses: number;
     times_used: number;
-    status: 'active' | 'used' | 'expired';
+    status: 'active' | 'used' | 'expired' | 'refunded';
     expires_at: string;                     // ISO date — initially +365d, becomes +30d on first activation
     activated_at?: string | null;           // null until user first opens /play/t/[token]
     stripe_session_id?: string;
+    bokun_booking_id?: string;              // Bokun booking ref for OTA-sourced tokens
+    source?: 'direct' | 'bokun_viator' | 'bokun_tripadvisor' | 'bokun_gyg' | 'bokun_direct';
     created_at: string;
     used_at?: string;
+    first_used_at?: string;                 // Set on first /api/access/use — drives E6 timing
+    refunded_at?: string;
 
     // ─── Nurturing cycle tracking ──────────────────────────────
     review_email_sent?: boolean;    // E6: review + coupon (+24h post-play)
@@ -257,9 +269,17 @@ export interface Sale {
     email: string;
     amount: number;                         // monto cobrado en centavos
     currency: string;                       // "usd"
-    coupon_code?: string;
+    coupon_code?: string | null;
     discount_applied?: number;              // descuento en centavos
-    stripe_session_id: string;
+    stripe_session_id?: string;
+    bokun_booking_id?: string;              // Bokun booking ref para sales OTA
     access_token_id: string;
+    source?: string;                        // 'direct' | 'bokun_viator' | 'bokun_tripadvisor' | ...
+    utm_source?: string | null;
+    utm_medium?: string | null;
+    utm_campaign?: string | null;
+    referrer?: string | null;
+    status?: 'refunded';                    // set on refund
+    refunded_at?: string;
     created_at: string;
 }
