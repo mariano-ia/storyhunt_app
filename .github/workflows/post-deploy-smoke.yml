@@ -28,11 +28,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Wait for Vercel to finish deploying
-        # 90s is enough for a Next.js build on Vercel hobby in 90% of cases.
-        # If it isn't ready, the first /api/public/experiences check would fail
-        # and we'd see it. Tune higher if your build gets slower.
-        run: sleep 90
+      - name: Wait for Vercel deploy
+        # Poll the Bokun webhook endpoint as canary — returns 401 once the
+        # current build is live. Previous deploys without /api/bokun would
+        # 404, so this signals "the NEW code is serving traffic" (vs. a
+        # dumb sleep that might fire before the deploy propagates). Cap at
+        # 5 minutes so we don't hang on stuck deploys.
+        env:
+          ABM_URL: ${{ vars.ABM_URL || 'https://storyhunt-app.vercel.app' }}
+        run: |
+          DEADLINE=$(($(date +%s) + 300))
+          until [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$ABM_URL/api/bokun/webhook" -H 'Content-Type: application/json' -d '{}')" = "401" ]; do
+            if [ $(date +%s) -gt $DEADLINE ]; then
+              echo "::warning::Deploy not confirmed after 5 min, running smoke anyway"
+              break
+            fi
+            sleep 10
+          done
+          echo "Deploy ready"
 
       - name: Run smoke
         env:
