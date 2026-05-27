@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callLLM } from '@/lib/llm';
-import { getExperience, getSteps, getScenes } from '@/lib/firestore';
+import { callLLM, type LLMOptions } from '@/lib/llm';
+import { getExperience, getSteps } from '@/lib/firestore';
 import { verifyAuth, adminUpdateExperience, adminUpdateStep, adminSaveInteraction as saveInteraction } from '@/lib/firebase-admin';
 
 // ─── POST /api/experiences/publish ───────────────────────────────────────────
-// Pipeline: normalize Spanish → translate to English → save _en fields → mark published
+// CHUNKED pipeline: normalize Spanish → translate to English → save _en fields.
+// The full work (2 LLM calls per text × ~100+ steps) cannot finish inside one
+// serverless request, so the client drives it in slices: it POSTs {offset,limit}
+// repeatedly until {done:true}. Status flips to published only on the final slice.
+
+export const maxDuration = 60; // each slice is sized to finish well under this
 
 const NORMALIZE_PROMPT = `Sos un editor de texto profesional. Tu tarea es normalizar texto en español argentino a español neutro internacional.
 
@@ -25,12 +30,24 @@ Rules:
 - For short labels or conditions, keep them concise
 - Respond ONLY with the translated text, no explanations`;
 
+// Per-call guards: abort a stalled attempt at 20s and retry (intermittent
+// gpt-4o-mini stalls of 50-65s would otherwise blow the 60s function budget).
+const LLM_OPTS: LLMOptions = { temperature: 0.3, maxTokens: 2000, timeoutMs: 20000, retries: 2 };
+const CHUNK_DEFAULT = 6; // texts per request, processed concurrently
+
+type WorkItem =
+    | { kind: 'exp'; field: 'narrator_personality'; text: string; writeNormalized: true }
+    | { kind: 'exp'; field: 'web_tagline' | 'web_description'; text: string; writeNormalized: false }
+    | { kind: 'step'; stepId: string; text: string };
+
 export async function POST(req: NextRequest) {
     const user = await verifyAuth(req);
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
     try {
-        const { experience_id } = await req.json() as { experience_id: string };
+        const { experience_id, offset = 0, limit = CHUNK_DEFAULT } = await req.json() as {
+            experience_id: string; offset?: number; limit?: number;
+        };
         if (!experience_id) return NextResponse.json({ error: 'experience_id requerido' }, { status: 400 });
 
         const apiKey = process.env.OPENAI_API_KEY || '';
@@ -39,74 +56,90 @@ export async function POST(req: NextRequest) {
         const experience = await getExperience(experience_id);
         if (!experience) return NextResponse.json({ error: 'Experiencia no encontrada' }, { status: 404 });
 
-        const steps = await getSteps(experience_id);
-        const scenes = await getScenes(experience_id);
+        const exp = experience as unknown as Record<string, unknown>;
 
-        let totalTokens = 0;
-        let totalCost = 0;
+        // Steps in a fully deterministic order (order, then id) so the offset/limit
+        // slice is identical on every request even when `order` values collide.
+        const steps = (await getSteps(experience_id))
+            .slice()
+            .sort((a, b) => ((a.order || 0) - (b.order || 0)) || a.id.localeCompare(b.id));
 
-        // Helper: normalize + translate a text
-        const processText = async (text: string): Promise<{ normalized: string; english: string }> => {
-            if (!text?.trim()) return { normalized: '', english: '' };
-
-            // Step 1: Normalize to neutral Spanish
-            const normResult = await callLLM(apiKey, NORMALIZE_PROMPT, text, { temperature: 0.3, maxTokens: 2000 });
-            totalTokens += normResult.tokens;
-            totalCost += normResult.cost;
-
-            // Step 2: Translate to English
-            const transResult = await callLLM(apiKey, TRANSLATE_PROMPT, normResult.text, { temperature: 0.3, maxTokens: 2000 });
-            totalTokens += transResult.tokens;
-            totalCost += transResult.cost;
-
-            return { normalized: normResult.text, english: transResult.text };
-        };
-
-        // ─── Process experience-level fields ──────────────────────────────────────
-        const narratorResult = await processText(experience.narrator_personality);
-        const taglineResult = await processText((experience as any).web_tagline || '');
-        const descResult = await processText((experience as any).web_description || '');
-
-        await adminUpdateExperience(experience_id, {
-            narrator_personality: narratorResult.normalized,
-            narrator_personality_en: narratorResult.english,
-            web_tagline_en: taglineResult.english,
-            web_description_en: descResult.english,
-        });
-
-        // ─── Process steps ────────────────────────────────────────────────────────
-        let processedSteps = 0;
-        for (const step of steps) {
-            const msgResult = await processText(step.message_to_send);
-            await adminUpdateStep(experience_id, step.id, {
-                message_to_send: msgResult.normalized,
-                message_to_send_en: msgResult.english,
-            });
-            processedSteps++;
+        // Build the stable work list of non-empty texts to translate.
+        const workList: WorkItem[] = [];
+        const narr = typeof exp.narrator_personality === 'string' ? exp.narrator_personality : '';
+        const tagline = typeof exp.web_tagline === 'string' ? exp.web_tagline : '';
+        const desc = typeof exp.web_description === 'string' ? exp.web_description : '';
+        if (narr.trim()) workList.push({ kind: 'exp', field: 'narrator_personality', text: narr, writeNormalized: true });
+        if (tagline.trim()) workList.push({ kind: 'exp', field: 'web_tagline', text: tagline, writeNormalized: false });
+        if (desc.trim()) workList.push({ kind: 'exp', field: 'web_description', text: desc, writeNormalized: false });
+        for (const s of steps) {
+            if (typeof s.message_to_send === 'string' && s.message_to_send.trim()) {
+                workList.push({ kind: 'step', stepId: s.id, text: s.message_to_send });
+            }
         }
 
-        // ─── Set published status ────────────────────────────────────────────────
-        await adminUpdateExperience(experience_id, {
-            status: 'published',
-            mode: 'production',
-            published_at: new Date().toISOString(),
-        });
+        const total = workList.length;
+        const slice = workList.slice(offset, offset + limit);
 
-        // Track cost
+        let tokens = 0;
+        let cost = 0;
+        const processText = async (text: string): Promise<{ normalized: string; english: string }> => {
+            const norm = await callLLM(apiKey, NORMALIZE_PROMPT, text, LLM_OPTS);
+            tokens += norm.tokens; cost += norm.cost;
+            const trans = await callLLM(apiKey, TRANSLATE_PROMPT, norm.text, LLM_OPTS);
+            tokens += trans.tokens; cost += trans.cost;
+            return { normalized: norm.text, english: trans.text };
+        };
+
+        // Process this slice concurrently (each item = 2 sequential calls).
+        const expUpdate: Record<string, string> = {};
+        await Promise.all(slice.map(async (item) => {
+            const { normalized, english } = await processText(item.text);
+            if (item.kind === 'step') {
+                await adminUpdateStep(experience_id, item.stepId, {
+                    message_to_send: normalized,
+                    message_to_send_en: english,
+                });
+            } else if (item.writeNormalized) {
+                expUpdate[item.field] = normalized;
+                expUpdate[`${item.field}_en`] = english;
+            } else {
+                expUpdate[`${item.field}_en`] = english;
+            }
+        }));
+        if (Object.keys(expUpdate).length > 0) {
+            await adminUpdateExperience(experience_id, expUpdate);
+        }
+
+        const nextOffset = offset + slice.length;
+        const done = nextOffset >= total;
+
+        // Flip to published only once everything is translated.
+        if (done) {
+            await adminUpdateExperience(experience_id, {
+                status: 'published',
+                mode: 'production',
+                published_at: new Date().toISOString(),
+            });
+        }
+
         saveInteraction({
             session_id: 'publish-pipeline',
             experience_id,
-            user_message: `Publish: ${experience.name}`,
-            system_response: `Processed ${processedSteps} steps, ${scenes.length} scenes`,
-            tokens_consumed: totalTokens,
-            estimated_cost: totalCost,
+            user_message: `Publish ${nextOffset}/${total}: ${experience.name}`,
+            system_response: done ? 'published' : 'chunk processed',
+            tokens_consumed: tokens,
+            estimated_cost: cost,
         });
 
         return NextResponse.json({
             success: true,
-            steps_processed: processedSteps,
-            tokens: totalTokens,
-            cost: totalCost,
+            done,
+            offset: nextOffset,
+            total,
+            processed: slice.length,
+            tokens,
+            cost,
         });
 
     } catch (err: unknown) {

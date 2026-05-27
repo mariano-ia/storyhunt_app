@@ -7,27 +7,44 @@ export interface LLMResult {
     cost: number;
 }
 
+export interface LLMOptions {
+    temperature?: number;
+    maxTokens?: number;
+    jsonMode?: boolean;
+    timeoutMs?: number; // abort a single attempt that stalls past this (then retry)
+    retries?: number;   // max retries on transient failure / stall
+}
+
 // ─── Retry wrapper ─────────────────────────────────────────────────────────
 // OpenAI/Gemini occasionally return transient 429 (rate limit) or 5xx (server)
-// errors. A single transient failure should NOT abort a multi-call pipeline
-// (e.g. publish does 2+ calls per step). Retry those with exponential backoff.
+// errors, OR a single call stalls for tens of seconds while eventually returning
+// 200 (observed: occasional 50-65s hangs on gpt-4o-mini). A single transient
+// failure/stall should NOT abort a multi-call pipeline (e.g. publish). We abort
+// any attempt that exceeds timeoutMs and retry with exponential backoff — a
+// retry almost always returns fast, so an intermittent stall costs ~timeoutMs
+// instead of >60s.
 
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 async function fetchWithRetry(
     url: string,
     init: RequestInit,
-    retries = 4
+    retries = 4,
+    timeoutMs = 30000
 ): Promise<Response> {
     let lastErr: unknown;
     for (let attempt = 0; attempt <= retries; attempt++) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            const res = await fetch(url, init);
+            const res = await fetch(url, { ...init, signal: ctrl.signal });
+            clearTimeout(timer);
             if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === retries) {
                 return res;
             }
         } catch (err) {
-            // Network-level failure (DNS, connection reset, timeout) — also retry
+            // Network failure, or our own AbortController firing on a stall — retry
+            clearTimeout(timer);
             lastErr = err;
             if (attempt === retries) throw err;
         }
@@ -45,7 +62,7 @@ export async function callLLM(
     apiKey: string,
     systemPrompt: string,
     userMessage: string,
-    options?: { temperature?: number; maxTokens?: number; jsonMode?: boolean }
+    options?: LLMOptions
 ): Promise<LLMResult> {
     if (!apiKey) {
         return { text: '[Sin API key configurada]', tokens: 0, cost: 0 };
@@ -63,7 +80,7 @@ async function callOpenAI(
     apiKey: string,
     systemPrompt: string,
     userMessage: string,
-    options?: { temperature?: number; maxTokens?: number; jsonMode?: boolean }
+    options?: LLMOptions
 ): Promise<LLMResult> {
     const body: Record<string, unknown> = {
         model: 'gpt-4o-mini',
@@ -86,7 +103,7 @@ async function callOpenAI(
             'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-    });
+    }, options?.retries ?? 4, options?.timeoutMs ?? 30000);
 
     if (!res.ok) {
         const errText = await res.text();
@@ -110,7 +127,7 @@ async function callGemini(
     apiKey: string,
     systemPrompt: string,
     userMessage: string,
-    options?: { temperature?: number; maxTokens?: number; jsonMode?: boolean }
+    options?: LLMOptions
 ): Promise<LLMResult> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const body: Record<string, unknown> = {
@@ -127,7 +144,7 @@ async function callGemini(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-    });
+    }, options?.retries ?? 4, options?.timeoutMs ?? 30000);
 
     if (!res.ok) {
         const errText = await res.text();

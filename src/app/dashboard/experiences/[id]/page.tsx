@@ -1111,16 +1111,33 @@ export default function ExperienceDetailPage() {
                                 try {
                                     // Save current form first
                                     await handleSaveGeneral();
-                                    const res = await authFetch('/api/experiences/publish', {
-                                        method: 'POST',
-                                        body: JSON.stringify({ experience_id: id }),
-                                    });
-                                    const data = await res.json();
-                                    if (res.ok) {
-                                        setPublishResult(`Publicada. ${data.steps_processed} pasos procesados. Costo: $${data.cost?.toFixed(4) || '0'}`);
-                                        load();
-                                    } else {
-                                        setPublishResult(`Error: ${data.error}`);
+                                    // Drive the chunked publish: POST slices until done so no
+                                    // single request exceeds the serverless budget. Show progress.
+                                    const limit = 6;
+                                    let offset = 0, total = 0, totalCost = 0;
+                                    for (let guard = 0; guard < 1000; guard++) {
+                                        const res = await authFetch('/api/experiences/publish', {
+                                            method: 'POST',
+                                            body: JSON.stringify({ experience_id: id, offset, limit }),
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) {
+                                            setPublishResult(`Error: ${data.error || res.status}`);
+                                            break;
+                                        }
+                                        total = data.total || 0;
+                                        totalCost += data.cost || 0;
+                                        if (!data.done && data.offset <= offset) {
+                                            setPublishResult('Error: el publish no avanzó (offset estancado)');
+                                            break;
+                                        }
+                                        offset = data.offset;
+                                        if (data.done) {
+                                            setPublishResult(`Publicada. ${total} textos traducidos. Costo: $${totalCost.toFixed(4)}`);
+                                            load();
+                                            break;
+                                        }
+                                        setPublishResult(`Publicando... ${Math.min(offset, total)}/${total}`);
                                     }
                                 } catch (err) {
                                     setPublishResult('Error de conexion');
