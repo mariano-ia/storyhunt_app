@@ -2,4 +2,6 @@
 state.json
 review.log
 .last-metrics.json
+.last-meta-metrics.json
 .last-analysis.json
+__pycache__/

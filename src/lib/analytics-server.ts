@@ -69,9 +69,11 @@ function ga4Name(eventName: EventName): string {
 // ─── Meta Conversions API ───────────────────────────────────────────────────
 
 async function sendMetaCAPI(eventName: EventName, p: ServerEventPayload, sourceUrl: string): Promise<boolean> {
-    const token = process.env.META_ADS_ACCESS_TOKEN;
+    // Accept either env var name so the purchase signal can never silently drop
+    // (Vercel/.env.local use META_ADS_TOKEN; legacy code only read META_ADS_ACCESS_TOKEN).
+    const token = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_TOKEN;
     if (!token) {
-        console.warn(`[analytics-server] META_ADS_ACCESS_TOKEN missing — skipping Meta CAPI ${eventName}`);
+        console.warn(`[analytics-server] Meta token missing (META_ADS_TOKEN / META_ADS_ACCESS_TOKEN) — skipping Meta CAPI ${eventName}`);
         return false;
     }
 

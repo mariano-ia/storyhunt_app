@@ -24,6 +24,15 @@
 .DS_Store
 *.pem
 
+# editor / local tooling
+.vscode/
+*.code-workspace
+.superpowers/
+
+# python caches
+__pycache__/
+*.pyc
+
 # debug
 npm-debug.log*
 yarn-debug.log*

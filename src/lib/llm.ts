@@ -7,6 +7,38 @@ export interface LLMResult {
     cost: number;
 }
 
+// ─── Retry wrapper ─────────────────────────────────────────────────────────
+// OpenAI/Gemini occasionally return transient 429 (rate limit) or 5xx (server)
+// errors. A single transient failure should NOT abort a multi-call pipeline
+// (e.g. publish does 2+ calls per step). Retry those with exponential backoff.
+
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+async function fetchWithRetry(
+    url: string,
+    init: RequestInit,
+    retries = 4
+): Promise<Response> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const res = await fetch(url, init);
+            if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === retries) {
+                return res;
+            }
+        } catch (err) {
+            // Network-level failure (DNS, connection reset, timeout) — also retry
+            lastErr = err;
+            if (attempt === retries) throw err;
+        }
+        // Exponential backoff with jitter: ~0.5s, 1s, 2s, 4s
+        const delay = 500 * 2 ** attempt + Math.random() * 250;
+        await new Promise((r) => setTimeout(r, delay));
+    }
+    // Unreachable in practice, but satisfies the type checker
+    throw lastErr ?? new Error('fetchWithRetry exhausted retries');
+}
+
 // ─── LLM Router ──────────────────────────────────────────────────────────────
 
 export async function callLLM(
@@ -47,7 +79,7 @@ async function callOpenAI(
         body.response_format = { type: 'json_object' };
     }
 
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -91,7 +123,7 @@ async function callGemini(
         },
     };
 
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

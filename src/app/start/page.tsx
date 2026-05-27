@@ -269,6 +269,51 @@ function detectPromoFromUrl(): string {
   return (params.get('promo') || '').trim().toUpperCase();
 }
 
+// ─── Campaign attribution (newsletter / UTM) ────────────────────────────────
+// Capture utm_* from the landing URL and persist (last-touch) so it survives
+// the card → modal → Stripe flow, then ride along in the /api/checkout body.
+// Backend stores it on the sale (fulfillment.ts → sales.utm_source).
+// MIRRORED in StoryHuntWeb main.js (dual-surface rule) — keep both in sync.
+type Attribution = { utm_source: string; utm_medium: string; utm_campaign: string; referrer: string };
+
+function captureAttribution(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utm_source = params.get('utm_source');
+    if (!utm_source) return; // only (re)write when a campaign param actually arrives
+    const attribution: Attribution = {
+      utm_source,
+      utm_medium: params.get('utm_medium') || '',
+      utm_campaign: params.get('utm_campaign') || '',
+      referrer: document.referrer || '',
+    };
+    window.localStorage.setItem('sh_attribution', JSON.stringify(attribution));
+  } catch { /* localStorage unavailable */ }
+}
+
+function getAttribution(): Attribution | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('sh_attribution');
+    if (raw) return JSON.parse(raw) as Attribution;
+  } catch { /* ignore */ }
+  // Fallback: utm present in URL but not yet persisted (e.g. direct landing on /start)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utm_source = params.get('utm_source');
+    if (utm_source) {
+      return {
+        utm_source,
+        utm_medium: params.get('utm_medium') || '',
+        utm_campaign: params.get('utm_campaign') || '',
+        referrer: document.referrer || '',
+      };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function LangPicker({ experience, onClose }: { experience: Experience; onClose: () => void }) {
   const experienceId = experience.id;
   const price = experience.price || 0;
@@ -334,6 +379,14 @@ function LangPicker({ experience, onClose }: { experience: Experience; onClose: 
       const body: Record<string, string> = { experience_id: experienceId, lang };
       if (promoCode.trim()) body.coupon_code = promoCode.trim().toUpperCase();
       if (email.trim()) body.email = email.trim();
+      // Attach campaign attribution (newsletter UTM) so it lands on the sale
+      const attr = getAttribution();
+      if (attr?.utm_source) {
+        body.utm_source = attr.utm_source;
+        if (attr.utm_medium) body.utm_medium = attr.utm_medium;
+        if (attr.utm_campaign) body.utm_campaign = attr.utm_campaign;
+        if (attr.referrer) body.referrer = attr.referrer;
+      }
 
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -710,6 +763,7 @@ export default function StartPage() {
   // Sync any active experiments to PostHog (currently none — hero-copy-v1 retired
   // 2026-05-06 in favor of single Variant D copy).
   useEffect(() => {
+    captureAttribution(); // persist newsletter/UTM on landing for later checkout
     setTimeout(() => syncExperimentsToPostHog(), 1000);
   }, []);
 

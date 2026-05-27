@@ -1,0 +1,10 @@
+# Runtime artifacts — never commit
+state.json
+review.log
+.last-product-snapshot.json
+.last-social-metrics.json
+.last-asset-inventory.json
+.last-analysis.json
+analyze-err.txt
+__pycache__/
+.last-blotato-status.json

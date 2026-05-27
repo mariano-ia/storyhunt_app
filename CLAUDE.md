@@ -201,7 +201,14 @@ Step features:
   (filtra por `first_used_at`, no `created_at` — tourists que compran ahead reciben el mail)
 - `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7).
   Respeta `converted: true` (no spam a buyers) y `unsubscribed: true`.
-- `/api/cron/campaign-report` — Daily 9 AM NYC — Meta Ads report
+- `/api/cron/campaign-report` — Daily 9 AM NYC — Meta Ads report.
+  Reports at the **ad ACCOUNT level** (`META_AD_ACCOUNT_ID`) so it always covers
+  whatever campaigns are LIVE — never hard-code a campaign ID (the old version
+  pinned a since-paused campaign and emailed an empty/nonsense report; fixed
+  2026-05-21). Token env var: `META_ADS_TOKEN` (also accepts legacy
+  `META_ADS_ACCESS_TOKEN`). Sends TODAY / LAST 7 DAYS / LIFETIME totals + a
+  per-ad table, incl. Purchases & Cost/Purchase — these read 0 while campaigns
+  optimize for LINK_CLICKS/LANDING_PAGE_VIEWS instead of purchase.
 - `/api/cron/abandon-stale-sessions` — Daily 15:00 NYC — flips in_progress >12h to abandoned
 - Lee social-calendar.json del repo StoryHuntWeb en GitHub
 - Env vars requeridas: INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
