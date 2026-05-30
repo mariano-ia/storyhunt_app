@@ -324,21 +324,26 @@ export default function ExperiencePreview() {
             const data = await res.json();
 
             const isCorrect = data.evaluation === 'correct';
-            const nextIdx = data.nextStepIndex;
-            const nextStepObj = (steps && nextIdx < steps.length) ? steps[nextIdx] : undefined;
+            // Use the resolved next step data from the API (sorted by scene+step
+            // there). Do NOT look up steps[nextStepIndex] here — see the player
+            // fix: client sort can disagree and attach the wrong media.
+            const nextMedia = data.nextStepMedia as
+                | { media_type?: 'image' | 'video' | 'audio' | null; media_url?: string | null; interrupted_typing?: boolean }
+                | null
+                | undefined;
 
             const systemMsg: PreviewMessage = {
                 role: 'system',
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
                 evaluation: data.evaluation,
-                media_type: isCorrect && nextStepObj ? nextStepObj.media_type : undefined,
-                media_url: isCorrect && nextStepObj ? nextStepObj.media_url : undefined
+                media_type: isCorrect ? (nextMedia?.media_type ?? undefined) : undefined,
+                media_url: isCorrect ? (nextMedia?.media_url ?? undefined) : undefined,
             };
 
             await pushMessageWithEffects(systemMsg, {
                 delay_seconds: 1.0,
-                interrupted_typing: isCorrect && nextStepObj ? nextStepObj.interrupted_typing : false
+                interrupted_typing: isCorrect ? !!nextMedia?.interrupted_typing : false,
             });
 
             if (data.completed) {
