@@ -957,7 +957,7 @@ export default function ExperienceDetailPage() {
                     {previewFromStep !== null ? (
                         <iframe
                             key={previewFromStep}
-                            src={`/play/${id}?from=${previewFromStep}&preview=1`}
+                            src={`/play/${id}?from=${previewFromStep}&preview=1&lang=es`}
                             style={{ width: '100%', height: '100%', border: 'none' }}
                         />
                     ) : (
