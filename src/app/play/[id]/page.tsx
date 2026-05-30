@@ -791,22 +791,28 @@ export default function PlayPage() {
 
             // The API always advances (connector-only mode). The user walks
             // through regardless of what they answer.
-            const nextIdx = data.nextStepIndex;
-            const nextStepObj = (steps && nextIdx < steps.length) ? steps[nextIdx] : undefined;
+            // IMPORTANT: do NOT look up steps[nextStepIndex] for media/effects —
+            // the API sorts by (scene, step) order, the player's getSteps sorts
+            // globally, so the indices can refer to DIFFERENT steps and the bug
+            // would attach a random step's media to this connector bubble. Use
+            // the resolved data the API ships back instead.
+            const nextMedia = data.nextStepMedia as
+                | { media_type?: 'image' | 'video' | 'audio' | null; media_url?: string | null; interrupted_typing?: boolean }
+                | null
+                | undefined;
 
             const systemMsg: PreviewMessage = {
                 role: 'system',
                 content: data.response ?? data.error ?? 'Error desconocido',
                 timestamp: new Date().toISOString(),
                 evaluation: 'correct',
-                // Inherit media from the next step if available
-                media_type: nextStepObj ? nextStepObj.media_type : undefined,
-                media_url: nextStepObj ? nextStepObj.media_url : undefined
+                media_type: nextMedia?.media_type ?? undefined,
+                media_url: nextMedia?.media_url ?? undefined,
             };
 
             await pushMessageWithEffects(systemMsg, {
                 delay_seconds: 1.0,
-                interrupted_typing: nextStepObj ? nextStepObj.interrupted_typing : false
+                interrupted_typing: !!nextMedia?.interrupted_typing,
             });
 
             if (data.completed) {

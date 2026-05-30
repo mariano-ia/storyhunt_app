@@ -174,6 +174,14 @@ TAREA: ${task}
         return NextResponse.json({
             evaluation: 'correct',
             nextStepIndex: nextIndex,
+            // Resolved from the (scene-order, step-order) sorted array. The player must
+            // use these fields — never look up steps[nextStepIndex] on the client, since
+            // its global sort can disagree with this one and would attach the wrong media.
+            nextStepMedia: nextStep ? {
+                media_type: (nextStep as any).media_type ?? null,
+                media_url: (nextStep as any).media_url ?? null,
+                interrupted_typing: (nextStep as any).interrupted_typing ?? false,
+            } : null,
             response: result.text,
             completed: isLast,
         });
