@@ -52,6 +52,9 @@ function ChatMedia({ type, url }: { type: 'image' | 'video' | 'audio'; url: stri
 
 function ChatBubble({ msg, isLastSequence, isFirstSequence, narratorInitial, narratorAvatar }: { msg: PreviewMessage; isLastSequence: boolean; isFirstSequence: boolean; narratorInitial: string; narratorAvatar?: string }) {
     const isSystem = msg.role === 'system';
+    const hasText = !!msg.content && !!msg.content.trim();
+    const hasMedia = !!msg.media_url && !!msg.media_type;
+    if (!hasText && !hasMedia) return null;
     return (
         <div style={{
             display: 'flex',
