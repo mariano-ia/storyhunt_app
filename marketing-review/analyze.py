@@ -91,11 +91,13 @@ OUTPUT — devolvé SÓLO JSON válido, sin prosa alrededor. Schema:
   },
   "new_production": [
     {
-      "type": "reel | carousel",
-      "category": "product-led | nyc-secrets | how-it-works",
+      "type": "reel | carousel | feed_image | story",
+      "category": "product-led | nyc-secrets | how-it-works | re-activation",
       "concept": "1 oración: de qué va (español)",
-      "hook": "texto en pantalla / primer segundo (EN INGLÉS, voz de marca)",
+      "hook": "texto en pantalla / primer segundo / caption (EN INGLÉS, voz de marca)",
       "experience": "<experiencia que promociona, o null>",
+      "link_target": "<SOLO para type=story: URL del link sticker, ej 'https://storyhunt.city/play/architect-en' — null si no es story>",
+      "media_hint": "<SOLO para type=story o feed_image: qué asset usar como base, ej 'frame from reel-04-roebling-erased' o 'feed image 2026-05-21-am-mystery'>",
       "ref_id": "id corto para referenciar desde el schedule, ej 'NEW-1'"
     }
   ],
@@ -130,21 +132,32 @@ OUTPUT — devolvé SÓLO JSON válido, sin prosa alrededor. Schema:
 }
 
 VOLUMEN Y REUSO (clave):
-- Recibís un INVENTARIO de reels YA PRODUCIDOS (asset_inventory, ~45 únicos categorizados: voicemail, historical, tip, urgency, brand, delivery, organic). USALOS. La mayoría del volumen sale de ahí (origin="created"), sin costo de producción.
+- Recibís un INVENTARIO de assets YA PRODUCIDOS (asset_inventory):
+  * `by_category`: ~45 reels únicos (voicemail, historical, tip, urgency, brand, delivery, organic).
+  * `feed_images.by_template`: 100+ feed PNGs 1080² (templates: mystery, data, quote, howitworks).
+  USALOS. La mayoría del volumen sale del inventario (origin="created"), sin costo de producción.
 - **TikTok: alto volumen — al menos 1 reel POR DÍA (idealmente 1-2/día)**, casi todos origin="created" del inventario. TikTok premia frecuencia; con 45 reels listos no hay excusa para 2/semana.
-- **Instagram: 4-6 reels/semana** (mix: mayoría created del inventario + 1-2 new flagship como la POV series). Más 1 carrusel + stories.
+- **Instagram (HARD MINS — la automatización venía publicando SOLO reels; esto es el fix):**
+  * **4-6 reels/semana** (mix: mayoría created + 1-2 new flagship como la POV series).
+  * **2-3 feed posts/semana** (mezcla: 1 carrusel + 1-2 single-image desde feed_images del inventario). NO dejar la semana sin feed. Si no hay carrusel nuevo en new_production, agendá 2 single-image del inventario.
+  * **2-3 stories/semana** con link sticker. Stories deben tener un PROPÓSITO (CTA a una experiencia, re-activación de tokens dormidos, push de un reel ganador a IG followers, teaser de algo que llega después). NO stories vacías. Media: frame estático de un reel del inventario, un feed_image existente, o un video corto <15s.
 - **Threads: cross-post de los reels + 2-3 posts de texto/semana** (hooks del founder, voz de marca).
-- new_production: SOLO las piezas nuevas que valen producirse (1-3 máx): el reel POV flagship, quizás 1 carrusel. Todo lo demás se cubre con el inventario.
+- new_production: 2-4 piezas nuevas que valen producirse — típicamente: 1 reel POV flagship + 1-2 stories con un hook específico + opcional 1 carrusel temático. Todo lo demás (volumen) se cubre con el inventario.
+
+STORIES — guía concreta (era el principal hueco del pipeline):
+- Cada story propuesta debe declarar `link_target` (URL del link sticker) y `media_hint` (qué asset reusar).
+- Re-activación de tokens dormidos: si `unused_tokens_note` muestra ≥10 tokens, EXIGÍ 1 story de re-activación esa semana (category="re-activation"). Link target = `https://storyhunt.city/play/<slug>` de la experiencia con más dormidos. Hook directo, narrativo, 2da persona.
+- Stories de soft-CTA: cross-post de un reel ganador como sticker "watch" o "tap to play" → link a la experiencia. Aprovechan el spike del reel.
 
 REGLAS:
 - Hooks y copy SIEMPRE en inglés, en la voz de marca. Análisis y notas en español.
 - Al menos 1 pieza new de la POV video series (how-it-works) si no hubo una la semana pasada.
 - Sesgá el contenido hacia la experiencia más vendida (Brooklyn Bridge's Architect / Midtown).
-- Si origin="created", el campo 'ref' DEBE ser un slug EXACTO del asset_inventory. No inventes slugs.
+- Si origin="created", el campo 'ref' DEBE ser un slug EXACTO del asset_inventory (reel slug O feed_image slug). No inventes slugs.
 - Si origin="new", 'ref' apunta al ref_id de new_production.
-- No repitas el MISMO reel created dos veces en la semana en la misma plataforma.
+- No repitas el MISMO asset created dos veces en la semana en la misma plataforma.
 - Cero social proof inventado. Cero "tour/guía/juego".
-- weekly_schedule: SIEMPRE los 7 días (monday..sunday, en inglés, ese orden). Cada día tiene una lista 'posts' (puede ser []). Distribuí realista: TikTok todos los días; IG reels en días de alto alcance (mar/mié/jue/sáb); carrusel su propio día; Threads texto intercalado. Cada post lleva platforms[], asset, origin, ref, note, time.
+- weekly_schedule: SIEMPRE los 7 días (monday..sunday, en inglés, ese orden). Cada día tiene una lista 'posts' (puede ser []). Distribuí realista: TikTok todos los días; IG reels en días de alto alcance (mar/mié/jue/sáb); feed posts en lun/mié/vie; stories 2-3 días distintos cuando IG tiene reel publicando (amplifican el spike); Threads texto intercalado. Cada post lleva platforms[], asset, origin, ref, note, time.
 """
 
 
