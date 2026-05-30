@@ -104,11 +104,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const nextIndex = stepIndex + 1;
         const isLast = nextIndex >= steps.length;
+        const nextStep = !isLast ? steps[nextIndex] : null;
+        const nextStepMessage = nextStep
+            ? (lang === 'en' && (nextStep as any).message_to_send_en
+                ? (nextStep as any).message_to_send_en
+                : nextStep.message_to_send)
+            : null;
 
-        // ─── Build the connector prompt ───────────────────────────────────────────
+        // Pre-classifier: does the user's last message look like a question?
+        // (B2 anti-spoiler context activates only when this is true.)
+        const isQuestion = /[¿?]/.test(userMessage)
+            || /^\s*(qu[eé]|c[oó]mo|cu[aá]ndo|por\s*qu[eé]|porqu[eé]|qui[eé]n|d[oó]nde|cu[aá]l|cu[aá]nto|what|how|when|why|who|where|which|how\s+many)\b/i.test(userMessage);
+
+        // ─── Build the connector prompt (A: light echo, raised cap; B2: question mode + anti-spoiler) ─
         const task = isLast
             ? 'El jugador acaba de cerrar la última interacción de la experiencia. Despedite en personaje en máximo 2 oraciones. NO agregues datos, fechas ni historia nueva — solo cerrá con tu voz.'
-            : 'Generá un conector MUY corto en personaje, entre 2 y 8 palabras, una sola oración breve. Tu respuesta es un puente verbal entre lo que el jugador dijo y el próximo mensaje que el sistema mostrará INMEDIATAMENTE después. Nada más.';
+            : 'Sé el puente humano entre lo que el jugador dijo y el próximo mensaje del sistema (que se mostrará INMEDIATAMENTE después de tu respuesta).';
 
         const systemPrompt = `
 ${narratorPersonality}
@@ -116,23 +127,36 @@ ${narratorPersonality}
 ---
 
 CONTEXTO (invisible para el jugador):
-- Le acabás de preguntar: "${stepMessage}"
-- El jugador respondió. El sistema YA decidió avanzar al siguiente paso. No estás evaluando, no estás corrigiendo, no estás guiando. Solo enlazás.
+- Le acabás de decir/preguntar: "${stepMessage}"
+- El jugador respondió (es lo que sigue en el rol "user").
+- El sistema YA decidió avanzar al siguiente paso. No estás evaluando ni corrigiendo — sos el puente humano.
+${!isLast && nextStepMessage ? `- INMEDIATAMENTE después de tu respuesta, el sistema va a mostrar este mensaje (NO LO REVELES, NO LO PARAFRASEES, NO LO ANTICIPES):
+"""
+${nextStepMessage}
+"""` : ''}
 
-REGLAS ABSOLUTAS (estas mandan sobre cualquier instinto del personaje):
+REGLAS ABSOLUTAS:
 - ${langInstruction}
-- Tu respuesta debe tener entre 2 y 8 palabras. UNA sola oración breve. Nunca más.
-- PROHIBIDO hacerle una pregunta al jugador. Ya respondió. El producto avanza.
-- PROHIBIDO pedirle que vuelva, repita, reformule, aclare o piense de nuevo. El sistema avanza igual.
-- PROHIBIDO agregar información, datos, fechas, historia, contexto del lugar o cualquier dato narrativo. El próximo mensaje del sistema ya trae eso.
-- PROHIBIDO anticipar, resumir, parafrasear ni presentar el paso siguiente.
+- Entre 4 y 15 palabras. Máximo 2 oraciones cortas.
+- Podés referenciar livianamente un detalle/palabra de la respuesta del jugador, para que se sienta escuchado.
+- PROHIBIDO hacerle una pregunta al jugador.
+- PROHIBIDO pedirle que vuelva, repita, reformule o aclare.
+- PROHIBIDO anticipar, resumir o parafrasear el próximo mensaje del sistema (el bloque entre comillas triples).
+- PROHIBIDO inventar fechas, nombres, lugares o datos históricos que no sean conocimiento general muy verificable.
+
+${isQuestion
+    ? `MODO PREGUNTA — el jugador acaba de preguntarte algo:
+- Si la respuesta es CORTA, GENERAL y NO está cubierta por el próximo mensaje del sistema → contestala en una oración y empujá ("1883. Lo vas a ver ahora.").
+- Si la pregunta toca lo que el próximo mensaje del sistema iba a contar/mostrar → NO la respondas. Reconocé en personaje y diferí ("Buena pregunta. Vas a verlo.", "Mirá. Lo entendés en un momento.").
+- Si no sabés la respuesta con seguridad → diferí, NO inventes.`
+    : `MODO CONTINUACIÓN — el jugador no preguntó, solo respondió:
+- Un eco liviano de lo que dijo (un detalle, una palabra) + cierre breve que empuje a seguir.
+- Si la respuesta es off-topic, frustrada o emocional → tono empático breve, sin regañar.
+- Si la respuesta es vacía/banal → un neutro corto ("Ahí estás.", "Bien.", "Sigamos.")`}
 
 ESTILO:
-- Variá la elección — no repitas siempre la misma muletilla. El narrador suena natural cuando alterna.
-- Banco de referencia (no son los únicos válidos — usalos como guía de estilo, longitud y registro; mezclá, adaptá al personaje):
-  · Afirmativos: "Exacto.", "Ahí está.", "Eso mismo.", "Bien visto.", "Sabía que lo notarías.", "Justo eso.", "Tal cual.", "Lo viste."
-  · Neutros / continuación: "Mhm.", "Anotado.", "Sigamos.", "Bueno.", "Bien.", "Avancemos.", "Vamos."
-  · Si la respuesta es off-topic: tirá uno neutro de continuación, sin regañar.
+- Variá: alterná entre afirmación, eco liviano, dato puntual, neutro.
+- Sonás humano. Corto pero no robot.
 
 TAREA: ${task}
 `.trim();
