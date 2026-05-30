@@ -3,7 +3,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     ArrowLeft, Check, Plus, Trash2, Edit2, GripVertical, Clock, ChevronDown, ChevronRight, BookOpen,
-    BarChart2, Save, Play, Share2, X, Copy, ExternalLink, Zap
+    BarChart2, Save, Play, Share2, X, Copy, ExternalLink, Zap,
+    Image as ImageIcon, Video, Music, Paperclip
 } from 'lucide-react';
 import {
     getExperience, updateExperience, getSteps, createStep, updateStep, deleteStep, reorderSteps,
@@ -254,6 +255,15 @@ function InlineStepEditor({ step, index, onSave, onDelete, isDragging, dragOverP
                             <option value="pause">Pausa</option>
                             <option value="error_screen">Pantalla Error</option>
                         </select>
+                        {form.media_url && (
+                            <span data-tip={`Multimedia: ${form.media_type || 'adjunto'}`}
+                                style={{ display: 'inline-flex', alignItems: 'center', color: borderColor, opacity: 0.8 }}>
+                                {form.media_type === 'image' ? <ImageIcon size={13} /> :
+                                 form.media_type === 'video' ? <Video size={13} /> :
+                                 form.media_type === 'audio' ? <Music size={13} /> :
+                                 <Paperclip size={13} />}
+                            </span>
+                        )}
                     </div>
                     {autoSaveState === 'saving' && <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>Guardando...</span>}
                     {autoSaveState === 'saved' && <span style={{ fontSize: 10, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={10} /> Guardado</span>}
