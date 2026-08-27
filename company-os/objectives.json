@@ -35,10 +35,26 @@
       "title": "Reparacion: infra observable y funcionando (semana 1-2, 100% Claude)",
       "status": "yellow",
       "key_results": [
-        { "id": "KR1.1", "kr": "Indices Firestore user_sessions(status,started_at) y sales(email,created_at) deployados; abandon-stale-sessions corre OK y limpia las 25 sesiones stale", "done": false },
-        { "id": "KR1.2", "kr": "Logging cron_runs en todos los crons vivos + health-check cruzado con alerta email (<48h de silencio o fallo)", "done": false },
-        { "id": "KR1.3", "kr": "E7 destrabado (0 enviados ever por el indice faltante); ciclo E1-E7 verificado end-to-end", "done": false },
-        { "id": "KR1.4", "kr": "Pedido de review DENTRO del chat al completar la experiencia (pico emocional) + review_links completos", "done": false }
+        {
+          "id": "KR1.1",
+          "kr": "Indices Firestore user_sessions(status,started_at) y sales(email,created_at) deployados; abandon-stale-sessions corre OK y limpia las 25 sesiones stale",
+          "done": true
+        },
+        {
+          "id": "KR1.2",
+          "kr": "Logging cron_runs en todos los crons vivos + health-check cruzado con alerta email (<48h de silencio o fallo)",
+          "done": true
+        },
+        {
+          "id": "KR1.3",
+          "kr": "E7 destrabado (0 enviados ever por el indice faltante); ciclo E1-E7 verificado end-to-end",
+          "done": false
+        },
+        {
+          "id": "KR1.4",
+          "kr": "Pedido de review DENTRO del chat al completar la experiencia (pico emocional) + review_links completos",
+          "done": false
+        }
       ]
     },
     {
@@ -46,10 +62,26 @@
       "title": "Canal OTA vivo por primera vez (Viator supplier directo, sin Bokun)",
       "status": "red",
       "key_results": [
-        { "id": "KR2.1", "kr": "FASE 0 HUMANA (deadline 2026-09-03): cuenta supplier Viator creada + Midtown Protocol submitted ($29) — paquete paste-and-go preparado por Claude", "done": false },
-        { "id": "KR2.2", "kr": "Listing Midtown COMPRABLE en Viator/TA (boton de compra verificado, instant confirmation, cutoff <=12h, >=6 fotos)", "done": false },
-        { "id": "KR2.3", "kr": "Fulfillment sin Bokun: email de reserva Viator -> provisionAccess() automatizado y testeado", "done": false },
-        { "id": "KR2.4", "kr": "Primer booking OTA real de la historia (bokun_events > 0 o equivalente Viator)", "done": false }
+        {
+          "id": "KR2.1",
+          "kr": "FASE 0 HUMANA (deadline 2026-09-03): cuenta supplier Viator creada + Midtown Protocol submitted ($29) — paquete paste-and-go preparado por Claude",
+          "done": false
+        },
+        {
+          "id": "KR2.2",
+          "kr": "Listing Midtown COMPRABLE en Viator/TA (boton de compra verificado, instant confirmation, cutoff <=12h, >=6 fotos)",
+          "done": false
+        },
+        {
+          "id": "KR2.3",
+          "kr": "Fulfillment sin Bokun: email de reserva Viator -> provisionAccess() automatizado y testeado",
+          "done": false
+        },
+        {
+          "id": "KR2.4",
+          "kr": "Primer booking OTA real de la historia (bokun_events > 0 o equivalente Viator)",
+          "done": false
+        }
       ]
     },
     {
@@ -57,9 +89,21 @@
       "title": "Reviews: el unico activo que compone",
       "status": "red",
       "key_results": [
-        { "id": "KR3.1", "kr": ">= 5 reviews semilla legitimas en 60d (goteo 1 c/1-2 sem, SOLO gente que jugo de verdad; pool: 42 tokens usados)", "done": false },
-        { "id": "KR3.2", "kr": "E6 pidiendo review TA para toda experiencia con listing (Architect y Village ya tienen review_links)", "done": false },
-        { "id": "KR3.3", "kr": "Toda review nueva respondida en <24h (Claude drafta, log en decision-log)", "done": false }
+        {
+          "id": "KR3.1",
+          "kr": ">= 5 reviews semilla legitimas en 60d (goteo 1 c/1-2 sem, SOLO gente que jugo de verdad; pool: 42 tokens usados)",
+          "done": false
+        },
+        {
+          "id": "KR3.2",
+          "kr": "E6 pidiendo review TA para toda experiencia con listing (Architect y Village ya tienen review_links)",
+          "done": false
+        },
+        {
+          "id": "KR3.3",
+          "kr": "Toda review nueva respondida en <24h (Claude drafta, log en decision-log)",
+          "done": false
+        }
       ]
     },
     {
@@ -67,9 +111,21 @@
       "title": "Motor narrativo: el experimento AI-run documentado en publico",
       "status": "red",
       "key_results": [
-        { "id": "KR4.1", "kr": "Decision de Mariano: publico con nombre o anonimo (bloquea el resto)", "done": false },
-        { "id": "KR4.2", "kr": "Decision-log publicable + 1 post/semana del experimento (X/HN/Reddit + IG si token renovado)", "done": false },
-        { "id": "KR4.3", "kr": "Digest semanal unico a Mariano (Telegram + email) con seccion NECESITO DE VOS", "done": false }
+        {
+          "id": "KR4.1",
+          "kr": "Decision de Mariano: publico con nombre o anonimo (bloquea el resto)",
+          "done": false
+        },
+        {
+          "id": "KR4.2",
+          "kr": "Decision-log publicable + 1 post/semana del experimento (X/HN/Reddit + IG si token renovado)",
+          "done": false
+        },
+        {
+          "id": "KR4.3",
+          "kr": "Digest semanal unico a Mariano (Telegram + email) con seccion NECESITO DE VOS",
+          "done": false
+        }
       ]
     }
   ]
