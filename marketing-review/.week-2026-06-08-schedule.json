@@ -1,0 +1,500 @@
+{
+  "week_start": "2026-06-08",
+  "accounts": {
+    "ig": "48407",
+    "tiktok": "43287",
+    "threads": "6850"
+  },
+  "posts": [
+    {
+      "id": "mon-reel01-tt",
+      "day": "mon",
+      "date": "2026-06-08",
+      "time_nyc": "13:00",
+      "scheduled_utc": "2026-06-08T17:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-01",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/voicemail/reel-01-missed-call-1883.mp4"
+      ],
+      "caption": "A voicemail from 1883 just landed on your phone.\n\nThe Brooklyn Bridge has been trying to reach you. Most people walk across it and never hear a thing.\n\nNot a tour. Not a game. The city, talking.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "mon-feed-ig",
+      "day": "mon",
+      "date": "2026-06-08",
+      "time_nyc": "12:00",
+      "scheduled_utc": "2026-06-08T16:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "feed_image",
+      "media_key": "feed-0605",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/posts/2026-06-05-pm-mystery.png"
+      ],
+      "caption": "Some blocks keep a secret on purpose.\n\nMost people walk straight past it. You don't have to.\n\nNot a tour. Not a game. NYC, talking to you. → link in bio.",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "mon-new2",
+      "day": "mon",
+      "date": "2026-06-08",
+      "time_nyc": "19:00",
+      "scheduled_utc": "2026-06-08T23:00:00Z",
+      "platforms": [
+        "48407",
+        "43287",
+        "6850"
+      ],
+      "asset": "reel",
+      "media_key": "NEW-2",
+      "media_paths": [
+        "/tmp/new-videos/NEW-2-reactivation-final.mp4"
+      ],
+      "caption": "You paid. You never showed.\n\nHe's still standing at the Brooklyn Bridge, waiting for you to open the message. Your link still works.\n\nThe hunt doesn't expire just because you got busy. Finish what you started.\n\nstoryhunt.city",
+      "threads_text": "You paid. You never showed.\n\nHe's still at the Brooklyn Bridge. Your link still works — the hunt doesn't expire because you got busy.\n\nFinish what you started. storyhunt.city",
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "tue-reel19-tt",
+      "day": "tue",
+      "date": "2026-06-09",
+      "time_nyc": "08:00",
+      "scheduled_utc": "2026-06-09T12:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-19",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/voicemail/reel-19-emily-roebling.mp4"
+      ],
+      "caption": "Her name isn't on the bridge. It should be.\n\nEmily Warren Roebling finished the Brooklyn Bridge when the men who started it couldn't. The city remembers. The plaques don't.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "tue-new1",
+      "day": "tue",
+      "date": "2026-06-09",
+      "time_nyc": "19:00",
+      "scheduled_utc": "2026-06-09T23:00:00Z",
+      "platforms": [
+        "48407",
+        "43287",
+        "6850"
+      ],
+      "asset": "reel",
+      "media_key": "NEW-1",
+      "media_paths": [
+        "/tmp/new-videos/NEW-1-pov-brooklyn-bridge-final.mp4"
+      ],
+      "caption": "The bridge is texting you. Everyone else is taking selfies.\n\nWalk across the Brooklyn Bridge and it has 140 years of secrets to tell — if you know how to listen. Most people never do.\n\nNot a tour. Not a game. NYC, talking to you.\n\nstoryhunt.city",
+      "threads_text": "The bridge is texting you. Everyone else is taking selfies.\n\n140 years of secrets, and most people walk across without hearing one. storyhunt.city",
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "tue-new4-story",
+      "day": "tue",
+      "date": "2026-06-09",
+      "time_nyc": "20:00",
+      "scheduled_utc": "2026-06-10T00:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "story",
+      "media_key": "NEW-4",
+      "media_paths": [
+        "/tmp/new-videos/stories/NEW-4-story-1883-notification.png"
+      ],
+      "caption": "1 unread message from 1883. Your hunt is still open.",
+      "threads_text": null,
+      "tags": null,
+      "link": "https://storyhunt.city/play/architect",
+      "ai": false
+    },
+    {
+      "id": "wed-reel03-tt",
+      "day": "wed",
+      "date": "2026-06-10",
+      "time_nyc": "08:00",
+      "scheduled_utc": "2026-06-10T12:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-03",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/price/reel-03-bus-tour-vs-storyhunt.mp4"
+      ],
+      "caption": "A bus tour talks AT you through a microphone.\n\nStoryHunt lets the city talk TO you, through your phone. Same two hours. Completely different NYC.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "wed-reel10-tt",
+      "day": "wed",
+      "date": "2026-06-10",
+      "time_nyc": "17:00",
+      "scheduled_utc": "2026-06-10T21:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-10",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/tip/reel-10-bridge-wine-cellar.mp4"
+      ],
+      "caption": "There's a wine cellar hidden inside the Brooklyn Bridge.\n\nThe anchorage held champagne for decades. You've walked over it and never knew.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "wed-new3-carousel",
+      "day": "wed",
+      "date": "2026-06-10",
+      "time_nyc": "12:00",
+      "scheduled_utc": "2026-06-10T16:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "carousel",
+      "media_key": "NEW-3-carousel",
+      "media_paths": [
+        "/tmp/new-videos/carousel-buildings/buildings-1.png",
+        "/tmp/new-videos/carousel-buildings/buildings-2.png",
+        "/tmp/new-videos/carousel-buildings/buildings-3.png",
+        "/tmp/new-videos/carousel-buildings/buildings-4.png",
+        "/tmp/new-videos/carousel-buildings/buildings-5.png",
+        "/tmp/new-videos/carousel-buildings/buildings-6.png",
+        "/tmp/new-videos/carousel-buildings/buildings-7.png"
+      ],
+      "caption": "5 NYC buildings hiding something inside — and you've walked past all of them.\n\nGrand Central's backwards sky. Catacombs under Old St. Patrick's. A bomber in the Empire State. The city is full of doors most people never open.\n\nSwipe through. Then let it tell you the rest. → link in bio.\n\nNot a tour. Not a game. NYC, talking to you.",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "wed-new6-story",
+      "day": "wed",
+      "date": "2026-06-10",
+      "time_nyc": "19:00",
+      "scheduled_utc": "2026-06-10T23:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "story",
+      "media_key": "NEW-6",
+      "media_paths": [
+        "/tmp/new-videos/stories/NEW-6-story-pov-softcta.png"
+      ],
+      "caption": "The bridge talks. Tap to listen.",
+      "threads_text": null,
+      "tags": null,
+      "link": "https://storyhunt.city/play/architect",
+      "ai": false
+    },
+    {
+      "id": "wed-new3-threads",
+      "day": "wed",
+      "date": "2026-06-10",
+      "time_nyc": "13:00",
+      "scheduled_utc": "2026-06-10T17:00:00Z",
+      "platforms": [
+        "6850"
+      ],
+      "asset": "text",
+      "media_key": null,
+      "media_paths": null,
+      "caption": null,
+      "threads_text": "Spent the morning digging into 5 NYC buildings that are hiding something inside.\n\nGrand Central's ceiling is painted backwards. There are catacombs under a cathedral on Mulberry St. A B-25 bomber flew into the Empire State in 1945 and the lights stayed on.\n\nYou've walked past all of them. The city just never told you. Posted the full carousel — go look.",
+      "tags": null,
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "thu-reel07-tt",
+      "day": "thu",
+      "date": "2026-06-11",
+      "time_nyc": "08:00",
+      "scheduled_utc": "2026-06-11T12:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-07",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/voicemail/reel-07-she-said-my-name.mp4"
+      ],
+      "caption": "She said my name. I never told her my name.\n\nThat's the moment people realize StoryHunt isn't a recording. The Brooklyn Bridge knows who's walking across it.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "thu-reel22",
+      "day": "thu",
+      "date": "2026-06-11",
+      "time_nyc": "19:00",
+      "scheduled_utc": "2026-06-11T23:00:00Z",
+      "platforms": [
+        "48407",
+        "43287",
+        "6850"
+      ],
+      "asset": "reel",
+      "media_key": "reel-22",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/tip/reel-22-minetta-creek.mp4"
+      ],
+      "caption": "There's a creek still running under the West Village.\n\nMinetta Brook never left — it just went underground. The streets bend around water nobody can see anymore.\n\nNot a tour. Not a game. NYC, talking to you.\n\nstoryhunt.city",
+      "threads_text": "There's a creek still running under the West Village. Minetta Brook never left — it went underground, and the streets still bend around water nobody can see. storyhunt.city",
+      "tags": "#nyc #westvillage #greenwichvillage #nychistory #hiddennyc #nyctravel",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "thu-new5-story",
+      "day": "thu",
+      "date": "2026-06-11",
+      "time_nyc": "20:00",
+      "scheduled_utc": "2026-06-12T00:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "story",
+      "media_key": "NEW-5",
+      "media_paths": [
+        "/tmp/new-videos/stories/NEW-5-story-emily-voicemail.png"
+      ],
+      "caption": "Emily's still trying to reach you. She finished the bridge. You bought the story — finish it.",
+      "threads_text": null,
+      "tags": null,
+      "link": "https://storyhunt.city/play/architect",
+      "ai": false
+    },
+    {
+      "id": "fri-reel06-tt",
+      "day": "fri",
+      "date": "2026-06-12",
+      "time_nyc": "08:00",
+      "scheduled_utc": "2026-06-12T12:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-06",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/urgency/reel-06-48h-weekend.mp4"
+      ],
+      "caption": "You've got 48 hours in NYC this weekend.\n\nDon't spend them behind glass on a bus. Let the city talk to you instead. Two hours, one walk, the New York nobody else sees.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "fri-reel04",
+      "day": "fri",
+      "date": "2026-06-12",
+      "time_nyc": "18:00",
+      "scheduled_utc": "2026-06-12T22:00:00Z",
+      "platforms": [
+        "48407",
+        "43287",
+        "6850"
+      ],
+      "asset": "reel",
+      "media_key": "reel-04",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/historical/reel-04-roebling-erased.mp4"
+      ],
+      "caption": "They almost erased her from the bridge she built.\n\nEmily Warren Roebling ran the Brooklyn Bridge to completion for 11 years. History nearly forgot. The city didn't.\n\nNot a tour. Not a game. NYC, talking to you.\n\nstoryhunt.city",
+      "threads_text": "They almost erased Emily Warren Roebling from the bridge she built. 11 years running the Brooklyn Bridge to completion, and history nearly forgot her. The city didn't. storyhunt.city",
+      "tags": "#nyc #brooklynbridge #brooklyn #nychistory #hiddennyc #nyctravel #nyctok",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "fri-feed-ig",
+      "day": "fri",
+      "date": "2026-06-12",
+      "time_nyc": "12:00",
+      "scheduled_utc": "2026-06-12T16:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "feed_image",
+      "media_key": "feed-0604",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/posts/2026-06-04-am-data.png"
+      ],
+      "caption": "The numbers most New Yorkers never learn about their own city.\n\nNot a tour. Not a game. NYC, talking to you. → link in bio.",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "fri-new2-threads",
+      "day": "fri",
+      "date": "2026-06-12",
+      "time_nyc": "15:00",
+      "scheduled_utc": "2026-06-12T19:00:00Z",
+      "platforms": [
+        "6850"
+      ],
+      "asset": "text",
+      "media_key": null,
+      "media_paths": null,
+      "caption": null,
+      "threads_text": "Honest founder moment: 27 people bought a StoryHunt for the Brooklyn Bridge and never opened it.\n\nThey paid. They got busy. The link's still sitting in an inbox somewhere.\n\nI keep thinking about that — a story bought and never heard. So this week I'm just going to say it plainly: if that's you, your link still works. The bridge is still there. Go finish it.",
+      "tags": null,
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "sat-testimonial-tt",
+      "day": "sat",
+      "date": "2026-06-13",
+      "time_nyc": "10:00",
+      "scheduled_utc": "2026-06-13T14:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "testimonial-v4",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/delivery/2026-05-16-1900-testimonial-v4-ten-bucks-nobrainer 2.mp4"
+      ],
+      "caption": "\"Ten bucks for two hours of NYC talking to me? No-brainer.\"\n\nLess than a bus tour ticket. None of the bus. storyhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "sat-reel14",
+      "day": "sat",
+      "date": "2026-06-13",
+      "time_nyc": "19:00",
+      "scheduled_utc": "2026-06-13T23:00:00Z",
+      "platforms": [
+        "48407",
+        "43287",
+        "6850"
+      ],
+      "asset": "reel",
+      "media_key": "reel-14",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/brand/reel-14-confessions.mp4"
+      ],
+      "caption": "The city has been keeping things from you.\n\nEvery block you've rushed through has a confession. StoryHunt is the first time NYC gets to say it out loud — to you, through your phone.\n\nNot a tour. Not a game. NYC, talking to you.\n\nstoryhunt.city",
+      "threads_text": "Every block you've rushed through has a confession. StoryHunt is the first time the city gets to say it out loud — to you, through your phone. storyhunt.city",
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "sat-feed-ig",
+      "day": "sat",
+      "date": "2026-06-13",
+      "time_nyc": "13:00",
+      "scheduled_utc": "2026-06-13T17:00:00Z",
+      "platforms": [
+        "48407"
+      ],
+      "asset": "feed_image",
+      "media_key": "feed-0603",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/posts/2026-06-03-pm-mystery.png"
+      ],
+      "caption": "You've walked past it a hundred times. It's been waiting.\n\nNot a tour. Not a game. NYC, talking to you. → link in bio.",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": false
+    },
+    {
+      "id": "sun-reel11-tt",
+      "day": "sun",
+      "date": "2026-06-14",
+      "time_nyc": "11:00",
+      "scheduled_utc": "2026-06-14T15:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-11",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/voicemail/reel-11-watching-midtown.mp4"
+      ],
+      "caption": "Something in Midtown has been watching you.\n\nGrand Central isn't just a station. The protocol runs deeper than the tracks. storyhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #midtownmanhattan #grandcentral #nychistory #hiddennyc #nyctravel",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "sun-reel27-tt",
+      "day": "sun",
+      "date": "2026-06-14",
+      "time_nyc": "18:00",
+      "scheduled_utc": "2026-06-14T22:00:00Z",
+      "platforms": [
+        "43287"
+      ],
+      "asset": "reel",
+      "media_key": "reel-27",
+      "media_paths": [
+        "/Users/marianonoceti/Desktop/Antigravity/StoryHuntWeb/assets/reels/2w/produced/tip/reel-27-dakota-name.mp4"
+      ],
+      "caption": "Why is it called the Dakota?\n\nBecause in 1884 the Upper West Side felt as far away as the frontier. The name was a joke. It stuck.\n\nstoryhunt.city",
+      "threads_text": null,
+      "tags": "#nyc #newyorkcity #nyctravel #thingstodoinnyc #brooklynbridge #nychistory #hiddennyc",
+      "link": null,
+      "ai": true
+    },
+    {
+      "id": "sun-new1-threads",
+      "day": "sun",
+      "date": "2026-06-14",
+      "time_nyc": "20:00",
+      "scheduled_utc": "2026-06-15T00:00:00Z",
+      "platforms": [
+        "6850"
+      ],
+      "asset": "text",
+      "media_key": null,
+      "media_paths": null,
+      "caption": null,
+      "threads_text": "Sunday night thought:\n\nWalked the Brooklyn Bridge at golden hour today. Everyone around me was filming themselves. Not one person was looking up at the cables.\n\nThere are 140 years of stories in that thing. You can hear them if you stop performing for a second.\n\nThat's the whole idea behind what we're building. The city's been talking the whole time.",
+      "tags": null,
+      "link": null,
+      "ai": false
+    }
+  ]
+}

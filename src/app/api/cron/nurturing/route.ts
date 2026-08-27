@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { logCronRun, checkCronHealth } from '@/lib/cron-log';
 import { Resend } from 'resend';
 import {
     mysteryTeaserEmail,
@@ -45,9 +46,12 @@ export async function GET(request: Request) {
             processE7LastCall(db, now, results),
         ]);
 
+        await logCronRun('nurturing', now.toISOString(), true, results);
+        await checkCronHealth(['abandon-stale-sessions', 'post-experience-email']);
         return NextResponse.json({ message: 'Nurturing cycle complete', results });
     } catch (err: any) {
         console.error('[nurturing] Error:', err);
+        await logCronRun('nurturing', now.toISOString(), false, results, err.message);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { checkCronHealth } from '@/lib/cron-log';
 
 // ─── GET /api/cron/abandon-stale-sessions ──────────────────────────────────
 // Daily cron that flips user_sessions stuck in `in_progress` for >12h to
@@ -59,6 +60,9 @@ export async function GET(request: Request) {
             ok: true,
             timestamp: FieldValue.serverTimestamp(),
         });
+
+        // Cross-monitor the sibling crons (nurturing watches this one back).
+        await checkCronHealth(['nurturing', 'post-experience-email']);
 
         return NextResponse.json({ ok: true, scanned, abandoned, errors });
     } catch (err) {

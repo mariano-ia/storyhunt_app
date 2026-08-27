@@ -63,7 +63,11 @@ bokun_events (dedup log — added 2026-05-20):
   - Mirror of stripe_events for Bokun OTA distribution.
 
 cron_runs (cron execution log — added 2026-05-18):
-  - Every cron writes a row: cron, started_at, finished_at, ok, counts.
+  - Every LIVE cron writes a row: cron, started_at, finished_at, ok, counts.
+  - NOTE (2026-08-27): this was only true for abandon-stale-sessions until the
+    cron-log rewrite — src/lib/cron-log.ts now provides logCronRun() +
+    checkCronHealth() (cross-monitoring with email alert, 48h cooldown).
+    abandon-stale-sessions and nurturing watch each other.
 
 Step types:
   - interactive: espera respuesta del usuario, evalúa con LLM
@@ -119,9 +123,10 @@ Step features:
 /api/stripe/webhook                 → Webhook Stripe (crea access token + sale)
                                       Stripe Dashboard MUST point to https://storyhunt.city/api/stripe/webhook
                                       (NO www. — the www subdomain does not have Vercel rewrites)
-/api/bokun/webhook                  → Webhook Bokun OTA (Viator/TripAdvisor/GYG)
-                                      Auth: ?token query param == BOKUN_WEBHOOK_SECRET (Bokun NO firma HMAC).
-                                      Full runbook + troubleshooting: docs/BOKUN-INTEGRATION.md
+/api/bokun/webhook                  → Webhook Bokun OTA — LEGACY: Bokun dado de baja por Mariano
+                                      ago-2026 (0 reservas ever). Código queda como referencia.
+                                      Canal OTA actual: Viator supplier directo (ver
+                                      AI-STARTUP-DECISION.md + marketing-review/viator-submission-midtown.md)
 /api/access/verify                  → Verifica access token (fallback si webhook falla)
 /api/nyc-check                      → Clasifica reply del Step 0 NYC gate (yes/no/unclear)
                                        usando gpt-4o-mini JSON mode (~$0.0001/call)
@@ -196,7 +201,10 @@ Step features:
 - Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BOKUN_WEBHOOK_SECRET, RESEND_API_KEY, INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
 
 ### Vercel Crons (vercel.json)
-- `/api/cron/publish-instagram` — Mon-Fri 11:15 AM NYC — publica TODOS los posts pendientes hasta hoy
+- REMOVIDOS de vercel.json 2026-08-27 (las rutas quedan, re-agregables):
+  `publish-instagram` (no-op desde 2026-05-20: calendario sin pendientes, token IG
+  muerto, publicación migrada a Blotato) y `campaign-report` (ads en $0 hasta
+  CPRL≥1 y NOTIFICATION_EMAIL nunca seteada en Vercel → mandaba a nadie).
 - `/api/cron/post-experience-email` — Daily 10 AM NYC — review email + THANKYOU40 coupon
   (filtra por `first_used_at`, no `created_at` — tourists que compran ahead reciben el mail)
 - `/api/cron/nurturing` — Daily 10:30 AM NYC — nurturing emails (E2, E3, E5, E7).

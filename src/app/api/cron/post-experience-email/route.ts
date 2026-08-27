@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { logCronRun } from '@/lib/cron-log';
 import { Resend } from 'resend';
 import { reviewWithTAEmail } from '@/lib/email-templates';
 
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
         });
 
         if (eligible.length === 0) {
+            await logCronRun('post-experience-email', now.toISOString(), true, { checked: tokensSnap.size, sent: 0 });
             return NextResponse.json({ message: 'No eligible users for review email', checked: tokensSnap.size });
         }
 
@@ -116,6 +118,11 @@ export async function GET(request: Request) {
             results.push({ email, success, mode: taReviewUrl ? 'ta' : 'coupon_only' });
         }
 
+        await logCronRun('post-experience-email', now.toISOString(), true, {
+            checked: tokensSnap.size,
+            sent: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length,
+        });
         return NextResponse.json({
             sent: results.filter(r => r.success).length,
             failed: results.filter(r => !r.success).length,
@@ -124,6 +131,7 @@ export async function GET(request: Request) {
 
     } catch (err: any) {
         console.error('[post-experience-email] Error:', err);
+        await logCronRun('post-experience-email', now.toISOString(), false, {}, err.message);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
