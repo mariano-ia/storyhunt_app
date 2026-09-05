@@ -1,16 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/post-experience-email",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/nurturing",
-      "schedule": "30 14 * * *"
-    },
-    {
-      "path": "/api/cron/abandon-stale-sessions",
-      "schedule": "0 15 * * *"
-    }
-  ]
+  "crons": []
 }

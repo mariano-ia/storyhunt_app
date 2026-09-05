@@ -201,6 +201,12 @@ Step features:
 - Env vars requeridas: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BOKUN_WEBHOOK_SECRET, RESEND_API_KEY, INSTAGRAM_ACCESS_TOKEN, CRON_SECRET
 
 ### Vercel Crons (vercel.json)
+> **PROYECTO EN PAUSA (2026-09-04).** `vercel.json` tiene `"crons": []` — NINGÚN
+> cron corre en producción. Las rutas siguen existiendo y son re-agregables tal
+> cual están documentadas abajo. Los 4 LaunchAgents locales también están
+> desactivados (ver sección "Automatización local"). No reactivar nada sin que
+> Mariano levante la pausa.
+
 - REMOVIDOS de vercel.json 2026-08-27 (las rutas quedan, re-agregables):
   `publish-instagram` (no-op desde 2026-05-20: calendario sin pendientes, token IG
   muerto, publicación migrada a Blotato) y `campaign-report` (ads en $0 hasta
@@ -248,7 +254,26 @@ Step features:
   conversion-review cron).
 - See `docs/WEEKLY-QA.md` for the full cadence + manual commands cheatsheet.
 
-### Local LaunchAgent: conversion-review (carpeta `conversion-review/`)
+### Automatización local (LaunchAgents) — TODOS DESACTIVADOS 2026-09-04
+Los 4 LaunchAgents de StoryHunt están desactivados por la pausa del proyecto,
+con `launchctl unload -w` + `launchctl disable gui/$UID/<label>` (quedan
+marcados `disabled`, no se recargan al login). Los `.plist` siguen en
+`~/Library/LaunchAgents/`.
+
+| Label | Cuándo corría | Qué hacía |
+|---|---|---|
+| `com.storyhunt.conversion-review` | Lun 9 AM | Email CRO semanal a Mariano |
+| `com.storyhunt.marketing-review` | Lun 10 AM | Email plan de contenido semanal |
+| `com.storyhunt.seo-pipeline` | Diario 10 AM | Publicaba SEO + email de notificación |
+| `com.storyhunt.catchup` | Diario 11:20 + login | Publicaba IG/SEO pendientes |
+
+Reactivar (solo si Mariano levanta la pausa):
+```bash
+launchctl enable gui/$UID/com.storyhunt.<label>
+launchctl load -w ~/Library/LaunchAgents/com.storyhunt.<label>.plist
+```
+
+### Local LaunchAgent: conversion-review (carpeta `conversion-review/`) — PAUSADO
 - Lunes 9 AM NYC — pulls 7d PostHog → Anthropic Opus 4.7 → email Resend
 - Análisis CRO autónomo de /start con propuestas data-driven en español
 - Pipeline: pull_metrics.py → analyze.py → send_review.py (orquestado por weekly-review.sh)
