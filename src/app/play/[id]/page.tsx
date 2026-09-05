@@ -151,6 +151,10 @@ export default function PlayPage() {
     const [stepIndex, setStepIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    // Per-step message counter — lets the narrator linger on questions up to a
+    // hard cap before forcing the advance. Ref (not state) to avoid re-renders.
+    const stepMsgCountRef = useRef(0);
 
     // Paywall states
     const [paywallStatus, setPaywallStatus] = useState<'none' | 'checking' | 'blocked' | 'invalid' | 'expired' | 'used'>('none');
@@ -208,8 +212,8 @@ export default function PlayPage() {
     const handleExperienceComplete = async () => {
         // Show closing message from narrator
         const closingMsg = lang === 'en'
-            ? "That's it. You made it to the end. I hope the city showed you something you weren't expecting. Before you go... what did you think of this adventure?"
-            : "Eso es todo. Llegaste hasta el final. Espero que la ciudad te haya mostrado algo que no esperabas. Antes de irte... ¿qué te pareció esta aventura?";
+            ? "That's it. You made it to the end. I hope the city showed you something you weren't expecting.\n\nOne last thing, and I read these myself — what did you think? Write me a line below. 👇"
+            : "Eso es todo. Llegaste hasta el final. Espero que la ciudad te haya mostrado algo que no esperabas.\n\nUna última cosa, y la leo yo: ¿qué te pareció? Escribime una frase acá abajo. 👇";
 
         await pushMessageWithEffects(
             { role: 'system', content: closingMsg, timestamp: new Date().toISOString() },
@@ -505,7 +509,7 @@ export default function PlayPage() {
             }
             // No next scene or no scenes at all — experience complete
             setStepIndex(allSteps.length);
-            handleExperienceComplete();
+            await handleExperienceComplete();
             return;
         }
 
@@ -751,6 +755,12 @@ export default function PlayPage() {
                     setNycCheckPhase('asking');
                 }
             }
+        }).catch((err) => {
+            // Without this, a single failed Firestore read (common on flaky IG
+            // in-app browsers) leaves loading=true forever → infinite spinner.
+            console.error('[player] initial data load failed', err);
+            setLoadError(true);
+            setLoading(false);
         });
     }, [id]);
 
@@ -789,8 +799,29 @@ export default function PlayPage() {
             });
             const data = await res.json();
 
-            // The API always advances (connector-only mode). The user walks
-            // through regardless of what they answer.
+            // ─── Per-step message cap (linger only on questions) ──────────────
+            // Default = advance every turn (1 LLM call, keeps the tourist moving).
+            // If the user is ASKING something, let the narrator play along for up
+            // to STEP_MSG_CAP-1 turns to feel real, then force the advance below
+            // no matter what they say next.
+            const STEP_MSG_CAP = 3;
+            stepMsgCountRef.current += 1;
+            if (data.isQuestion && !data.completed && stepMsgCountRef.current < STEP_MSG_CAP) {
+                const lingerMsg: PreviewMessage = {
+                    role: 'system',
+                    content: data.response ?? 'Mmm.',
+                    timestamp: new Date().toISOString(),
+                    evaluation: 'correct',
+                };
+                await pushMessageWithEffects(lingerMsg, { delay_seconds: 1.0 });
+                setSending(false);
+                return;
+            }
+            // Advancing now — reset the per-step counter for the next step.
+            stepMsgCountRef.current = 0;
+
+            // The API advances on this turn. The user walks through regardless of
+            // what they answered.
             // IMPORTANT: do NOT look up steps[nextStepIndex] for media/effects —
             // the API sorts by (scene, step) order, the player's getSteps sorts
             // globally, so the indices can refer to DIFFERENT steps and the bug
@@ -817,7 +848,7 @@ export default function PlayPage() {
 
             if (data.completed) {
                 setStepIndex(steps.length);
-                handleExperienceComplete();
+                await handleExperienceComplete();
             } else {
                 const currentStep = steps[stepIndex];
                 // Check if current step has a next_step_id override
@@ -853,7 +884,7 @@ export default function PlayPage() {
                             await advanceNarrativeSteps(nextSceneSteps, 0, scenes, nextScene.id, steps);
                         }
                     } else {
-                        handleExperienceComplete();
+                        await handleExperienceComplete();
                     }
                 }
             }
@@ -897,6 +928,23 @@ export default function PlayPage() {
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <h2 style={{ fontSize: 18, color: 'black', margin: 0, fontWeight: 600 }}>Chat no encontrado</h2>
             <p style={{ margin: '8px 0 0', fontSize: 15 }}>Esta experiencia no existe.</p>
+        </div>
+    );
+
+    if (loadError) return (
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#000', fontFamily: "'Fira Code', monospace", color: '#00ff41', padding: 32, textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.6 }}>⚠</div>
+            <div style={{ fontSize: 16, marginBottom: 10, fontWeight: 600 }}>
+                {lang === 'en' ? 'Connection problem' : 'Problema de conexión'}
+            </div>
+            <div style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginBottom: 24, maxWidth: 360 }}>
+                {lang === 'en'
+                    ? "We couldn't load the experience. This usually fixes itself — tap to retry. If you opened this from Instagram, try opening it in Safari or Chrome."
+                    : 'No pudimos cargar la experiencia. Suele resolverse solo — tocá para reintentar. Si lo abriste desde Instagram, probá abrirlo en Safari o Chrome.'}
+            </div>
+            <button onClick={() => window.location.reload()} style={{ padding: '12px 28px', background: '#00ff41', color: '#000', border: 'none', borderRadius: 8, fontFamily: "'Fira Code', monospace", fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                {lang === 'en' ? 'Retry' : 'Reintentar'}
+            </button>
         </div>
     );
 
@@ -1022,22 +1070,6 @@ export default function PlayPage() {
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <a
-                        href={`mailto:hello@storyhunt.city?subject=${encodeURIComponent(`Help — ${experience?.name || 'StoryHunt'} ${sessionId ? '(session ' + sessionId.slice(0, 8) + ')' : ''}`)}`}
-                        title={lang === 'en' ? 'Need help?' : '¿Necesitás ayuda?'}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 32, height: 32, borderRadius: 16,
-                            background: 'transparent',
-                            color: '#0B84FF',
-                            textDecoration: 'none',
-                            fontSize: 16, fontWeight: 600,
-                        }}
-                    >?</a>
-                </div>
             </div>
 
             {/* Chat area */}
